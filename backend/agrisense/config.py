@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     gcs_media_bucket: str = ''
     firebase_storage_bucket: str = ''
     media_signing_secret: str = ''
+    analytics_dataset: str = ''
+    analytics_table: str = 'domain_events'
     cloud_tasks_location: str = ''
     cloud_tasks_queue: str = 'agrisense-jobs'
     cloud_tasks_service_account_email: str = ''
@@ -84,6 +86,10 @@ class Settings(BaseSettings):
         if emulator and self.app_env not in ('development','test'):
             raise ValueError('Firebase emulator is local only')
         return self
+
+    @property
+    def analytics_available(self) -> bool:
+        return bool(self.analytics_dataset and (self.google_cloud_project or self.firebase_project_id))
 
     @property
     def media_bucket(self) -> str:
