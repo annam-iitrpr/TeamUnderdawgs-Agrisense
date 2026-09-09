@@ -87,7 +87,9 @@ export default function WhyPage() {
       date: formatShortDay(d.date, language),
       raw: d.date,
     };
-    for (const s of SERIES) row[s] = d.scores[s];
+    // A stress type absent from the record is unknown, which is null here.
+    // Leaving it undefined would let the chart treat the gap as a zero.
+    for (const s of SERIES) row[s] = d.scores[s] ?? null;
     return row;
   });
 
@@ -196,7 +198,7 @@ export default function WhyPage() {
                   }}
                 />
 
-                {active.map((s, i) => (
+                {active.map((s) => (
                   <Area
                     key={`a-${s}`}
                     type="monotone"

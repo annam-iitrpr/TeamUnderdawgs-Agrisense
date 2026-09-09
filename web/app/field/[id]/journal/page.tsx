@@ -2,10 +2,10 @@
 
 import { PhoneFrame } from "@/components/phone-frame";
 import { useApp } from "@/components/providers";
-import { BuildSprint, Button, Card, ErrorState } from "@/components/ui";
+import { BuildSprint, Button, ErrorState } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Camera, Check, Mic } from "lucide-react";
+import { Camera, Check } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 

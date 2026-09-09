@@ -1,40 +1,97 @@
-# Secrets: never stage environment files, credentials, or local identities.
+# Merged from the contract_v1 bootstrap and the Phase 1 branch. Union of both:
+# where the two lists differed, the broader pattern was kept.
+
+# ── Secrets and environment ────────────────────────────────────────────────
+# Never commit credentials. Real values live in the operator's local env only;
+# deployment secrets come from Secret Manager.
 .env
 .env.*
 *.env
 *.env.*
-**/*service-account*.json
-**/*service_account*.json
-**/credentials*.json
+!.env.example
+agrisense.env
+**/.env
+**/.env.local
+**/.env.*.local
 *.pem
 *.key
 *.p12
 *.pfx
-# README publication requires explicit user authorization.
+**/*service-account*.json
+**/*service_account*.json
+**/credentials*.json
+service-account*.json
+*-service-account.json
+gcp-credentials*.json
+firebase-adminsdk*.json
+secrets/
+.secrets/
+
+# ── Documentation held back until explicitly approved for commit ───────────
+# README publication requires explicit operator authorization.
 [Rr][Ee][Aa][Dd][Mm][Ee]*
-# Local state and generated runtime output
-.local/
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage*
-htmlcov/
+
+# ── Node / Next.js ─────────────────────────────────────────────────────────
 node_modules/
 .next/
 out/
+build/
 dist/
+.turbo/
 *.tsbuildinfo
-*.db
-*.sqlite*
-*.log
-.DS_Store
-playwright-report/
+next-env.d.ts
+.eslintcache
+.npm/
+.pnpm-store/
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage*
+htmlcov/
+
+# ── Test output, traces and browser state ──────────────────────────────────
+# Playwright storage-state files are credentials.
 test-results/
+playwright-report/
 playwright/.auth/
+blob-report/
+.playwright/
+storage-state*.json
+*.trace.zip
+coverage/
+
+# ── Local data, media and databases ────────────────────────────────────────
+.local/
+local-media/
+media/
+uploads/
+*.sqlite
+*.sqlite*
+*.db
+pgdata/
+
+# ── Infrastructure state ───────────────────────────────────────────────────
 .firebase/
 *.tfstate*
 .terraform/
 *.tfvars
+
+# ── Logs ───────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# ── Editor and OS noise ────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

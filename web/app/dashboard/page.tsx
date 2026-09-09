@@ -3,8 +3,8 @@
 import { DashboardShell } from "@/components/dashboard-shell";
 import { StressMap } from "@/components/stress-map";
 import { Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
-import { api, ApiError, type DashboardResponse, type DashboardRow } from "@/lib/api";
-import { cn, formatHour, stressToken, stressWord, titleCase } from "@/lib/utils";
+import { api, ApiError, type DashboardResponse } from "@/lib/api";
+import { formatHour, stressToken, stressWord } from "@/lib/utils";
 import { ArrowUpDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";

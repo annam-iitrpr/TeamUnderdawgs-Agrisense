@@ -10,14 +10,7 @@ import {
   type ScoreResponse,
 } from "@/lib/api";
 import { stressLabel } from "@/lib/i18n";
-import {
-  formatHour,
-  formatRupees,
-  formatShortDay,
-  stressToken,
-  stressWord,
-  titleCase,
-} from "@/lib/utils";
+import { formatRupees, formatShortDay, titleCase } from "@/lib/utils";
 import {
   CartesianGrid,
   Legend,
@@ -82,7 +75,9 @@ export default function FieldDetailPage() {
     const row: Record<string, string | number | null> = {
       date: formatShortDay(d.date),
     };
-    for (const s of SERIES) row[s] = d.scores[s];
+    // A stress type absent from the record is unknown, which is null here.
+    // Leaving it undefined would let the chart treat the gap as a zero.
+    for (const s of SERIES) row[s] = d.scores[s] ?? null;
     return row;
   });
 

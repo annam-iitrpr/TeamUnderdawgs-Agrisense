@@ -2,7 +2,7 @@
 
 import { PhoneFrame } from "@/components/phone-frame";
 import { ReminderToggle, useApp } from "@/components/providers";
-import { Button, Card, ErrorState, Skeleton } from "@/components/ui";
+import { Card, ErrorState, Skeleton } from "@/components/ui";
 import { api, ApiError, type ScoreResponse } from "@/lib/api";
 import { cn, formatDay, formatHour, formatRupees } from "@/lib/utils";
 import { BookOpen, CalendarClock, CloudRain, HelpCircle, History } from "lucide-react";
