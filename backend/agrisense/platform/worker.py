@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
-from agrisense.platform import assistant, reminders, science
+from agrisense.platform import assistant, privacy, reminders, science
 from agrisense.platform import db as d
 from agrisense.platform.errors import PlatformError
 
@@ -82,7 +82,15 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
         message = assistant.reply(session, settings, row.tenant_id, row.farmer_id,
                                   request['conversation_id'], request['message_id'])
         return message.id
-    if row.kind in ('privacy.export', 'privacy.delete', 'soil.extract'):
+    if row.kind == 'privacy.export':
+        return privacy.export(session, settings, row.tenant_id, row.farmer_id, row.id)
+    if row.kind == 'privacy.delete':
+        user_id = request.get('user_id')
+        if not user_id:
+            raise PlatformError('ERASURE_ACTOR_MISSING', 'This request could not be completed.', 422)
+        privacy.erase(session, settings, row.tenant_id, row.farmer_id, user_id)
+        return None
+    if row.kind in ('soil.extract',):
         raise PlatformError('DEPENDENCY_UNAVAILABLE', f'{row.kind} is not available yet.', 503, True)
     raise PlatformError('UNKNOWN_JOB_KIND', f'No handler for {row.kind}.', 422)
 

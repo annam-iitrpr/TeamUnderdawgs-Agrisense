@@ -1,0 +1,116 @@
+"""Export gives a farmer their own records back; erasure removes them, not just a flag."""
+from __future__ import annotations
+
+import hashlib
+import json
+
+from agrisense.platform import db as d
+from agrisense.platform import media, worker
+from sqlalchemy import select
+
+PNG = b'\x89PNG\r\n\x1a\n' + b'synthetic test image bytes'
+
+
+def populate(harness, caller, season):
+    """A farmer with a journal entry, a cost, an uploaded photo and a conversation."""
+    ticket = caller.post('/media/uploads', {'filename': 'p.png', 'content_type': 'image/png',
+                                            'size_bytes': len(PNG)}).json()['data']
+    from urllib.parse import urlsplit
+    parts = urlsplit(ticket['upload_url'])
+    harness.put(f'{parts.path}?{parts.query}', content=PNG)
+    caller.post(f'/media/{ticket["asset"]["id"]}/complete', {'sha256': hashlib.sha256(PNG).hexdigest()})
+    caller.post(f'/seasons/{season["id"]}/journal',
+                {'action': 'watered', 'occurred_at': '2026-09-09T04:00:00Z', 'cost_inr': 300.0,
+                 'quantities': [{'value': 18.0, 'unit': 'mm'}],
+                 'text': 'Irrigated the north plot', 'media_ids': [ticket['asset']['id']]})
+    caller.post('/conversations', {'season_id': season['id']})
+    return ticket['asset']['id']
+
+
+async def test_export_returns_the_farmers_own_records_and_nobody_elses(harness, asha, ravi, season, field):
+    populate(harness, asha, season)
+    ravi.post('/fields', {'name': 'Ravi private plot', 'area_ha': 3.0, 'entered_area': 3.0,
+                          'entered_area_unit': 'ha',
+                          'centroid': {'latitude': 22.0, 'longitude': 78.0, 'source': 'manual'}})
+
+    queued = asha.post('/me/export', None)
+    assert queued.status_code == 202, queued.text
+    assert await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings) >= 1
+
+    job = asha.get(f'/jobs/{queued.json()["data"]["id"]}').json()['data']
+    assert job['status'] == 'succeeded', job
+    asset_id = job['result_id']
+
+    with harness.app.state.sessions() as session:
+        row = session.scalar(select(d.MediaRow).where(d.MediaRow.id == asset_id))
+        document = json.loads(media.store(harness.app.state.settings).read(row.object_key))
+
+    assert document['farmer']['id'] == row.farmer_id
+    assert [f['name'] for f in document['fields']] == ['North plot']
+    assert 'Ravi private plot' not in json.dumps(document)
+    assert len(document['journal']) == 1 and document['journal'][0]['cost_inr'] == 300.0
+    # Both the cost line and the irrigation line are exported.
+    assert sorted(line['kind'] for line in document['cost_ledger']) == ['cost', 'irrigation']
+    assert len(document['conversations']) == 1
+    assert len(document['media_assets']) == 1
+
+    # The farmer downloads it through the ordinary short-lived link.
+    assert asha.get(f'/media/{asset_id}/access').status_code == 200
+    assert ravi.get(f'/media/{asset_id}/access').status_code == 404
+
+
+async def test_export_requires_a_verified_email(harness, asha):
+    from agrisense.platform.auth import Identity
+    harness.app.state.verifier.identities['token-asha'] = Identity('uid-asha', False, 'Asha')
+    refused = asha.post('/me/export', None)
+    assert refused.status_code == 403
+    assert refused.json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'
+
+
+async def test_deletion_removes_the_records_and_the_stored_objects(harness, asha, ravi, season, field):
+    asset_id = populate(harness, asha, season)
+    ravi.get('/me')
+    ravi.post('/fields', {'name': 'Ravi keeps this', 'area_ha': 3.0, 'entered_area': 3.0,
+                          'entered_area_unit': 'ha',
+                          'centroid': {'latitude': 22.0, 'longitude': 78.0, 'source': 'manual'}})
+
+    sessions = harness.app.state.sessions
+    settings = harness.app.state.settings
+    with sessions() as session:
+        key = session.scalar(select(d.MediaRow).where(d.MediaRow.id == asset_id)).object_key
+    assert media.store(settings).read(key) == PNG
+
+    queued = asha.delete('/me')
+    assert queued.status_code == 202, queued.text
+    assert await worker.drain_jobs(sessions, settings) >= 1
+    with sessions() as session:
+        job = session.scalar(select(d.JobRow).where(d.JobRow.kind == 'privacy.delete'))
+        assert job is None or job.status == 'succeeded'
+
+    with sessions() as session:
+        # Nothing of this farmer's survives.
+        assert session.scalars(select(d.JournalRow)).all() == []
+        assert session.scalars(select(d.ConversationRow)).all() == []
+        assert session.scalar(select(d.MediaRow).where(d.MediaRow.id == asset_id)) is None
+        assert [row.name for row in session.scalars(select(d.FieldRow))] == ['Ravi keeps this']
+        assert session.scalar(select(d.User).where(d.User.firebase_uid == 'uid-asha')) is None
+        # The other farmer is untouched.
+        assert session.scalar(select(d.User).where(d.User.firebase_uid == 'uid-ravi')) is not None
+
+    try:
+        media.store(settings).read(key)
+        raise AssertionError('the stored object survived erasure')
+    except Exception:
+        pass
+
+    # The other farmer still works normally afterwards.
+    assert ravi.get('/fields').json()['data']['items'][0]['name'] == 'Ravi keeps this'
+
+
+async def test_deletion_requires_a_verified_email(harness, asha):
+    from agrisense.platform.auth import Identity
+    asha.get('/me')
+    harness.app.state.verifier.identities['token-asha'] = Identity('uid-asha', False, 'Asha')
+    refused = asha.delete('/me')
+    assert refused.status_code == 403
+    assert refused.json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'

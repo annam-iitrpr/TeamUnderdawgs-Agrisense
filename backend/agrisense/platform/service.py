@@ -185,7 +185,7 @@ class DomainService:
                     patch['consents']=[{**v,'recorded_at':d.utcnow().isoformat()} for v in patch['consents']]
                 value=c.Farmer.model_validate({**row.payload,**patch,'version':row.version});row.payload=dump(value);return value
             if not self.actor.email_verified:raise PlatformError('EMAIL_VERIFICATION_REQUIRED','Verify your email before deleting your account.',403)
-            job=self.job('privacy.delete',{});user=self.s.get(d.User,self.actor.user_id);user.disabled=True;return job
+            job=self.job('privacy.delete',{'user_id':self.actor.user_id});user=self.s.get(d.User,self.actor.user_id);user.disabled=True;return job
         if path=='/me/export':
             if not self.actor.email_verified:raise PlatformError('EMAIL_VERIFICATION_REQUIRED','Verify your email before exporting data.',403)
             return self.job('privacy.export',{})
