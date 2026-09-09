@@ -149,5 +149,3 @@ def test_the_catalog_is_served_from_the_reference_bundle_never_invented(asha, mo
     # Products come from the same bundle, and an empty catalog is an empty page, not an error.
     assert asha.get('/catalog/products').json()['data']['items'] == []
     assert asha.get('/catalog/crops', params={'limit': 0}).status_code == 422
-    # Location search has no source yet and says so rather than returning invented places.
-    assert asha.get('/catalog/locations', params={'q': 'nagpur'}).status_code == 503

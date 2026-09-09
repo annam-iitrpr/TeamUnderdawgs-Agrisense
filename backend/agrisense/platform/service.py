@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import media, science
+from agrisense.platform import locations, media, science
 from agrisense.platform.auth import Actor
 from agrisense.platform.errors import PlatformError, missing, unavailable
 
@@ -363,7 +363,11 @@ class DomainService:
 
     def catalog(self,path,query):
         """Served from the Phase 2 reference bundle; the platform never invents catalog entries."""
-        if path=='/catalog/locations':raise unavailable('Location search')
+        if path=='/catalog/locations':
+            try:limit=int(query.get('limit','10'))
+            except ValueError as exc:raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.') from exc
+            if not 1<=limit<=100:raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.')
+            return locations.search(query.get('q',''),limit,self.settings)
         bundle=science.references()
         items=bundle.crops if path=='/catalog/crops' else bundle.products
         try:
