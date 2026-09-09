@@ -105,15 +105,18 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
         setField(fieldData);
         setSeasons(seasonPage.items ?? []);
 
-        const today = new Date();
-        const end = new Date(today);
+        // Sowing starts tomorrow: the engine refuses a window that has already begun,
+        // and today is already partly gone wherever the farmer is.
+        const start = new Date();
+        start.setDate(start.getDate() + 1);
+        const end = new Date(start);
         end.setMonth(end.getMonth() + 6);
         const iso = (d: Date) => d.toISOString().slice(0, 10);
 
         const { data } = await planningApi.compare(
           {
             field_id: fieldId,
-            proposed_season: { start_date: iso(today), end_date: iso(end) },
+            proposed_season: { start_date: iso(start), end_date: iso(end) },
             candidate_crop_ids: candidateIds.slice(0, 5),
           },
           newIdempotencyKey(),
@@ -322,6 +325,9 @@ function NoCandidates({
 }) {
   const exclusions = comparison?.exclusions ?? [];
   const fullyAllocated = exclusions.some((e) => e.code === "no_unallocated_area");
+  const noRegionalData = exclusions.some(
+    (e) => e.code === "reviewed_regional_crop_reference_missing",
+  );
 
   if (fullyAllocated) {
     return (
@@ -329,6 +335,26 @@ function NoCandidates({
         <p>
           Every hectare of {fieldName} already belongs to a season, so there is no area left to
           plan for. Close a season, or reduce the area it uses, and then come back.
+        </p>
+      </Callout>
+    );
+  }
+
+  if (noRegionalData) {
+    const crops = exclusions
+      .filter((e) => e.code === "reviewed_regional_crop_reference_missing")
+      .map((e) => String((e.facts as Record<string, unknown>)?.crop_id ?? ""))
+      .filter(Boolean);
+    return (
+      <Callout tone="caution" title="No reviewed data for your area yet">
+        <p>
+          AgriSense has the weather for {fieldName} but not the reviewed agronomic records it
+          needs to score {crops.length > 0 ? crops.join(", ") : "these crops"} here. It will
+          not rank crops on a guess, so nothing is shown rather than a made-up score.
+        </p>
+        <p className="mt-2 text-sm">
+          You can still add a crop to this field and record your season now. Suitability,
+          water and return appear here as soon as the reviewed data is published.
         </p>
       </Callout>
     );
