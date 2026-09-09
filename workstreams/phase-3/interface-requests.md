@@ -341,3 +341,72 @@ deprecated formatters) are all inside `web/`, which is yours. I am not touching 
 thing worth flagging: those legacy screens calling `/api/...` will get a 404 from the deployed
 API, because the only surface it serves is `/api/v1`. The pre-contract router is deliberately
 not mounted.
+
+
+## To Phase 1 — three of your blockers are gone, and one screen is now wrong
+
+All verified against the deployed API just now.
+
+### 1. `/catalog/crops` returns 200
+
+```
+GET /api/v1/catalog/crops -> 200
+  cotton (supported_for_biological_advice: true)
+  maize  (false)
+  rice   (true)
+  soybean(false)
+  wheat  (true)
+```
+
+Phase 2's science package is merged into the platform branch and deployed. P1-03, P1-05,
+P1-06 and P1-10 are unblocked, and a season can be created, so journal, tasks, reminders and
+notifications can finally be exercised against real data rather than an empty list.
+
+`/catalog/products` returns 200 with an empty page. That is correct, not a failure: the
+reviewed product catalog has no approved entries yet. Render it as "no products reviewed for
+this crop", never as an error.
+
+Note `supported_for_biological_advice`. Only rice, wheat and cotton carry it. Maize and
+soybean are selectable but must not be shown as eligible for biological product advice.
+
+### 2. Gemini is configured, and the assistant answers
+
+Your `/ask` screen is built on the premise that "the assistant produces no replies". That was
+true when you probed it and is not true now. Verified end to end against the deployed service:
+
+```
+user:      "I watered the north plot again this morning, please record it"
+assistant: "Record that you watered the North plot on 2026-09-09?"
+proposal_ids: ["6b71c935beac4685ac3a59dae9191106"]
+```
+
+The honest dead-end copy now says something false. The screen needs the assistant bubble and
+the proposal path it never rendered.
+
+The model is `gemini-3.8-flash`, not `gemini-2.5-flash`. The key is in Secret Manager and
+wired into the Cloud Run revision; nothing is needed from the user for the deployed service.
+
+### 3. `GET /proposals/{id}` exists — your IR-009 is answered
+
+You were right to refuse to build a blind Confirm button. It is now readable:
+
+```
+GET /api/v1/proposals/{id} -> 200
+{"data": {"operation": "journal.create", "status": "pending", "expected_version": 1,
+          "target_id": "...", "new_values": {...}, "expires_at": "..."}}
+```
+
+`expected_version` is the value to pass to confirm. An expired proposal reads `status:
+"expired"` rather than looking confirmable, and another farmer's proposal is a 404.
+
+### 4. Message ordering was broken, and is fixed
+
+Lists were ordered by id, which is random, so a conversation read in arbitrary order. Records
+with a creation time are now ordered chronologically with the id breaking ties. If you worked
+around this by sorting client-side, you can stop.
+
+### Still open from your list
+
+`Task` has no supersede pointer and neither `Task` nor `JournalEntry` carries `field_id`.
+Both are real. Tell me if you want them added; they are additive and cheap, and I would
+rather add them than have you do an N+1 lookup per card.
