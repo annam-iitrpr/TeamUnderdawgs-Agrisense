@@ -19,6 +19,8 @@ from agrisense.platform import db as d
 from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.worker')
+# Returned when a job removed its own record, so there is nothing left to write a status to.
+ERASED = object()
 MAX_ATTEMPTS = 5
 LEASE = timedelta(minutes=5)
 BACKOFF_SECONDS = 30
@@ -68,7 +70,7 @@ def finish(session: Session, row: d.JobRow, *, result_id: str | None = None, err
         row.status = 'dead_letter' if row.attempts >= MAX_ATTEMPTS else 'failed'
 
 
-async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | None:
+async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | object | None:
     request = row.payload.get('request', {})
     if row.kind == 'science.evaluate':
         season = session.scalar(select(d.SeasonRow).where(
@@ -89,7 +91,7 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
         if not user_id:
             raise PlatformError('ERASURE_ACTOR_MISSING', 'This request could not be completed.', 422)
         privacy.erase(session, settings, row.tenant_id, row.farmer_id, user_id)
-        return None
+        return ERASED
     if row.kind in ('soil.extract',):
         raise PlatformError('DEPENDENCY_UNAVAILABLE', f'{row.kind} is not available yet.', 503, True)
     raise PlatformError('UNKNOWN_JOB_KIND', f'No handler for {row.kind}.', 422)
@@ -110,6 +112,10 @@ async def drain_jobs(sessions: sessionmaker, settings: Settings, limit: int = 10
             identifier, kind = row.id, row.kind
             try:
                 result_id = await run_job(session, row, settings)
+                if result_id is ERASED:
+                    session.commit()
+                    processed += 1
+                    continue
                 finish(session, row, result_id=result_id)
             except PlatformError as error:
                 session.rollback()

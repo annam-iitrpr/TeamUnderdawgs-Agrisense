@@ -82,7 +82,12 @@ def export(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
 
 
 def erase(session: Session, settings: Settings, tenant_id: str, farmer_id: str, user_id: str) -> dict[str, int]:
-    """Remove the records themselves. A disabled flag is not erasure."""
+    """Remove the records themselves. A disabled flag is not erasure.
+
+    This includes the job row driving the erasure: it references the tenant and farmer being
+    removed, so it cannot outlive them. The worker is told the record is gone rather than
+    discovering it by writing to a row that no longer exists.
+    """
     removed: dict[str, int] = {}
     store = media.store(settings)
     for row in owned(session, d.MediaRow, tenant_id, farmer_id):

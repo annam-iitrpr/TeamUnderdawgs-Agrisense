@@ -84,8 +84,8 @@ async def test_deletion_removes_the_records_and_the_stored_objects(harness, asha
     assert queued.status_code == 202, queued.text
     assert await worker.drain_jobs(sessions, settings) >= 1
     with sessions() as session:
-        job = session.scalar(select(d.JobRow).where(d.JobRow.kind == 'privacy.delete'))
-        assert job is None or job.status == 'succeeded'
+        # The job record is erased with the account it belonged to.
+        assert session.scalar(select(d.JobRow).where(d.JobRow.kind == 'privacy.delete')) is None
 
     with sessions() as session:
         # Nothing of this farmer's survives.
@@ -114,3 +114,19 @@ async def test_deletion_requires_a_verified_email(harness, asha):
     refused = asha.delete('/me')
     assert refused.status_code == 403
     assert refused.json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'
+
+
+async def test_the_erasure_removes_its_own_job_record_along_with_the_account(harness, asha, season):
+    """The job row references the tenant being erased, so it cannot outlive it."""
+    sessions = harness.app.state.sessions
+    populate(harness, asha, season)
+    assert asha.delete('/me').status_code == 202
+    with sessions() as session:
+        assert session.scalar(select(d.JobRow).where(d.JobRow.kind == 'privacy.delete')) is not None
+
+    assert await worker.drain_jobs(sessions, harness.app.state.settings) >= 1
+    with sessions() as session:
+        # No job row, and no dangling reference to a tenant that no longer exists.
+        # A surviving row here would have failed the foreign key on commit.
+        assert session.scalars(select(d.JobRow)).all() == []
+        assert session.scalars(select(d.FarmerRow)).all() == []
