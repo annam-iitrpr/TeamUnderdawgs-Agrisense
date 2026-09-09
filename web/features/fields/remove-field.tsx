@@ -20,7 +20,15 @@ import { fields as fieldsApi } from "@/lib/api/routes";
 import { AlertTriangle, Archive } from "lucide-react";
 import { useState } from "react";
 
-export function RemoveField({ field, onRemoved }: { field: Field; onRemoved: () => void }) {
+export function RemoveField({
+  field,
+  onRemoved,
+  compact,
+}: {
+  field: Field;
+  onRemoved: () => void;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +53,18 @@ export function RemoveField({ field, onRemoved }: { field: Field; onRemoved: () 
   }
 
   if (!open) {
+    if (compact) {
+      return (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-control px-2 text-xs font-semibold text-clay hover:bg-clay/10"
+        >
+          <Archive aria-hidden className="size-3.5" />
+          Remove
+        </button>
+      );
+    }
     return (
       <Button variant="secondary" className="border-clay/50 text-clay" onClick={() => setOpen(true)}>
         <Archive aria-hidden className="size-4" />

@@ -113,7 +113,12 @@ export function FieldDashboard() {
       }
     >
       <div className="space-y-4">
-        <FieldSwitcher fields={visible} activeId={activeId} onSelect={setActiveId} />
+        <FieldSwitcher
+          fields={visible}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onChanged={() => fieldsQuery.refetch()}
+        />
         {active ? (
           <FieldPanel
             key={active.id}
@@ -174,10 +179,12 @@ function FieldSwitcher({
   fields,
   activeId,
   onSelect,
+  onChanged,
 }: {
   fields: Field[];
   activeId: string | null;
   onSelect: (id: string) => void;
+  onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const active = fields.find((f) => f.id === activeId);
@@ -188,9 +195,12 @@ function FieldSwitcher({
     return (
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <FieldSummary field={active} />
-        <Link href="/onboarding?add=1" className="text-sm font-semibold text-forest underline">
-          Add another field
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <RemoveField field={active} onRemoved={onChanged} compact />
+          <Link href="/onboarding?add=1" className="text-sm font-semibold text-forest underline">
+            Add another field
+          </Link>
+        </div>
       </Card>
     );
   }
@@ -230,6 +240,11 @@ function FieldSwitcher({
                   </span>
                 </span>
               </button>
+              {/* Each field is managed where it is listed, so a farmer does not
+                  have to switch to a field just to remove it. */}
+              <div className="mt-1.5 pl-1">
+                <RemoveField field={field} onRemoved={onChanged} compact />
+              </div>
             </li>
           ))}
           <li className="pt-1">
