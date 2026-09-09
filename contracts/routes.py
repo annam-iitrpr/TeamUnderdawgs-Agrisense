@@ -44,6 +44,7 @@ ROUTES = [
     ('POST', '/conversations', ConversationCreate, Conversation, 201),
     ('GET', '/conversations/{id}/messages', None, Page[Message], 200),
     ('POST', '/conversations/{id}/messages', MessageCreate, Message, 201),
+    ('GET', '/proposals/{id}', None, ProposedMutation, 200),
     ('POST', '/proposals/{id}/confirm', VersionedPatch, MutationReceipt, 200),
     ('POST', '/proposals/{id}/cancel', VersionedPatch, MutationReceipt, 200),
     ('POST', '/channels/whatsapp/link', ChannelLinkRequest, ChannelLinkChallenge, 201),

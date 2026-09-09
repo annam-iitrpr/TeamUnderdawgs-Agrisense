@@ -45,6 +45,7 @@ export interface components { schemas: {
   "Envelope[Page[Season]]": { "data": components["schemas"]["Page_Season_"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[Page[StressMapPoint]]": { "data": components["schemas"]["Page_StressMapPoint_"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[Page[Task]]": { "data": components["schemas"]["Page_Task_"]; "meta": components["schemas"]["Meta"]; };
+  "Envelope[ProposedMutation]": { "data": components["schemas"]["ProposedMutation"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[Recommendation]": { "data": components["schemas"]["Recommendation"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[Reminder]": { "data": components["schemas"]["Reminder"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[SeasonEvaluation]": { "data": components["schemas"]["SeasonEvaluation"]; "meta": components["schemas"]["Meta"]; };
@@ -241,6 +242,9 @@ patch: { requestBody: components["schemas"]["NotificationPatch"]; responses: { 2
 };
 "/api/v1/planning/compare": {
 post: { requestBody: components["schemas"]["PlanningRequest"]; responses: { 200: components["schemas"]["Envelope[CropComparison]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
+};
+"/api/v1/proposals/{id}": {
+get: { responses: { 200: components["schemas"]["Envelope[ProposedMutation]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
 };
 "/api/v1/proposals/{id}/cancel": {
 post: { requestBody: components["schemas"]["VersionedPatch"]; responses: { 200: components["schemas"]["Envelope[MutationReceipt]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };

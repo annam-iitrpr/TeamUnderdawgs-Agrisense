@@ -96,7 +96,7 @@ def test_pagination_is_bounded_and_cursors_do_not_repeat_items(asha):
 
 
 def test_unimplemented_science_capabilities_report_dependency_state_rather_than_guessing(asha, season, field):
-    for path in (f'/seasons/{season["id"]}/water', f'/seasons/{season["id"]}/economics', '/catalog/crops'):
+    for path in (f'/seasons/{season["id"]}/water', f'/seasons/{season["id"]}/economics'):
         response = asha.get(path)
         assert response.status_code == 503
         assert response.json()['error'] == {'code': 'DEPENDENCY_UNAVAILABLE', 'message': response.json()['error']['message'], 'details': {}, 'retryable': True}
@@ -128,7 +128,10 @@ def test_the_catalog_is_served_from_the_reference_bundle_never_invented(asha, mo
     from agrisense.contracts_generated import models as c
     from agrisense.platform import science
 
-    assert asha.get('/catalog/crops').status_code == 503
+    # With the science package present the catalog serves the reviewed bundle.
+    live = asha.get('/catalog/crops')
+    assert live.status_code == 200
+    assert [item['id'] for item in live.json()['data']['items']]
 
     bundle = c.ReferenceBundle(
         version='test-bundle',

@@ -323,6 +323,14 @@ class DomainService:
             value=c.Message(**dump(body),id=d.new_id(),conversation_id=id,role='user',created_at=d.utcnow())
             self.s.add(d.MessageRow(**self.owned_values(dump(value)),conversation_id=id));self.s.flush()
             self.job('assistant.reply',{'conversation_id':id,'message_id':value.id});return value
+        if path=='/proposals/{id}':
+            # A farmer cannot confirm a change they cannot read, so the proposal is legible
+            # before it is applied, and expired ones say so rather than looking pending.
+            row=self.own(d.ProposalRow,id)
+            value=c.ProposedMutation.model_validate(row.payload)
+            if value.status=='pending' and aware(row.expires_at)<=d.utcnow():
+                value=value.model_copy(update={'status':'expired'})
+            return value
         if path in ('/proposals/{id}/confirm','/proposals/{id}/cancel'):
             row=self.own(d.ProposalRow,id,True);self.version(row,body.expected_version)
             if row.status!='pending':raise PlatformError('PROPOSAL_NOT_PENDING','This proposal is no longer pending.',409)

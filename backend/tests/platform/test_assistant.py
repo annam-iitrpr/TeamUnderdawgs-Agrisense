@@ -216,3 +216,33 @@ async def test_an_empty_model_response_is_retried_rather_than_stored_as_a_reply(
     with pytest.raises(PlatformError) as raised:
         assistant.ask(Settings(app_env='test'), {}, [])
     assert raised.value.code == 'ASSISTANT_UNREADABLE' and raised.value.retryable is True
+
+
+async def test_a_proposal_can_be_read_before_it_is_confirmed(harness, asha, ravi, season, monkeypatch):
+    """Confirming a change a farmer cannot see would be asking for blind approval."""
+    draft = ('{"kind":"proposal","text":"Record it?","operation":"journal.create",'
+             f'"target_id":"{season["id"]}","expected_version":1,'
+             '"values":{"action":"watered","occurred_at":"2026-09-09T04:00:00Z","cost_inr":250.0}}')
+    StubModel(draft).install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages', {'text': 'I watered'})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+    with harness.app.state.sessions() as session:
+        proposal_id = session.scalar(select(d.ProposalRow)).id
+
+    seen = asha.get(f'/proposals/{proposal_id}')
+    assert seen.status_code == 200, seen.text
+    body = seen.json()['data']
+    assert body['operation'] == 'journal.create'
+    assert body['status'] == 'pending'
+    assert body['new_values']['cost_inr'] == 250.0
+    assert body['expected_version'] == 1
+    # Another farmer cannot read it at all.
+    assert ravi.get(f'/proposals/{proposal_id}').status_code == 404
+
+    from datetime import timedelta
+    with harness.app.state.sessions() as session:
+        session.get(d.ProposalRow, proposal_id).expires_at = d.utcnow() - timedelta(minutes=1)
+        session.commit()
+    # An expired proposal reads as expired rather than looking confirmable.
+    assert asha.get(f'/proposals/{proposal_id}').json()['data']['status'] == 'expired'
