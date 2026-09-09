@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
+from agrisense.platform import assistant, reminders, science
 from agrisense.platform import db as d
-from agrisense.platform import reminders, science
 from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.worker')
@@ -68,7 +68,7 @@ def finish(session: Session, row: d.JobRow, *, result_id: str | None = None, err
         row.status = 'dead_letter' if row.attempts >= MAX_ATTEMPTS else 'failed'
 
 
-async def run_job(session: Session, row: d.JobRow) -> str | None:
+async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | None:
     request = row.payload.get('request', {})
     if row.kind == 'science.evaluate':
         season = session.scalar(select(d.SeasonRow).where(
@@ -78,12 +78,16 @@ async def run_job(session: Session, row: d.JobRow) -> str | None:
         bundle, forecast, snapshot = await science.evaluate(session, row.tenant_id, season.id)
         stored = science.store_evaluation(session, row.tenant_id, row.farmer_id, season, bundle, snapshot, forecast)
         return stored.id
-    if row.kind in ('privacy.export', 'privacy.delete', 'assistant.reply', 'soil.extract'):
+    if row.kind == 'assistant.reply':
+        message = assistant.reply(session, settings, row.tenant_id, row.farmer_id,
+                                  request['conversation_id'], request['message_id'])
+        return message.id
+    if row.kind in ('privacy.export', 'privacy.delete', 'soil.extract'):
         raise PlatformError('DEPENDENCY_UNAVAILABLE', f'{row.kind} is not available yet.', 503, True)
     raise PlatformError('UNKNOWN_JOB_KIND', f'No handler for {row.kind}.', 422)
 
 
-async def drain_jobs(sessions: sessionmaker, limit: int = 10) -> int:
+async def drain_jobs(sessions: sessionmaker, settings: Settings, limit: int = 10) -> int:
     """Each job commits on its own so one failure cannot roll back its neighbours."""
     token = d.new_id()
     processed = 0
@@ -97,7 +101,7 @@ async def drain_jobs(sessions: sessionmaker, limit: int = 10) -> int:
             session.commit()
             identifier, kind = row.id, row.kind
             try:
-                result_id = await run_job(session, row)
+                result_id = await run_job(session, row, settings)
                 finish(session, row, result_id=result_id)
             except PlatformError as error:
                 session.rollback()
@@ -168,7 +172,7 @@ async def worker_loop(settings: Settings, interval: float = 5.0, iterations: int
     count = 0
     try:
         while iterations is None or count < iterations:
-            processed = await drain_jobs(sessions)
+            processed = await drain_jobs(sessions, settings)
             delivered = sum(reminders.dispatch(sessions, settings).values())
             session = sessions()
             try:

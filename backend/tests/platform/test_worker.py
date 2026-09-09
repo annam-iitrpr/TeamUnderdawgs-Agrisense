@@ -31,7 +31,7 @@ async def test_absent_science_dead_letters_after_bounded_retries_without_losing_
             row = session.get(d.JobRow, job_id)
             row.run_after = d.utcnow() - timedelta(seconds=1)
             session.commit()
-        assert await worker.drain_jobs(sessions) == 1
+        assert await worker.drain_jobs(sessions, harness.app.state.settings) == 1
         with sessions() as session:
             row = session.get(d.JobRow, job_id)
             assert row.attempts == attempt
