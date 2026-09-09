@@ -58,3 +58,13 @@ Next: publish the core arithmetic milestone; complete verified provider normaliz
 - CPU window benchmark: Python 3.12.10 arm64, 336 hours/336 candidates, 50 runs; median 2.134 ms, p95 2.283 ms. Excludes network; no accuracy claim.
 - Source/discrepancy registry and rules-only model card added; raw data/model binaries excluded under science/.gitignore.
 - Next: inherited safety shortcuts and regression checks; no branch merge.
+
+## Verified milestone 5
+
+- Milestone 4 pushed as `cf6174a`. No merges performed.
+- Six independent inherited-behavior regressions reproduced first: 20-billion drought index at zero temperature; nutrient index prescribing biologicals; unsupported rupee uplift; live outage falling back to demo; CE Hub missing weather receiving constants; legacy spray input certifying a window without evidence. All were then repaired.
+- CE Hub and Open-Meteo legacy adapters now reject missing values rather than substituting constants; explicit zero survives. CE Hub validates duplicate timestamps and offset presence. Open-Meteo hourly aggregates aligned to preceding intervals.
+- Legacy drought remains unparameterized for advisory projection; source /4 phosphorus divisor restored; nutrient diagnostics never prescribe products. Unsupported legacy incremental value returns null. Full product-safe windows use the new engine.
+- `PYTHONPATH=backend .venv/bin/python -m pytest backend/tests/science backend/tests/test_stress.py backend/tests/platform/test_contracts.py -q`: 89 passed. Baseline assertions for invalid previous semantics updated with the six independent reproductions, not suppressed.
+- Legacy meteoblue history defaults remain isolated from the new facade and are still a migration limitation; no live historical capability is claimed.
+- Next: facade validation refinements, provider daily/history coverage and independent property tests.

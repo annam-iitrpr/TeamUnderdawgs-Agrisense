@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-PHOSPHORUS_SF_DIVISOR: float = 3.0
+PHOSPHORUS_SF_DIVISOR: float = 4.0  # Source reproduction; /3 is an unapproved candidate.
 
 YIELD_RISK_NORMALISE: bool = True
 

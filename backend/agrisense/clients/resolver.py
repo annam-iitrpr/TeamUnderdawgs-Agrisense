@@ -1,6 +1,6 @@
 """Chooses a forecast source and degrades cleanly when one fails.
 
-Order: CE Hub, then Open-Meteo as a live substitute, then bundled fixtures. Every
+Order: CE Hub, then Open-Meteo as a live substitute. Fixtures require explicit mock mode. Every
 step down is recorded in the provenance so the interface can show exactly what the
 user is looking at. This function never raises.
 """
@@ -12,7 +12,9 @@ import logging
 import time
 from typing import Any
 
-from agrisense.config import Settings, get_settings
+import httpx
+
+from agrisense.config import DataMode, Settings, get_settings
 
 from .base import DailyForecast, HourlyForecast, Provenance
 from .cehub import CEHubForecastClient
@@ -71,24 +73,27 @@ class ForecastResolver:
 
     async def daily(self, lat: float, lon: float, days: int = 14) -> DailyForecast:
         return await self._cached(
-            _cache_key("daily", lat, lon, days),
+            _cache_key(f"daily:{self.settings.agrisense_data_mode}", lat, lon, days),
             lambda: self._daily(lat, lon, days),
         )
 
     async def hourly(self, lat: float, lon: float, hours: int = 336) -> HourlyForecast:
         return await self._cached(
-            _cache_key("hourly", lat, lon, hours),
+            _cache_key(f"hourly:{self.settings.agrisense_data_mode}", lat, lon, hours),
             lambda: self._hourly(lat, lon, hours),
         )
 
     async def _daily(self, lat: float, lon: float, days: int = 14) -> DailyForecast:
         notes: list[str] = []
 
+        if self.settings.agrisense_data_mode is DataMode.MOCK:
+            return await self.fixture.daily(lat, lon, days)
+
         if self.settings.should_try_live(self.settings.cehub_available):
             try:
                 return await CEHubForecastClient(self.settings).daily(lat, lon, days)
-            except Exception as exc:
-                log.warning("CE Hub daily forecast failed: %s", exc)
+            except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+                log.warning("CE Hub daily forecast failed: %s", type(exc).__name__)
                 notes.append("CE Hub was unreachable.")
 
         try:
@@ -97,26 +102,24 @@ class ForecastResolver:
                 days=result.days,
                 provenance=_degraded(result.provenance, " ".join(notes)),
             )
-        except Exception as exc:
-            log.warning("Open-Meteo daily forecast failed: %s", exc)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            log.warning("Open-Meteo daily forecast failed: %s", type(exc).__name__)
             notes.append("The substitute provider was also unreachable.")
 
-        result = await self.fixture.daily(lat, lon, days)
-        if notes:
-            return DailyForecast(
-                days=result.days,
-                provenance=_degraded(result.provenance, " ".join(notes)),
-            )
-        return result
+        return DailyForecast(days=[], provenance=Provenance(
+            source="unavailable", live=False, note=" ".join(notes)))
 
     async def _hourly(self, lat: float, lon: float, hours: int = 336) -> HourlyForecast:
         notes: list[str] = []
 
+        if self.settings.agrisense_data_mode is DataMode.MOCK:
+            return await self.fixture.hourly(lat, lon, hours)
+
         if self.settings.should_try_live(self.settings.cehub_available):
             try:
                 return await CEHubForecastClient(self.settings).hourly(lat, lon, hours)
-            except Exception as exc:
-                log.warning("CE Hub hourly forecast failed: %s", exc)
+            except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+                log.warning("CE Hub hourly forecast failed: %s", type(exc).__name__)
                 notes.append("CE Hub was unreachable.")
 
         try:
@@ -125,14 +128,9 @@ class ForecastResolver:
                 hours=result.hours,
                 provenance=_degraded(result.provenance, " ".join(notes)),
             )
-        except Exception as exc:
-            log.warning("Open-Meteo hourly forecast failed: %s", exc)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+            log.warning("Open-Meteo hourly forecast failed: %s", type(exc).__name__)
             notes.append("The substitute provider was also unreachable.")
 
-        result = await self.fixture.hourly(lat, lon, hours)
-        if notes:
-            return HourlyForecast(
-                hours=result.hours,
-                provenance=_degraded(result.provenance, " ".join(notes)),
-            )
-        return result
+        return HourlyForecast(hours=[], provenance=Provenance(
+            source="unavailable", live=False, note=" ".join(notes)))

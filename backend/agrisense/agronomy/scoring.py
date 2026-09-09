@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date as Date
 from typing import Any
 
-from .constants import GROSS_MARGIN_PER_HA, STRESS_SCALE_MAX, VALUE_ESTIMATE_BAND, YIELD_PROTECTION_PER_STRESS_DAY, Crop, ProductKind
+from .constants import STRESS_SCALE_MAX, Crop, ProductKind
 from .projection import DAILY_STRESS_TYPES, StressProjection
 from .timing import CandidateDays
 from .viability import RankedHours, SprayWindow
@@ -114,40 +114,10 @@ def estimate_value(
     area_ha: float,
     delay_days: int = 7,
 ) -> ValueEstimate | None:
-    if chosen_window is None or not projection.days:
-        return None
-
-    spray_date = chosen_window.start.date()
-    day_index = {d.date: i for i, d in enumerate(projection.days)}
-    start = day_index.get(spray_date, 0)
-
-    def stress_on(day_i: int) -> float:
-        if day_i >= len(projection.days):
-            return 0.0
-        values = [v for v in projection.days[day_i].scores.values() if v is not None]
-        return max(values, default=0.0)
-
-    avoided = sum(stress_on(i) for i in range(start, min(start + delay_days, len(projection.days))))
-    avoided_normalised = avoided / STRESS_SCALE_MAX
-
-    margin = GROSS_MARGIN_PER_HA.get(crop, 50000.0)
-    central = margin * area_ha * avoided_normalised * YIELD_PROTECTION_PER_STRESS_DAY
-
-    low = int(max(central * (1 - VALUE_ESTIMATE_BAND), 0))
-    high = int(central * (1 + VALUE_ESTIMATE_BAND))
-
-    acres = max(area_ha / 0.404686, 1e-09)
-
-    return ValueEstimate(
-        low,
-        high,
-        int(low / acres),
-        int(high / acres),
-        basis=f"Compares applying in this window against applying {delay_days} days later, across {round(avoided_normalised, 2)} accumulated stress days on {round(area_ha, 2)} hectares.",
-        delay_days=delay_days,
-        stress_days=round(avoided_normalised, 2),
-        area_ha=round(area_ha, 2),
-    )
+    # A stress index is not a crop/product response distribution. The legacy
+    # interface has no comparator evidence, so an incremental value is unknown.
+    # Use science.economics.incremental_value only with explicit scenario inputs.
+    return None
 
 
 def _describe_factors(projection: StressProjection, candidates: CandidateDays, ranked: RankedHours) -> list[dict[str, Any]]:
@@ -207,7 +177,7 @@ def readiness(
     window = ranked.best_window
     viability = ranked.viability
 
-    score = int(round(need * timing_fit * viability * 100))
+    score = round(need * timing_fit * viability * 100)
 
     blocked = candidates.blocked_reason
     check_again = None

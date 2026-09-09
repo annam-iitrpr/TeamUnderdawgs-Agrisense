@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
+from math import isfinite
 from typing import Any
 
 import httpx
@@ -61,6 +62,8 @@ def _auth_headers(settings: Settings) -> dict[str, str]:
     Verified working: the ApiKey header. The others are kept because the service
     may be deployed differently for other teams.
     """
+    if settings.cehub_api_key and settings.cehub_bearer_token:
+        raise CEHubError("select exactly one authentication mode")
     if settings.cehub_api_key:
         return {settings.cehub_api_key_header: settings.cehub_api_key}
     if settings.cehub_bearer_token:
@@ -73,7 +76,8 @@ def _parse_value(raw: Any) -> float | None:
     if raw is None or raw == "":
         return None
     try:
-        return float(raw)
+        value = float(raw)
+        return value if isfinite(value) else None
     except (TypeError, ValueError):
         return None
 
@@ -93,10 +97,10 @@ def _row_value(row: dict[str, Any]) -> float | None:
     return None
 
 
-def _parse_timestamp(raw: str) -> datetime | None:
+def _parse_timestamp(raw: str, offset: float) -> datetime | None:
     for fmt in ("%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(raw, fmt)
+            return datetime.strptime(raw, fmt).replace(tzinfo=timezone(timedelta(hours=offset)))
         except (TypeError, ValueError):
             continue
     return None
@@ -169,9 +173,13 @@ class CEHubForecastClient:
         for field_name, rows in zip(measures.keys(), results, strict=True):
             series: dict[datetime, float] = {}
             for row in rows:
-                stamp = _parse_timestamp(str(row.get("date", "")))
+                if "offset" not in row:
+                    raise CEHubError("provider timezone offset is missing")
+                stamp = _parse_timestamp(str(row.get("date", "")), float(row["offset"]))
                 value = _row_value(row)
                 if stamp is not None and value is not None:
+                    if stamp in series:
+                        raise CEHubError("duplicate provider timestamp")
                     series[stamp] = value
             by_field[field_name] = series
 
@@ -188,7 +196,7 @@ class CEHubForecastClient:
         out = []
         for day in sorted(buckets):
             row = buckets[day]
-            if "tmax_c" not in row or "tmin_c" not in row:
+            if not set(DAILY_MEASURES).issubset(row):
                 continue
 
             out.append(
@@ -196,10 +204,10 @@ class CEHubForecastClient:
                     date=day,
                     tmax_c=row["tmax_c"],
                     tmin_c=row["tmin_c"],
-                    precipitation_mm=row.get("precipitation_mm", 0.0),
-                    humidity_pct=row.get("humidity_pct", 60.0),
-                    wind_kmh=row.get("wind_ms", 2.5) * MS_TO_KMH,
-                    solar_wh_m2=row.get("solar_wh_m2", 5000.0),
+                    precipitation_mm=row["precipitation_mm"],
+                    humidity_pct=row["humidity_pct"],
+                    wind_kmh=row["wind_ms"] * MS_TO_KMH,
+                    solar_wh_m2=row["solar_wh_m2"],
                 )
             )
 
@@ -226,17 +234,17 @@ class CEHubForecastClient:
         out = []
         for stamp in sorted(buckets):
             row = buckets[stamp]
-            if "temperature_c" not in row:
+            if not set(HOURLY_MEASURES).issubset(row):
                 continue
 
             out.append(
                 HourlyWeather(
-                    timestamp=stamp,
+                    timestamp=stamp.astimezone(UTC),
                     temperature_c=row["temperature_c"],
-                    humidity_pct=row.get("humidity_pct", 60.0),
-                    wind_kmh=row.get("wind_ms", 2.5) * MS_TO_KMH,
-                    precipitation_mm=row.get("precipitation_mm", 0.0),
-                    solar_wh_m2=row.get("solar_wh_m2", 0.0),
+                    humidity_pct=row["humidity_pct"],
+                    wind_kmh=row["wind_ms"] * MS_TO_KMH,
+                    precipitation_mm=row["precipitation_mm"],
+                    solar_wh_m2=row["solar_wh_m2"],
                 )
             )
 

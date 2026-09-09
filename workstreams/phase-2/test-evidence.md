@@ -17,3 +17,5 @@ Milestone 3: 74 tests passed including six shared contract checks. Added determi
 Milestone 4: 81 passed. Baseline training CLI ran on 24 explicit synthetic rows and emitted software-test-only evaluation with 8 independent rows per split. NDVI, market price forms, crop-product mismatch, grouped temporal leakage, zero-outcome metrics and synthetic promotion denial tested.
 
 `PYTHONPATH=backend .venv/bin/python science/evaluation/benchmark.py`: synthetic 336-hour/336-candidate window engine, 50 runs on arm64/Python 3.12.10, p95 2.283 ms; no network/DB/LLM. Optional XGBoost fit has not been run; no empirical model evaluation exists.
+
+Milestone 5: initial `test_legacy_guards.py` run produced six expected failures identifying actual inherited defects. After fixes, full scoped suite is 89 passed. Added explicit mock/no-network and missing-vs-zero Open-Meteo tests. Restored source /4 phosphorus and null zero-temperature behavior in inherited tests, with rationale tied to source discrepancies.
