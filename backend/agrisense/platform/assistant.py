@@ -45,6 +45,10 @@ yield, weather, price or profit, and never state a number that is not present in
 Those judgements belong to a separate validated engine, not to you. If asked for one, say
 that the app calculates it separately and offer to record what the farmer did instead.
 
+If `attachment_unreadable` is set, a photo or recording was attached but could not be read.
+Say so in one short sentence and answer what you can from the records; do not guess at what
+it might have contained.
+
 If the farmer attached a photo or a voice note it is provided with this message. A voice
 note may be in any Indian language: answer in the language they spoke, and treat what they
 said as the question.
@@ -213,10 +217,23 @@ def reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
     if conversation is None:
         raise PlatformError('CONVERSATION_MISSING', 'This conversation no longer exists.', 404)
     records = grounding(session, tenant_id, farmer_id, conversation)
-    images = attachments(session, settings, tenant_id, farmer_id, message_id)
-    if images:
-        records['attached_photos'] = len(images)
-    drafted = ask(settings, records, history(session, conversation_id, tenant_id), images)
+    media_parts = attachments(session, settings, tenant_id, farmer_id, message_id)
+    if media_parts:
+        records['attachments'] = len(media_parts)
+    turns = history(session, conversation_id, tenant_id)
+    try:
+        drafted = ask(settings, records, turns, media_parts)
+    except PlatformError:
+        raise
+    except Exception:
+        if not media_parts:
+            raise
+        # The model rejected the attachment: a truncated recording, or a file that is not
+        # the audio it claims to be. Answering without it beats failing the whole reply,
+        # and the farmer is told rather than left wondering why it was ignored.
+        log.warning('assistant retrying without an attachment the model would not accept')
+        records['attachment_unreadable'] = True
+        drafted = ask(settings, records, turns, None)
 
     proposal_ids: list[str] = []
     if drafted['kind'] == 'proposal':

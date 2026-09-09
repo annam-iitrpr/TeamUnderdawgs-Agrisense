@@ -322,3 +322,44 @@ async def test_another_farmers_photo_is_never_attached(harness, asha, ravi, seas
     assert refused.status_code == 404
     await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
     assert not getattr(stub, 'images', [])
+
+
+async def test_an_attachment_the_model_rejects_does_not_lose_the_reply(
+        harness, asha, season, monkeypatch):
+    """A truncated recording must not cost the farmer their answer."""
+    import hashlib
+    from urllib.parse import urlsplit
+
+    from agrisense.platform import assistant
+
+    blob = b'\x1a\x45\xdf\xa3' + b'not really audio'
+    ticket = asha.post('/media/uploads', {'filename': 'v.webm', 'content_type': 'audio/webm',
+                                          'size_bytes': len(blob)}).json()['data']
+    parts = urlsplit(ticket['upload_url'])
+    harness.put(f'{parts.path}?{parts.query}', content=blob)
+    asha.post(f'/media/{ticket["asset"]["id"]}/complete',
+              {'sha256': hashlib.sha256(blob).hexdigest()})
+
+    seen: list[bool] = []
+
+    def ask(settings, records, turns, images=None):
+        seen.append(bool(images))
+        if images:
+            raise RuntimeError('400 INVALID_ARGUMENT')
+        assert records.get('attachment_unreadable') is True
+        import json as _json
+        return _json.loads('{"kind":"answer","text":"I could not play that recording."}')
+
+    monkeypatch.setattr(assistant, 'ask', ask)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages',
+              {'text': '', 'media_ids': [ticket['asset']['id']]})
+    assert await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings) == 1
+
+    # Tried with the attachment, then again without it.
+    assert seen == [True, False]
+    with harness.app.state.sessions() as session:
+        assert session.scalar(select(d.JobRow)).status == 'succeeded'
+    replies = [m for m in asha.get(f'/conversations/{convo["id"]}/messages').json()['data']['items']
+               if m['role'] == 'assistant']
+    assert len(replies) == 1 and 'could not play' in replies[0]['text']
