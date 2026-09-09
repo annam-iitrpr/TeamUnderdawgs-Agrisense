@@ -2,6 +2,8 @@
 
 All numeric fixtures are synthetic arithmetic inputs, not empirical field evidence.
 
+Historical milestone: 109 scoped tests pass, including reordered code columns, unit mismatch, duplicates, all-null/unequal-length series, date/horizon validation, queue credential redaction, history exclusion from forecast provider selection, legacy missing versus zero values and documented queue result host. Live three-day typed meteoblue adapter returned 3 daily records, estimated mode, no hourly records. Source checked 2026-09-10: https://docs.meteoblue.com/en/weather-apis/dataset-api (retained JSON query, daily response metadata and HTTPS queue result endpoint). HTTPX fixtures are software evidence only; no historical forecast skill or field-model accuracy claimed.
+
 2026-09-10 resumed checkout: baseline 98 passed. New solar regression failed first at `radiation_wm2` for -0.66. After scoped normalization fix: `PYTHONPATH=backend .venv/bin/python -m pytest backend/tests/science backend/tests/test_stress.py backend/tests/platform/test_contracts.py -q` → 102 passed. Live `probe_science_live.py --env ../agrisense.env` → passed, 10-day Nagpur case, 238 hours/11 daily/30 stress points/8 invalid solar values left null. Pure seam test includes HTTPX provider boundary, real generated models and real evaluation; HTTP route, worker and auth are not exercised. Fresh Python 3.12 local venv uses existing manifest; no dependency manifest/lock changes.
 
 Milestone 1: Python 3.12.10, `PYTHONPATH=backend python3 -m unittest discover -s backend/tests/science -p test_core.py -v`, 9 passed. Source boundary, monotonicity, nonfinite/missing, water balance, unit conversion, FAO reference, decimal economics, zero yield and duplicate/revised cost coverage.

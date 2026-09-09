@@ -6,6 +6,12 @@ Reproduced your latitude 21.1 / longitude 79.1 / horizon 10 case. CE Hub returns
 
 `METEOBLUE_API_KEY` supplies historical Dataset reanalysis, not a verified forecast fallback. Do not wire history into operational future forecasts. The separate null-coverage schema request below still applies to genuine provider outages; the exception now exposes safe `diagnostics` codes (no provider response bodies/URLs) so operators can distinguish auth/schema/transport failures.
 
+## Separate platform gap: planning route remains a stub
+
+Read-only inspection of `origin/codex/phase-3-platform:backend/agrisense/platform/service.py`, `/planning/compare` branch, shows `self.own(...); raise unavailable('Crop planning science integration')`. This route never calls Phase 2 `compare_crops`. Wire an authorized PlanningSnapshot and historical ClimateBundle to the existing facade; never use a ten-day future forecast as full-season climate. Acceptance: missing reviewed local evidence returns a structured CropComparison with exclusions, not unconditional 503. Approved regional data remains absent; do not substitute synthetic planner test records.
+
+Historical data entrypoint is now available in `agrisense.science.history.MeteoblueHistoryProvider`. Its typed daily output preserves missingness and explicitly identifies reanalysis; platform must cache/archive and orchestrate large/queued imports. It does not itself construct approved regional planning parameters or validated climate ensembles.
+
 Current schema: `contract_v1` / 1.0 from `ff851c3`. Phase 3 owns additive changes and regeneration.
 
 1. Add optional `gust_kmh: Measurement`, `rain_probability: Measurement` (fraction), and `inversion_clear: bool|null` with dated evidence to `ForecastHour`. Example: `{"gust_kmh":{"value":12,"unit":"km/h"},"rain_probability":{"value":0.1,"unit":"fraction"},"inversion_clear":null}`. Missing inversion must require field verification. Acceptance: a gust/rain-probability prohibition or unknown inversion cannot yield an unconditional selected interval.

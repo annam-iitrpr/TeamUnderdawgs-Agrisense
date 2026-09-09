@@ -13,6 +13,14 @@ Last verified commit: this milestone (see Git history). Full `agrisense-contract
 - 102 scoped tests pass, including provider → generated contract → evaluation regression and credential-safe failure diagnostics. No authenticated HTTP/browser claim.
 - Next: publish this isolated fix, then restore the unfinished historical-weather slice and verification. Reviewed reference datasets and empirical model labels remain externally blocked.
 
+## Resumed milestone 2 — historical weather
+
+- Weather fix pushed as `d04e2ac`; no merges. Added `science/history.py` with the retained ERA5T/ERA5 daily query and strict code/unit/date/shape validation. Live three-day request passed with estimated reanalysis provenance and zero fabricated hourly records.
+- Legacy missing-weather regression failed first (humidity 60, wind 8, solar 5200). Adapter now preserves nulls; rain zero stays zero. Legacy days lacking temperatures are explicitly omitted, while the new typed history path retains partial days.
+- Corrected legacy queue result URL against official meteoblue documentation and restricted job IDs to UUIDs. New synchronous history port reports queued jobs as requiring platform orchestration, never repeats them as forecast requests.
+- Scoped tests: 109 passed; scoped Ruff and diff checks passed. Empirical model quality is still unmeasured.
+- Read-only finding: current Phase 3 `/planning/compare` unconditionally raises unavailable after ownership lookup. This is a separate platform integration gap, not repaired by a weather-provider change; interface request recorded.
+
 | Requirement | State | Evidence / remaining work |
 | --- | --- | --- |
 | P2-01 weather | in-progress | Live CE Hub metadata and batched hourly probe HTTP 200; normalization and contract bridge underway |
