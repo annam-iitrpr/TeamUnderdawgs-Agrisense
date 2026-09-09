@@ -10,16 +10,16 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 |---|---|---|
 | P3-00 shared contract | done | Published and tagged `contract_v1` at `ff851c3`; 57 operations, generated TS/Pydantic bindings, 6 contract checks passing |
 | P3-00 tested bootstrap | in-progress | CI green: contracts, lint, 40 tests on PostgreSQL 16, migration round trip with drift check, tracked-file secret scan, dependency audit. Still needed: Firebase browser harness, one-command local runtime |
-| P3-01 database/auth | done | 30 tables live on local PostgreSQL 14 and Cloud SQL PostgreSQL 16; Firebase verification and first-request enrollment; legacy unauthenticated router and public `/uploads` mount no longer served |
+| P3-01 database/auth | done | 30 tables on local PostgreSQL 14 and Cloud SQL 16. Firebase Authentication was never initialized on the project; Identity Platform is now initialized with email/password enabled and real tokens verify end to end |
 | P3-02 API workflows | in-progress | 57 routes dispatch from the frozen registry. Implemented: profile, fields, seasons, journal, ledger, tasks, notifications, reminders, conversations, proposals, media, soil queueing, channels, closure. Still dependency-gated: planning, catalog, evaluation results, agronomist evidence/backtests |
 | P3-03 jobs/outbox | done | Leased jobs with exponential backoff and dead lettering; per-consumer outbox receipts so one failing subscriber cannot dead-letter an event for the others; stale tasks expire |
 | P3-04 WhatsApp | in-progress | Signature-verified ingestion, once-per-message-id inbox, hashed phone identities, one-time link codes, consent-gated queued outbound. No message has been sent. Blocked on `META_APP_SECRET`, which is absent from the supplied env |
 | P3-05 media/Gemini | in-progress | Media custody complete and tested: tickets, digest/size/magic verification, tenant-prefixed keys, short-lived owner-only reads. Gemini absent from the env, so extraction stays queued and unimplemented |
 | P3-06 assistant | pending | proposal contract defined |
 | P3-07 reminders/analytics | pending | task/notification/reminder distinctions defined |
-| P3-08 deployment | in-progress | Image builds and was smoke tested locally; Cloud Run service definition and deploy script committed. No cloud revision deployed yet |
+| P3-08 deployment | done | Live at https://agrisense-api-788265611154.asia-south1.run.app. Least-privilege runtime service account, private media bucket, Secret Manager, Cloud SQL socket; verified end to end with a real Firebase token |
 | P3-09 env | in-progress | Supplied `agrisense.env` stays outside the repo. Confirmed present: Firebase, Cloud SQL, WhatsApp, meteoblue, CEHub. Confirmed absent: `META_APP_SECRET`, any Gemini key/model |
-| P3-10 live setup | in-progress | Cloud SQL reachable via Auth Proxy and migrated. Weather, WhatsApp and Gemini not yet exercised live |
+| P3-10 live setup | in-progress | Cloud SQL, Firebase Auth and Cloud Run all working. Weather, WhatsApp and Gemini still unexercised; `META_APP_SECRET` and Gemini configuration are absent |
 | P3-11 acceptance | in-progress | 40 automated tests green in CI. No browser, live-provider or end-to-end demo run yet |
 | P3-12 integration | in-progress | Phase 2 branched from `ff851c3` and shares ancestry. Phase 1 started from an unrelated root, so `.gitignore` and `web/` will need a reconciled merge |
 

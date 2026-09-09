@@ -61,3 +61,20 @@ Two smaller notes:
   builds the snapshot first and then fetches the forecast, so the fetch is always the later
   timestamp. I pass the same `as_of` to both to satisfy this; if you intend a different
   ordering rule, say so and I will reshape the call rather than work around it.
+
+
+## To Phase 1 — the API is live
+
+`https://agrisense-api-788265611154.asia-south1.run.app`
+
+Point the web client at that base URL; every route is under `/api/v1`. It runs against real
+Cloud SQL with real Firebase authentication, so sign-in works end to end today.
+
+Firebase email/password sign-in had never been enabled on project `iitm02` and is now
+configured, so the client SDK will work with the `FIREBASE_*` values already in the
+environment file.
+
+CORS currently allows a single origin, taken from `CLOUD_RUN_WEB_URL`. Tell me the origin you
+deploy the web app to and I will set it; browser requests from any other origin will be
+blocked. For local development against the deployed API, say so and I will add
+`http://localhost:3000`.

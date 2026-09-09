@@ -29,6 +29,27 @@ Nothing below is claimed unless it was actually run. Python 3.12.13, Pydantic 2.
   with 401; enrollment from that identity produced exactly one tenant across repeated
   sign-ins. The test account was deleted.
 
+## Deployed and verified in production
+
+Cloud Run service `agrisense-api` in `asia-south1`, running as a dedicated least-privilege
+service account, reaching Cloud SQL over the attached socket, with `DATABASE_URL` and the
+media signing secret read from Secret Manager.
+
+Live URL: https://agrisense-api-788265611154.asia-south1.run.app
+
+Verified against the deployed service with a real Firebase account created and then deleted:
+
+1. `GET /livez` and `GET /readyz` answer 200; readiness proves the Cloud SQL connection.
+2. Anonymous `/api/v1/*` is refused 401 with the contract error envelope.
+3. Security headers present: HSTS, `nosniff`, `DENY`, `no-referrer`, `no-store`, request id.
+4. A real Firebase ID token enrolls on first call and returns the profile at version 1.
+5. A field persists to Cloud SQL and a replayed `Idempotency-Key` returns the same record.
+6. Over-allocating a season is refused 422 `AREA_ALLOCATION_EXCEEDED`.
+7. A stale `expected_version` is refused 409 `VERSION_CONFLICT`.
+8. `/seasons/{id}/water` answers 503 `DEPENDENCY_UNAVAILABLE` rather than inventing a number.
+
+All rows created by that run were deleted afterwards; the shared database is back to empty.
+
 ## Not yet run
 
 No browser session, no live weather, WhatsApp or Gemini call, and no Cloud Run revision
