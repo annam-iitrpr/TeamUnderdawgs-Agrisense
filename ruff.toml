@@ -1,0 +1,28 @@
+# One lint contract for the whole repository, so backend, contracts and scripts agree.
+target-version = "py312"
+line-length = 100
+extend-exclude = ["backend/.venv", "web", "backend/migrations/versions"]
+
+[lint]
+# Pinned explicitly so a ruff upgrade cannot silently change what CI enforces.
+# E701/E702 are omitted: the platform modules use a deliberate compact statement style.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "DTZ", "PIE", "RUF"]
+extend-ignore = ["E701", "E702"]
+ignore = ["UP046"]  # Generic[T] in the contract models is intentional and mirrored in TypeScript.
+
+[lint.per-file-ignores]
+# Generated bindings are rewritten by the generator, never edited by hand.
+"backend/agrisense/contracts_generated/*" = ["ALL"]
+"contracts/models.py" = ["I001"]
+"contracts/routes.py" = ["F403", "F405", "I001"]
+# These bootstrap sys.path before importing the repo-root contracts package.
+"scripts/seed_contract_fixtures.py" = ["E402"]
+"scripts/generate_contracts.py" = ["E402"]
+"backend/tests/platform/test_contracts.py" = ["E402"]
+# The pre-contract router and science-owned packages are not maintained on this branch.
+"backend/agrisense/api/*" = ["ALL"]
+"backend/agrisense/models/*" = ["ALL"]
+"backend/agrisense/agronomy/*" = ["ALL"]
+"backend/agrisense/clients/*" = ["ALL"]
+"backend/agrisense/services/*" = ["ALL"]
+"backend/tests/test_stress.py" = ["ALL"]

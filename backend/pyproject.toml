@@ -1,44 +1,34 @@
 [project]
 name = "agrisense"
-version = "0.1.0"
-description = "Biological application timing and readiness scoring for Indian smallholder fields."
-requires-python = ">=3.11"
+version = "0.3.0"
+description = "AgriSense tenant-safe platform and scientific integration."
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "fastapi>=0.115",
-    "httpx>=0.27",
-    "numpy>=2.0",
-    "pydantic-settings>=2.6",
-    "python-multipart>=0.0.12",
-    "sqlmodel>=0.0.22",
-    "uvicorn[standard]>=0.32",
+  "fastapi>=0.141,<0.142", "httpx>=0.28,<0.29", "numpy>=2.2,<3",
+  "pydantic-settings>=2.10,<3", "python-multipart>=0.0.22,<0.1",
+  "sqlmodel>=0.0.37,<0.1", "uvicorn[standard]>=0.41,<1",
+  "alembic>=1.16,<2", "psycopg[binary]>=3.2,<4", "firebase-admin>=7,<8",
+  "google-genai>=1.50,<3", "google-cloud-storage>=3,<4",
+  "google-cloud-tasks>=2.19,<3", "google-cloud-bigquery>=3.30,<4",
+  "pillow>=12,<13", "python-magic>=0.4.27,<0.5",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "hypothesis>=6.115",
-    "mypy>=1.13",
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "pytest-cov>=6.0",
-    "ruff>=0.8",
-]
+[dependency-groups]
+dev = ["hypothesis>=6.115", "mypy>=1.13", "pytest>=9", "pytest-asyncio>=1",
+       "pytest-cov>=6", "ruff>=0.15", "pyyaml>=6", "types-PyYAML>=6",
+       "jsonschema>=4.26", "openapi-spec-validator>=0.7", "pip-audit>=2.9"]
+science = ["xgboost>=3", "shap>=0.48", "numpyro>=0.19", "scikit-learn>=1.6", "pandas>=2.2"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
 [tool.hatch.build.targets.wheel]
 packages = ["agrisense"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-
-[tool.ruff]
-target-version = "py311"
-line-length = 100
-
+markers = ["integration: requires isolated PostgreSQL and Firebase Auth Emulator"]
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 ignore_missing_imports = true
