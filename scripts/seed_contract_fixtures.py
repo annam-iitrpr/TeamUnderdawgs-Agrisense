@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
 """Build synthetic, non-personal fixtures; never used as live provider fallback."""
-from pathlib import Path
 import sys
+from pathlib import Path
+
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from contracts.models import Farmer, Field, Location, Season, SeasonSnapshot, Recommendation, Reason, EvaluationBundle, DomainEvent
+from contracts.models import (
+    DomainEvent,
+    EvaluationBundle,
+    Farmer,
+    Field,
+    Location,
+    Reason,
+    Recommendation,
+    Season,
+    SeasonSnapshot,
+)
 
 for crop in ('rice','wheat','cotton'):
     farmer=Farmer(id='synthetic-farmer',tenant_id='synthetic-tenant',display_name='Synthetic farmer',version=1)

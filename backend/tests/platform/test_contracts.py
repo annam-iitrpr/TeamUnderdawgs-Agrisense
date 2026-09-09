@@ -1,14 +1,15 @@
-from pathlib import Path
 import json
 import subprocess
 import sys
+from pathlib import Path
+
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
-from contracts.models import Estimate, Interval, FieldCreate, Measurement, Recommendation
+from contracts.models import Estimate, FieldCreate, Interval, Measurement, Recommendation
 from contracts.routes import ROUTES
 
 

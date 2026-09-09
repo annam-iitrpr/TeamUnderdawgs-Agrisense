@@ -8,7 +8,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field as PydanticField, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
+from pydantic import Field as PydanticField
 
 Id = Annotated[str, PydanticField(min_length=1, max_length=128)]
 Version = Annotated[int, PydanticField(ge=1)]

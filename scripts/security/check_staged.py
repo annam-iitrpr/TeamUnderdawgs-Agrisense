@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Inspect exactly the index before every commit. Never print matched secret values."""
 import argparse
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -34,7 +34,7 @@ def check(all_tracked=False, secret_files=()):
     for raw in names.split(b'\0'):
         if not raw: continue
         name=raw.decode();base=Path(name).name.lower()
-        if base.startswith('readme') or base=='.env' or base.startswith('.env.') or re.search(r'\.env(?:\.|$)',base) or base.endswith(('.pem','.key','.p12','.pfx')) or re.search(r'(service[-_]account|credentials).*\.json$',base):
+        if base.startswith(('readme','.env')) or re.search(r'\.env(?:\.|$)',base) or base.endswith(('.pem','.key','.p12','.pfx')) or re.search(r'(service[-_]account|credentials).*\.json$',base):
             issues.append((name,'forbidden private/README filename'));continue
         data=git('show',':'+name)
         for reason,pattern in patterns.items():
