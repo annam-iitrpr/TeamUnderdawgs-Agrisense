@@ -28,7 +28,7 @@ import type { DataMode, Field, Recommendation, Season } from "@/lib/api/contract
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveField } from "./active-field";
-import { ChevronDown, MapPin, Plus, Sprout } from "lucide-react";
+import { ChevronDown, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -339,8 +339,28 @@ function NoSeasonCard({
         it was sown. Nothing can be calculated for this field until then.
       </p>
 
-      <div className="mt-4">
-        <AddSeasonForm field={field} existingSeasons={[]} onAdded={onAdded} />
+      <div className="mt-4 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/plan-crop?field=${encodeURIComponent(field.id)}`}
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-control bg-forest px-4 text-sm font-semibold text-white"
+          >
+            <Sparkles aria-hidden className="size-4" />
+            Suggest crops for this field
+          </Link>
+        </div>
+        <details className="rounded-card border border-mist p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-ink">
+            I already know which crop
+          </summary>
+          <p className="mt-1 text-xs text-slate">
+            Adds the crop straight away. Water, suitability and return are shown on the
+            suggestions screen.
+          </p>
+          <div className="mt-3">
+            <AddSeasonForm field={field} existingSeasons={[]} onAdded={onAdded} />
+          </div>
+        </details>
       </div>
 
     </Card>
@@ -519,7 +539,10 @@ function DataRequests({ field, seasonCount }: { field: Field; seasonCount: numbe
   const requests: Array<{ label: string; href?: string; blocked?: string }> = [];
 
   if (seasonCount === 0) {
-    requests.push({ label: "Add the crop for this field", href: "/onboarding" });
+    requests.push({
+      label: "Add the crop for this field",
+      href: `/plan-crop?field=${encodeURIComponent(field.id)}`,
+    });
   }
   // Soil is handled inline by its own card below, not as a link to somewhere else.
   if (field.irrigation_method == null) {
