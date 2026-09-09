@@ -342,3 +342,51 @@ the install button renders only when the browser actually offers it), and the
 offline fallback was not tested by pulling the network in a browser. The suite
 runs unauthenticated against public routes, so it is `contract-fixture`-profile
 evidence about layout and PWA wiring — not integration evidence.
+
+## Slice 9 — first real integration evidence against the live API
+
+Phase 3 published the deployed base URL and enabled Firebase email/password on
+project `iitm02`. This slice verifies the contract end to end **server to
+server**, which sidesteps the CORS restriction that still blocks browser calls
+from local development (IR-005).
+
+Method: exchange the device-1 test account's email and password for a real
+Firebase ID token via the Identity Toolkit REST endpoint, then call the deployed
+API with `Authorization: Bearer <token>`. The token is never printed or stored.
+
+| Request | Status | Observed |
+|---|---|---|
+| Firebase `signInWithPassword` | 200 | Real ID token issued (921 chars), `localId` present |
+| `GET /api/v1/me` | **200** | `{data, meta}`; `data_mode: live`; data carries `id`, `tenant_id`, `display_name`, `preferred_language`, `timezone`, `consents`, `linked_channel_ids`, `version` |
+| `GET /api/v1/fields` | **200** | `{items: [], next_cursor: null}` — correct for a new account, and an empty list rather than an error |
+| `GET /api/v1/catalog/crops?limit=5` | **503** | `{error, request_id}`; `code: DEPENDENCY_UNAVAILABLE`, `retryable: true`, farmer-safe message |
+| `GET /api/v1/tasks?limit=3` | **200** | `{items: [], next_cursor: null}` |
+| `GET /api/v1/me` with a bogus token | **401** | `code: UNAUTHENTICATED` — auth is genuinely enforced, not assumed |
+| `GET /health/live`, `/health/ready`, `/healthz` | 404 | Documented paths do not match the deployed service; raised as IR-006 |
+
+### What this actually proves
+
+- **Firebase UID to application actor enrolment works.** The test account was
+  created through the browser sign-up screen and `/me` returned a populated
+  farmer record with a `tenant_id`, so Phase 3's idempotent enrolment ran.
+- **The envelope matches this branch's client exactly.** `meta` carries all
+  seven expected keys (`request_id`, `schema_version`, `data_mode`,
+  `generated_at`, `provenance`, `warnings`, `job_id`) and errors carry
+  `code`/`message`/`retryable`. The provisional guesses recorded in slice 3 are
+  confirmed correct on the parts the screens depend on — so `ApiError`'s
+  branch-on-code design and the visible `data_mode` badge are built on the real
+  shape, not a hopeful one.
+- **The 503 is the design working, not a fault.** `catalog/crops` cannot answer
+  because nothing builds a `ReferenceBundle` on the Phase 2 side. It returns a
+  retryable `DEPENDENCY_UNAVAILABLE` with a message safe to show a farmer,
+  instead of an empty list that would read as "no crops exist" or a fabricated
+  catalogue. `ApiError.isDependencyUnavailable` exists for exactly this, and
+  P1-03 must render it as "we cannot check crops right now" rather than as an
+  empty state.
+
+### Still not integrated in a browser
+
+Browser requests from `http://localhost:3000` remain blocked by CORS, so the
+`live-local` Playwright profile cannot run yet — IR-005 asks for the origin to
+be allowed. Until then, screen-level evidence stays `contract-fixture` profile
+and is labelled as such.

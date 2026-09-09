@@ -3,6 +3,10 @@
 Addressed to Phase 3 (contract owner). Each request names the current state, the
 proposed change, the reason, an example payload and the affected acceptance test.
 
+**Status: IR-001 to IR-004 are ANSWERED** by Phase 3 in
+`workstreams/phase-3/interface-requests.md` (commit `e3fce05`). Resolutions are
+noted inline below. IR-005 and IR-006 are open.
+
 ---
 
 ## IR-001 — Publish the shared bootstrap tag and confirm the realignment path
@@ -20,6 +24,11 @@ bootstrap is supposed to freeze.
 
 **Affected tests.** All of them — the `live-local` Playwright profile cannot run
 without a backend and generated types.
+
+**ANSWERED.** `contract_v1` is tagged at `ff851c3`; there is no separate
+`agrisense-contract-v1` tag, and it was published deliberately before the
+bootstrap gate finished. Phase 3 confirms merging rather than rebasing was the
+right call. Done in D-006.
 
 ---
 
@@ -46,6 +55,11 @@ Playwright profiles.
 
 **Reason.** Hand-splicing manifests and lockfiles is the merge conflict most
 likely to break the integration build.
+
+**ANSWERED — the opposite of what was asked, and better.** Phase 3 is handing
+*ownership* of all nine files to Phase 1 rather than overwriting them, having
+reverted its own edits to `web/package.json` to keep the merge clean, and asks
+only that `firebase` stays pinned. It is. No action remains.
 
 ---
 
@@ -80,6 +94,15 @@ status strip is wrong.
 
 **Affected tests.** `tests/e2e/phase1` data-mode badge and provenance assertions.
 
+**ANSWERED and confirmed against the live API.** Import from
+`web/lib/generated/api.ts`; never hand-edit it, since CI fails on stale output.
+The envelope is exactly `{data, meta}` and `{error, request_id}` with no
+variation across the 57 routes; `error` carries `code`, `message`, `details`,
+`retryable`; `message` is farmer-safe and `code` is what the UI branches on;
+submitted values are never echoed back in `details`. All of this matches what
+this branch built — verified live in test-evidence.md slice 9. Adopted in
+slice 7.
+
 ---
 
 ## IR-004 — Confirm the readiness "insufficient data" shape
@@ -99,3 +122,63 @@ P1-05 slice.
 
 **Affected tests.** P1-05 null-versus-zero rendering test (also named in the
 Phase 2 spec's Playwright list).
+
+**ANSWERED — confirmed, and enforced by the schema rather than by convention.**
+In `Recommendation`, `readiness`, `need`, `timing_fit` and `viability` are each
+**required and independently nullable**: always present, `null` when unknown,
+never omitted and never zero-to-mean-unknown. `status` is required and
+non-nullable. The same rule holds for `Measurement.value` and every `Estimate`
+quantile, each of which carries a `missing_reason`. So P1-05 can rely on the key
+existing and must render `null` as "not enough data".
+
+
+---
+
+## IR-005 — please allow `http://localhost:3000` as a CORS origin
+
+**Current state.** The live API at
+`https://agrisense-api-788265611154.asia-south1.run.app` allows a single origin
+taken from `CLOUD_RUN_WEB_URL`. Phase 3 offered to add a local origin on
+request. This is that request.
+
+**Request.** Add `http://localhost:3000` **and** `http://127.0.0.1:3000` to the
+allowed origins. Both are needed: Next's dev server prints `localhost` while
+Playwright's `baseURL` here is `127.0.0.1`, and browsers treat them as distinct
+origins.
+
+**Reason.** Server-to-server verification already passes (see below), but every
+browser call from local development is currently blocked at the preflight, so
+the farmer screens cannot be exercised against the real API — only against
+fixtures. That is the difference between "layout verified" and "integrated".
+
+**Web origin for deployment.** Phase 1 has not deployed a web origin yet. When
+one exists it will be recorded here; until then only the local origins are
+needed.
+
+**Affected tests.** The `live-local` Playwright profile, and every P1-02 onward
+acceptance journey.
+
+---
+
+## IR-006 — health endpoints answer 404 at the documented paths
+
+**Current state.** Against the live service:
+
+```
+GET /health/live   -> 404
+GET /health/ready  -> 404
+GET /healthz       -> 404
+```
+
+The shared contract describes `/health/live` for process health and
+`/health/ready` for local dependency readiness, and there is a recent commit
+titled "expose a health path Cloud Run's frontend will forward".
+
+**Request.** Confirm the actual health path on the deployed revision. Phase 1
+does not need it for a farmer screen; it is useful for the dev harness and for
+distinguishing "API is down" from "my request was rejected" in the UI's error
+copy.
+
+**Reason.** Low priority and blocking nothing — raised only because the
+documented paths and the deployed behaviour currently disagree, and that is the
+kind of mismatch that is cheap to fix now and confusing later.
