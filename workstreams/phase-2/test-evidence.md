@@ -13,3 +13,7 @@ Milestone 2: combined science and inherited stress suite, 63 passed in 1.30 seco
 Open-Meteo official hourly definitions (https://open-meteo.com/en/docs) identify rain, probability, gusts and radiation as preceding-hour aggregates. Normalizer shifts these to interval starts; terminal unknown stays null. CE Hub UTC offset and 2 m wind height observed live; modelUpdateTime timezone and sum interval convention remain unresolved.
 
 Milestone 3: 74 tests passed including six shared contract checks. Added deterministic generated-model round-trip, foreign snapshot rejection, unit mismatch rejection, paired ROI scenario, fewer-than-five crop comparison, water budget exclusion, closure zero yield/cost. JSON Schema dependency installed only in local venv. No browser test claim.
+
+Milestone 4: 81 passed. Baseline training CLI ran on 24 explicit synthetic rows and emitted software-test-only evaluation with 8 independent rows per split. NDVI, market price forms, crop-product mismatch, grouped temporal leakage, zero-outcome metrics and synthetic promotion denial tested.
+
+`PYTHONPATH=backend .venv/bin/python science/evaluation/benchmark.py`: synthetic 336-hour/336-candidate window engine, 50 runs on arm64/Python 3.12.10, p95 2.283 ms; no network/DB/LLM. Optional XGBoost fit has not been run; no empirical model evaluation exists.

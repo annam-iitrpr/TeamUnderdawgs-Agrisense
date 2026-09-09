@@ -1,0 +1,12 @@
+# Raw/private data and trained artifacts require controlled storage.
+datasets/
+raw/
+artifacts/
+*.pkl
+*.pickle
+*.joblib
+*.ubj
+*.onnx
+*.npz
+*.parquet
+*.arrow

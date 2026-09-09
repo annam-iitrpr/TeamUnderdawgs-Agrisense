@@ -17,3 +17,5 @@ Milestone 3 DELIVERS the generated-contract facade in `backend/agrisense/science
 Reference scalar record convention: `planning:<crop>`, `water:<crop>`, `product:<product_id>`, `economics:<crop>`, `scenario:<crop>:<sample_id>`. Every reviewed record requires `reviewed=true`, `evidence_id` present in the evidence catalog, and ISO `valid_from`/`valid_until`. Tests contain synthetic examples only. No approved production product/calendar records are shipped.
 
 Phase 1: null fields are present explicitly in model JSON, not omitted. `status=insufficient_data` retains null readiness/timing/viability. Water daily replenishment values are alternatives, not volumes to sum across days; contract needs dated daily water records before UI can show them authoritatively.
+
+Milestone 4 adds `science/data.py` and `science/validation.py`, offline `science/training/train_yield.py`, source registry, rules-only model card and repeatable CPU benchmark. Run training with `PYTHONPATH=backend`; require explicit --software-test for synthetic exports. No registry promotion or remote model write occurs. Operator explicitly forbids merging other branches in this session.

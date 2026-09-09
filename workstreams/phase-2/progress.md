@@ -47,3 +47,14 @@ Next: publish the core arithmetic milestone; complete verified provider normaliz
 - Saved live CE Hub payload normalizes to 43 hours within the inspected UTC interval, with no synthetic weather fill.
 - Full tracked-file secret scan passed against supplied env; README/environment files remain excluded.
 - Next: reference ingestion, leakage-safe learning/evaluation pipeline, legacy hazard repairs and benchmark.
+
+## Verified milestone 4
+
+- Milestone 3 pushed as `cbbf8c1`; operator explicitly instructs **no merges with any other branch**. Continue only on Phase 2.
+- Soil scale/depth interpretation, explicit market product/price units and cloud-masked NDVI transforms added; no unverified provider response maps or live satellite claim.
+- Offline baseline/XGBoost pipeline, forward farmer/field-separated splitting, future-feature checks, conformal calibration, target metrics and promotion safeguards implemented.
+- Baseline CLI exercised with 24 synthetic rows, 8 each train/calibration/test; result `software_test_only`. Artifacts and dataset stay in ignored `.local/`; real labels and optional XGBoost runtime remain prerequisites for empirical work.
+- 81 combined science/inherited/shared-contract tests passed. NDVI exact equality initially failed at floating-point rounding; corrected to an appropriate numerical tolerance, preserving the independently expected 0.5.
+- CPU window benchmark: Python 3.12.10 arm64, 336 hours/336 candidates, 50 runs; median 2.134 ms, p95 2.283 ms. Excludes network; no accuracy claim.
+- Source/discrepancy registry and rules-only model card added; raw data/model binaries excluded under science/.gitignore.
+- Next: inherited safety shortcuts and regression checks; no branch merge.
