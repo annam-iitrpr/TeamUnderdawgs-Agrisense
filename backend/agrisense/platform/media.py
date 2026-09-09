@@ -110,10 +110,29 @@ class BucketStore:
         from google.cloud import storage
         self.bucket = storage.Client(project=settings.google_cloud_project or None).bucket(settings.media_bucket)
 
+    def _signing_identity(self) -> dict[str, str]:
+        """Cloud Run's metadata credential has no private key, so signing goes through the IAM
+        signBlob API instead. That needs serviceAccountTokenCreator on the runtime identity.
+        A key-bearing credential signs locally and needs none of this."""
+        from google.auth import default
+        from google.auth.transport.requests import Request
+        credentials, _ = default()
+        if hasattr(credentials, 'signer_email') and getattr(credentials, 'signer', None) is not None:
+            return {}
+        credentials.refresh(Request())
+        email = getattr(credentials, 'service_account_email', None)
+        if not email or email == 'default':
+            email = self.settings.signing_service_account
+        if not email:
+            raise unavailable('Media storage signing')
+        return {'service_account_email': email, 'access_token': credentials.token}
+
     def _signed(self, key: str, method: str, ttl: timedelta, content_type: str | None = None) -> tuple[str, int]:
         expires = d.utcnow() + ttl
         try:
-            url = self.bucket.blob(key).generate_signed_url(version='v4', expiration=expires, method=method, content_type=content_type)
+            url = self.bucket.blob(key).generate_signed_url(
+                version='v4', expiration=expires, method=method, content_type=content_type,
+                **self._signing_identity())
         except Exception as exc:
             # Without a signing credential the capability is unavailable; it is never bypassed.
             log.exception('cloud storage signing failed')

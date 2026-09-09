@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     gcs_media_bucket: str = ''
     firebase_storage_bucket: str = ''
     media_signing_secret: str = ''
+    signing_service_account: str = ''
     analytics_dataset: str = ''
     analytics_table: str = 'domain_events'
     cloud_tasks_location: str = ''

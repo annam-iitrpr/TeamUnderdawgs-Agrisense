@@ -52,6 +52,9 @@ spec:
               value: ${CLOUD_RUN_WEB_URL}
             - name: GCS_MEDIA_BUCKET
               value: ${GCS_MEDIA_BUCKET}
+            # Signing goes through IAM signBlob; the metadata credential has no private key.
+            - name: SIGNING_SERVICE_ACCOUNT
+              value: ${API_SERVICE_ACCOUNT}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
