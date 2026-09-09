@@ -11,3 +11,9 @@ Phase 1 display goldens: cotton Tmax 35 => 4.5/9 heat index; rice frost null mea
 Live CE Hub access verified; station contract, meteoblue exported Dataset query, approved local calendars/product rules, market key and real outcome labels remain unavailable. Full browser/auth integration awaits Phase 3 runtime and merged frontend.
 
 Milestone 2 adds internal weather types, bounded providers and window ranking. Import `agrisense.science.providers.build_weather_bundle(..., providers=...)` for dependency-injected internal bundles; the generated ForecastBundle wrapper is next. No hidden fixture provider exists in this service. Pure window engine requires reviewed evidence and full rainfast continuity.
+
+Milestone 3 DELIVERS the generated-contract facade in `backend/agrisense/science/facade.py`. Phase 3 can now import all four exports. All pure functions accept/return the generated 1.0 models. Snapshot facts are checked for mismatched identities/future events, recommendations replay deterministically, unavailable economics remains null.
+
+Reference scalar record convention: `planning:<crop>`, `water:<crop>`, `product:<product_id>`, `economics:<crop>`, `scenario:<crop>:<sample_id>`. Every reviewed record requires `reviewed=true`, `evidence_id` present in the evidence catalog, and ISO `valid_from`/`valid_until`. Tests contain synthetic examples only. No approved production product/calendar records are shipped.
+
+Phase 1: null fields are present explicitly in model JSON, not omitted. `status=insufficient_data` retains null readiness/timing/viability. Water daily replenishment values are alternatives, not volumes to sum across days; contract needs dated daily water records before UI can show them authoritatively.

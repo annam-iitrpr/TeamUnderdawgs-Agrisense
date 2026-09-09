@@ -11,3 +11,5 @@ Not run: authenticated API, PostgreSQL integration, Playwright and hosted stagin
 Milestone 2: combined science and inherited stress suite, 63 passed in 1.30 seconds. HTTPX mock boundaries cover 204, 401/403, redirects, circuit opening, retry-after, oversized payload and redaction. Live probe success is separate from fixture tests.
 
 Open-Meteo official hourly definitions (https://open-meteo.com/en/docs) identify rain, probability, gusts and radiation as preceding-hour aggregates. Normalizer shifts these to interval starts; terminal unknown stays null. CE Hub UTC offset and 2 m wind height observed live; modelUpdateTime timezone and sum interval convention remain unresolved.
+
+Milestone 3: 74 tests passed including six shared contract checks. Added deterministic generated-model round-trip, foreign snapshot rejection, unit mismatch rejection, paired ROI scenario, fewer-than-five crop comparison, water budget exclusion, closure zero yield/cost. JSON Schema dependency installed only in local venv. No browser test claim.

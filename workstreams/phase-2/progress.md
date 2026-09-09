@@ -36,3 +36,14 @@ Next: publish the core arithmetic milestone; complete verified provider normaliz
 - CE Hub interval semantics remain unconfirmed: raw hourly input is available for diagnostics but cannot certify safe windows.
 - Shared schema does not yet transport gust/probability/inversion evidence; interface request published.
 - Next: implement facade against generated models and evidence-gated planning/closure.
+
+## Verified milestone 3
+
+- Milestone 2 pushed as `1ecb09f`.
+- Public generated-contract facade exports `evaluate_season`, `compare_crops`, `summarize_season`, and async `build_weather_bundle`. Deterministic replay IDs derive from complete inputs and versions. No DB/auth/router/LLM imports.
+- Paired vectorized 2,000-draw economic scenarios preserve yield/price/cost rows, expose scenario quantiles and zero-yield losses; current actual-ledger reconciliation is explicitly unavailable pending schema additions.
+- Local crop planner gates reviewed date/region, soil pH, water, cash budget, historical climate coverage and remaining allocated area; never fabricates five crops.
+- `PYTHONPATH=backend .venv/bin/python -m pytest backend/tests/science backend/tests/test_stress.py backend/tests/platform/test_contracts.py -q`: 74 passed. Shared tests initially could not collect because local jsonschema was absent; installed local dependency and reran successfully.
+- Saved live CE Hub payload normalizes to 43 hours within the inspected UTC interval, with no synthetic weather fill.
+- Full tracked-file secret scan passed against supplied env; README/environment files remain excluded.
+- Next: reference ingestion, leakage-safe learning/evaluation pipeline, legacy hazard repairs and benchmark.
