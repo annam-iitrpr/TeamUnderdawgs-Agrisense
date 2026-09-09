@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import science
+from agrisense.platform import reminders, science
 from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.worker')
@@ -169,13 +169,14 @@ async def worker_loop(settings: Settings, interval: float = 5.0, iterations: int
     try:
         while iterations is None or count < iterations:
             processed = await drain_jobs(sessions)
+            delivered = sum(reminders.dispatch(sessions, settings).values())
             session = sessions()
             try:
                 expired = science.expire_stale_tasks(session)
                 session.commit()
             finally:
                 session.close()
-            if not processed and not expired:
+            if not processed and not delivered and not expired:
                 await asyncio.sleep(interval)
             count += 1
     finally:
