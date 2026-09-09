@@ -6686,7 +6686,8 @@
               "application/pdf",
               "audio/ogg",
               "audio/mpeg",
-              "audio/wav"
+              "audio/wav",
+              "audio/webm"
             ],
             "title": "Content Type",
             "type": "string"

@@ -548,7 +548,8 @@ class SeasonEvaluation(ContractModel):
 
 class UploadRequest(ContractModel):
     filename: Annotated[str, PydanticField(min_length=1, max_length=255)]
-    content_type: Literal['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'audio/ogg', 'audio/mpeg', 'audio/wav']
+    # audio/webm is what a browser's recorder actually produces on Chrome and Android.
+    content_type: Literal['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'audio/ogg', 'audio/mpeg', 'audio/wav', 'audio/webm']
     size_bytes: Annotated[int, PydanticField(gt=0, le=20971520)]
     captured_at: AwareDatetime | None = None
 

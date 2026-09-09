@@ -1,12 +1,12 @@
 {
   "artifacts": {
     "backend/agrisense/contracts_generated/__init__.py": "561f30ed5958e048c23c82f7ef5d445a1e1cde5ed479ac68fde1449cebfa9dab",
-    "backend/agrisense/contracts_generated/models.py": "32c78709d48a1eaa77b4c2ce9501548e9cdb85d01e015387998ef49f6485304d",
+    "backend/agrisense/contracts_generated/models.py": "a3d7f359d9b62dfa916e7f6273429e19ac4d127e759e9a08361a08b6149de3cb",
     "backend/agrisense/contracts_generated/routes.py": "1e41f20db2b5a3d92d274282fe17afe3b0c9b275b7a536a563cfe8981b15e862",
     "contracts/events.schema.json": "61144a60954f7631015421a5d710f03975958471914f0e465af40419bd212246",
-    "contracts/openapi.yaml": "b6435ea7ac04feb395ecc540b2e6b7c4879d30cb141bb768dcc9a26369d78bea",
+    "contracts/openapi.yaml": "187cbfed4c1604253b69ee9bcc551e52f5382058b0a2a49033880384d4dffca6",
     "contracts/science.schema.json": "30166e15341c080fec3337455910760e140c19b12f832247b23b725c7cb573ed",
-    "web/lib/generated/api.ts": "0bfa30c1178ebeef831a496a2388e2641fc692e667c69ab0e5d38ea043eea5ff"
+    "web/lib/generated/api.ts": "2b00c84494d8f80339e324f6db1308471c3eac91febcc648ed5e7a4db1894eac"
   },
   "schema_version": "1.0"
 }

@@ -45,7 +45,11 @@ yield, weather, price or profit, and never state a number that is not present in
 Those judgements belong to a separate validated engine, not to you. If asked for one, say
 that the app calculates it separately and offer to record what the farmer did instead.
 
-If the farmer attached a photo it is provided with this message and you can see it.
+If the farmer attached a photo or a voice note it is provided with this message. A voice
+note may be in any Indian language: answer in the language they spoke, and treat what they
+said as the question.
+
+For a photo, you can see it.
 Describe only what is visible. You may say a leaf looks discoloured; you may not name a
 disease, diagnose a deficiency, or recommend a treatment from a photograph. A photograph is
 an observation to record, never a diagnosis.
@@ -138,6 +142,8 @@ def ask(settings: Settings, records: dict[str, Any], turns: list[dict[str, str]]
 
 MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
 VIEWABLE = ('image/jpeg', 'image/png', 'image/webp')
+# Gemini accepts audio directly, so a spoken question needs no separate transcription step.
+AUDIBLE = ('audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/wav')
 
 
 def attachments(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
@@ -156,7 +162,7 @@ def attachments(session: Session, settings: Settings, tenant_id: str, farmer_id:
         if asset is None:
             continue
         kind = (asset.payload or {}).get('content_type', '')
-        if kind not in VIEWABLE or (asset.payload or {}).get('size_bytes', 0) > MAX_ATTACHMENT_BYTES:
+        if kind not in VIEWABLE + AUDIBLE or (asset.payload or {}).get('size_bytes', 0) > MAX_ATTACHMENT_BYTES:
             continue
         try:
             from agrisense.platform import media

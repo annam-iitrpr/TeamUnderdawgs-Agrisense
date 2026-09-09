@@ -29,11 +29,14 @@ SIGNATURES = {
     'image/webp': [b'RIFF'],
     'application/pdf': [b'%PDF-'],
     'audio/ogg': [b'OggS'],
+    # WebM and Matroska share the EBML header.
+    'audio/webm': [b'\x1a\x45\xdf\xa3'],
     'audio/mpeg': [b'ID3', b'\xff\xfb', b'\xff\xf3', b'\xff\xf2'],
     'audio/wav': [b'RIFF'],
 }
 EXTENSIONS = {'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',
-              'application/pdf': '.pdf', 'audio/ogg': '.ogg', 'audio/mpeg': '.mp3', 'audio/wav': '.wav'}
+              'application/pdf': '.pdf', 'audio/ogg': '.ogg', 'audio/mpeg': '.mp3', 'audio/wav': '.wav',
+              'audio/webm': '.webm'}
 
 
 def object_key(tenant_id: str, asset_id: str, content_type: str) -> str:

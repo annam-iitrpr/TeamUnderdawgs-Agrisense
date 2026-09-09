@@ -30,8 +30,9 @@ import {
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ProposalCard } from "@/features/ask/proposal-card";
-import { uploadImage, UploadError, ACCEPTED_IMAGE_TYPES } from "@/lib/media/upload";
-import { BookOpen, ImagePlus, Send, Sprout, X } from "lucide-react";
+import { VoiceRecorder } from "@/features/ask/voice-recorder";
+import { uploadAttachment, UploadError, ACCEPTED_IMAGE_TYPES } from "@/lib/media/upload";
+import { BookOpen, ImagePlus, Mic, Send, Sprout, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -120,14 +121,14 @@ export function AskScreen() {
       if (photo) {
         setUploading(true);
         try {
-          mediaIds = [await uploadImage(photo.file, newIdempotencyKey())];
+          mediaIds = [await uploadAttachment(photo.file, newIdempotencyKey())];
         } finally {
           setUploading(false);
         }
       }
       const { data: sent } = await postMessage(convo.id, text, mediaIds);
       if (photo) {
-        URL.revokeObjectURL(photo.preview);
+        if (photo.preview) URL.revokeObjectURL(photo.preview);
         setPhoto(null);
       }
       setMessages((prev) => [...prev, sent]);
@@ -249,6 +250,14 @@ export function AskScreen() {
             >
               <ImagePlus aria-hidden className="size-4" />
             </Button>
+            <VoiceRecorder
+              disabled={sending}
+              onError={setError}
+              onRecorded={(file) => {
+                if (photo) URL.revokeObjectURL(photo.preview);
+                setPhoto({ file, preview: "" });
+              }}
+            />
             <Button type="submit" size="lg" busy={sending} disabled={draft.trim() === "" && !photo}>
               <Send aria-hidden className="size-4" />
               Send
@@ -264,16 +273,26 @@ export function AskScreen() {
 
         {photo ? (
           <Card className="flex items-center gap-3 p-3">
-            {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not a remote asset */}
-            <img
-              src={photo.preview}
-              alt="Photo you are about to attach"
-              className="size-14 shrink-0 rounded-control object-cover"
-            />
+            {photo.preview ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- object URL, not a remote asset */
+              <img
+                src={photo.preview}
+                alt="Photo you are about to attach"
+                className="size-14 shrink-0 rounded-control object-cover"
+              />
+            ) : (
+              <span className="grid size-14 shrink-0 place-items-center rounded-control bg-forest/10 text-forest">
+                <Mic aria-hidden className="size-5" />
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-ink">{photo.file.name}</p>
               <p className="text-xs text-slate">
-                {uploading ? "Uploading…" : "Attached to your next question"}
+                {uploading
+                  ? "Uploading…"
+                  : photo.preview
+                    ? "Attached to your next question"
+                    : "Voice note ready — press Send"}
               </p>
             </div>
             <Button
@@ -295,8 +314,8 @@ export function AskScreen() {
             named rather than offered: a microphone that discards what a farmer
             said is worse than no microphone. */}
         <Callout tone="info" className="text-xs">
-          You can attach a photo. Voice questions are not wired up yet, so speak-to-ask is not
-          available on this screen for now.
+          You can attach a photo or ask by voice in any of the languages above. A voice note is
+          sent as you recorded it; nothing is transcribed on this device.
         </Callout>
       </div>
     </AppShell>
