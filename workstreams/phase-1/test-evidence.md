@@ -44,3 +44,32 @@ put a spray window on the wrong morning:
 
 Not yet evidenced: no browser run, no screenshots, no integration. There is no
 backend to integrate against (progress.md blocker 3).
+
+## Slice 2 — five-language i18n with completeness gate
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0, no diagnostics |
+| Unit tests | `npx vitest run` | exit 0 — 43 passed / 43 total, 2 files |
+
+Added `web/tests/unit/i18n.test.ts` (17 tests). What it actually enforces:
+
+- All five spec languages ship (`en`, `hi`, `mr`, `pa`, `te`), each with a
+  native-script name for the switcher.
+- **Completeness gate**: a per-language assertion fails and names the missing
+  keys if English gains a key the other four dictionaries do not have. This is
+  the spec's "track untranslated keys and fail completeness checks" — it is the
+  check that stops English text appearing inside a Telugu screen.
+- A whitespace-only value counts as missing, so the gate cannot be satisfied
+  with blank labels.
+- `REVIEW_STATUS` asserts English is the source and every other language is
+  `pending-review`. This test is intentionally a tripwire: flipping any
+  language to `reviewed` fails until a named reviewer is recorded in
+  decisions.md.
+- `interpolate` leaves an unmatched placeholder visible rather than printing
+  `undefined`, and substitutes a literal `0` instead of treating it as absent.
+
+**External blocker (unchanged):** no native-speaker or agronomist review has
+happened for Hindi, Marathi, Punjabi or Telugu. Punjabi and Telugu are newly
+written for this phase and have had no review at all. Per the spec this is
+recorded as pending, not presented as a finished multilingual product.

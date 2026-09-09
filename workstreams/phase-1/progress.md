@@ -61,10 +61,21 @@ Recorded per slice below as work proceeds.
 - Added `lib/format.ts` as the single date/area/money formatter, pinned to
   `Asia/Kolkata`, with unknown-not-zero handling throughout.
 
+### Slice 2 — five-language i18n with completeness gate
+
+- `npx vitest run` → exit 0, 43/43 passing (26 format + 17 i18n).
+- `npx tsc --noEmit` → exit 0.
+- Dictionaries for `en`, `hi`, `mr`, `pa`, `te` under `lib/i18n/`, keyed and
+  compiled — no runtime LLM generation of menus.
+- Non-English dictionaries are `Partial<Dict>` on purpose: an untranslated key
+  falls back to English and is *reported* by the completeness test, rather than
+  forcing fabricated translations to satisfy the compiler.
+- `REVIEW_STATUS` records all four non-source languages as `pending-review`.
+
 ## Next concrete step
 
-Land the five-language i18n dictionary, then the provisional typed API client
-and the `contract-fixture` layer, then begin P1-01 authentication screens.
+Provisional typed API client plus the `contract-fixture` layer, then the P1-01
+authentication screens against the Firebase Auth Emulator.
 
 ## Integration requests
 
