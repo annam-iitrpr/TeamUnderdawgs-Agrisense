@@ -73,3 +73,34 @@ Added `web/tests/unit/i18n.test.ts` (17 tests). What it actually enforces:
 happened for Hindi, Marathi, Punjabi or Telugu. Punjabi and Telugu are newly
 written for this phase and have had no review at all. Per the spec this is
 recorded as pending, not presented as a finished multilingual product.
+
+## Slice 3 — provisional v1 API client, contract types and query discipline
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0, no diagnostics |
+| Unit tests | `npx vitest run` | exit 0 — 57 passed / 57 total, 3 files |
+
+Added `web/tests/unit/api-envelope.test.ts` (14 tests):
+
+- Every status the contract assigns to a condition maps to the right error code
+  (401/403/404/409/422/429/503), with an explicit unknown fallback.
+- Retryability is correct per condition: rate-limit, dependency-unavailable and
+  network invite a retry; unauthenticated, forbidden, invalid-input, not-found
+  and version-conflict do not, so the UI never offers a button that cannot help.
+- `fieldErrors` extracts per-input messages from a 422 only, and returns nothing
+  for other codes or non-errors.
+- **Query-key isolation**, which is the P1-04 cross-contamination requirement:
+  keys differ by field, by actor for the same field id, and by input version.
+  Absent members are dropped so a missing season cannot collide with a literal.
+
+`useApiQuery` additionally aborts the in-flight request on key change **and**
+discards a late result whose key is no longer current, because an abort is not
+guaranteed to win the race. That behaviour is asserted in the browser rather
+than here; the Playwright case for rapid field switching is listed as pending
+in progress.md and is not claimed as evidence yet.
+
+**Not evidenced:** the client has never spoken to a real server. There is no
+backend (progress.md blocker 3). The envelope shape is provisional per IR-003 —
+if Phase 3's actual envelope differs, these tests pass while the integration
+would fail, which is exactly why IR-003 asks for confirmation.
