@@ -12,11 +12,11 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 | P3-00 tested bootstrap | in-progress | CI green: contracts, lint, 40 tests on PostgreSQL 16, migration round trip with drift check, tracked-file secret scan, dependency audit. Still needed: Firebase browser harness, one-command local runtime |
 | P3-01 database/auth | done | 30 tables on local PostgreSQL 14 and Cloud SQL 16. Firebase Authentication was never initialized on the project; Identity Platform is now initialized with email/password enabled and real tokens verify end to end |
 | P3-02 API workflows | in-progress | 57 routes dispatch from the frozen registry. Implemented: profile, fields, seasons, journal, ledger, tasks, notifications, reminders, conversations, proposals, media, soil queueing, channels, closure. Still dependency-gated: planning, catalog, evaluation results, agronomist evidence/backtests |
-| P3-03 jobs/outbox | done | Leased jobs with exponential backoff and dead lettering; per-consumer outbox receipts so one failing subscriber cannot dead-letter an event for the others; stale tasks expire |
+| P3-03 jobs/outbox | done | Leased jobs with backoff and dead lettering, per-consumer outbox receipts, stale task expiry. Deployed as a scheduled Cloud Run job and verified end to end in production |
 | P3-04 WhatsApp | in-progress | Signature-verified ingestion, once-per-message-id inbox, hashed phone identities, one-time link codes, consent-gated queued outbound. No message has been sent. Blocked on `META_APP_SECRET`, which is absent from the supplied env |
 | P3-05 media/Gemini | in-progress | Media custody complete and tested. Privacy export writes through the same store. Gemini absent from the env, so soil extraction stays queued and unimplemented |
 | P3-06 assistant | in-progress | Full loop built: grounded context from the caller's own records, contract-validated drafts, single-use expiring proposals confirmed through the normal versioned route. The model never writes. Gemini is not configured, so live replies report their dependency |
-| P3-07 reminders/analytics | in-progress | Reminder delivery with timezone-aware quiet hours, settled-work cancellation, late-drop and once-only delivery. Analytics export not started |
+| P3-07 reminders/analytics | done | Reminder delivery with timezone-aware quiet hours and once-only delivery; analytics export carries identifiers only and never personal text. Both run in the deployed worker |
 | P3-08 deployment | done | Live at https://agrisense-api-788265611154.asia-south1.run.app. Least-privilege runtime service account, private media bucket, Secret Manager, Cloud SQL socket; verified end to end with a real Firebase token |
 | P3-09 env | in-progress | Supplied `agrisense.env` stays outside the repo. Confirmed present: Firebase, Cloud SQL, WhatsApp, meteoblue, CEHub. Confirmed absent: `META_APP_SECRET`, any Gemini key/model |
 | P3-10 live setup | in-progress | Cloud SQL, Firebase Auth and Cloud Run all working. Weather, WhatsApp and Gemini still unexercised; `META_APP_SECRET` and Gemini configuration are absent |
@@ -85,11 +85,10 @@ intended behaviour until the dependency exists:
 
 ## Next concrete steps
 
-1. Analytics export, the last unstarted requirement.
-2. Soil extraction and live assistant replies, once Gemini configuration exists.
-3. Evaluation end to end, once Phase 2 publishes a `ReferenceBundle` builder.
-4. Set the real CORS origin once Phase 1 deploys the web app.
-5. Integration, when the user calls for it. Phase 1 has merged `contract_v1`, so all three
+1. Soil extraction and live assistant replies, once Gemini configuration exists.
+2. Evaluation end to end, once Phase 2 publishes a `ReferenceBundle` builder.
+3. Set the real CORS origin once Phase 1 deploys the web app.
+4. Integration, when the user calls for it. Phase 1 has merged `contract_v1`, so all three
    branches now share ancestry and no unrelated-root reconciliation is needed.
 
 ## Contract publication validation

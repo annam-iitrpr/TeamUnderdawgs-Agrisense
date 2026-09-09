@@ -50,6 +50,28 @@ Verified against the deployed service with a real Firebase account created and t
 
 All rows created by that run were deleted afterwards; the shared database is back to empty.
 
+## Worker verified in production
+
+Deployed as a Cloud Run job invoked every minute by Cloud Scheduler through a dedicated
+invoker identity, running the same image as the API.
+
+- A pass connects to Cloud SQL, drains what is queued and exits zero; a quiet pass is normal.
+- An account export was queued through the deployed API, picked up by the **scheduled** worker
+  with no manual trigger, and succeeded on its first attempt.
+- The resulting file was downloaded through a signed link and contained the farmer's own
+  records.
+- An erasure was queued the same way, ran on the schedule, and removed the records and the
+  stored objects. The bucket is empty and the database is back to zero rows.
+
+Two real defects were found only by running this against real infrastructure, not by
+inspection or by the offline suite:
+
+1. Signed media links failed with `DEPENDENCY_UNAVAILABLE`, because Cloud Run's metadata
+   credential carries no private key. Signing now goes through the IAM signBlob API.
+2. The erasure job deletes its own job row, which the worker then wrote a status to. The job
+   row references the tenant being erased and cannot outlive it, so the disappearance is now
+   explicit and covered by a test.
+
 ## Not yet run
 
 No browser session, no live weather, WhatsApp or Gemini call, and no Cloud Run revision
