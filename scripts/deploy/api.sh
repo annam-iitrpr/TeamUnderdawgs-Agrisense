@@ -20,6 +20,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 : "${GCS_MEDIA_BUCKET:?set GCS_MEDIA_BUCKET}"
 : "${API_SERVICE_ACCOUNT:?set API_SERVICE_ACCOUNT}"
 
+# Defaults to the deployed web origin alone. Widen it deliberately, never by accident.
+export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-$CLOUD_RUN_WEB_URL}"
+
 REPOSITORY="${ARTIFACT_REPOSITORY:-agrisense}"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD)"
 export API_IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY}/agrisense-api:${TAG}"

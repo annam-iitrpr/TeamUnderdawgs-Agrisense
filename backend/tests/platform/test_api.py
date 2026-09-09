@@ -116,5 +116,8 @@ def test_archiving_requires_closed_seasons_and_health_probes_answer(asha, field,
     assert asha.post(f'/seasons/{season["id"]}/journal', {'action': 'observation', 'occurred_at': '2027-01-21T04:00:00Z'}).status_code == 409
     version = asha.get(f'/fields/{field["id"]}').json()['data']['version']
     assert asha.post(f'/fields/{field["id"]}/archive', {'expected_version': version}).status_code == 200
-    assert harness.get('/healthz').json() == {'status': 'ok'}
-    assert harness.get('/readyz').json() == {'status': 'ready'}
+    # The documented paths, plus the aliases kept for the container probe and monitoring.
+    for path in ('/health/live', '/healthz', '/livez'):
+        assert harness.get(path).json() == {'status': 'ok'}, path
+    for path in ('/health/ready', '/readyz'):
+        assert harness.get(path).json() == {'status': 'ready'}, path

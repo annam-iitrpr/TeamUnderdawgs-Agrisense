@@ -207,15 +207,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Meta only needs an acknowledgement; nothing about the account is disclosed here.
         return Response(status_code=200)
 
-    # Cloud Run's frontend reserves /healthz and does not forward it to the container, so the
-    # container probes use that path while external monitoring uses /livez.
+    # /health/live and /health/ready are the documented paths. Cloud Run's frontend reserves
+    # /healthz and never forwards it, so that alias survives only for the container probe.
+    @app.get('/health/live', include_in_schema=False)
     @app.get('/healthz', include_in_schema=False)
     @app.get('/livez', include_in_schema=False)
-    async def healthz() -> dict[str, str]:
+    async def health_live() -> dict[str, str]:
         return {'status': 'ok'}
 
+    @app.get('/health/ready', include_in_schema=False)
     @app.get('/readyz', include_in_schema=False)
-    async def readyz() -> Response:
+    async def health_ready() -> Response:
         from sqlalchemy import text
         try:
             with engine.connect() as connection:

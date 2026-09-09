@@ -26,15 +26,16 @@ ENV_VARS="$ENV_VARS,GOOGLE_CLOUD_LOCATION=${GCP_REGION},GCS_MEDIA_BUCKET=${GCS_M
 ACTION=create
 gcloud run jobs describe "$JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 && ACTION=update
 
+# --args needs the = form: its value starts with a dash and would parse as a flag otherwise.
 gcloud run jobs "$ACTION" "$JOB" \
-  --image "$API_IMAGE" \
   --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
   --service-account "$API_SERVICE_ACCOUNT" \
   --set-cloudsql-instances "$CLOUDSQL_INSTANCE_CONNECTION_NAME" \
   --set-env-vars "$ENV_VARS" \
   --set-secrets "DATABASE_URL=agrisense-database-url:latest,MEDIA_SIGNING_SECRET=agrisense-media-signing-secret:latest" \
-  --command python --args -m,agrisense.platform.worker_main \
-  --max-retries 1 --task-timeout 600 --memory 512Mi --cpu 1
+  --max-retries 1 --task-timeout 600 \
+  --image "$API_IMAGE" --command python --args="-m,agrisense.platform.worker_main" \
+  --memory 512Mi --cpu 1
 
 # A dedicated invoker identity: the scheduler may start this job and nothing else.
 INVOKER="agrisense-scheduler@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
