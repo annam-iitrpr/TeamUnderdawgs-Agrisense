@@ -30,7 +30,8 @@ import {
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ProposalCard } from "@/features/ask/proposal-card";
-import { BookOpen, Send, Sprout } from "lucide-react";
+import { uploadImage, UploadError, ACCEPTED_IMAGE_TYPES } from "@/lib/media/upload";
+import { BookOpen, ImagePlus, Send, Sprout, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -61,6 +62,9 @@ export function AskScreen() {
   const activeField = visible.find((f) => f.id === activeId) ?? null;
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -111,7 +115,21 @@ export function AskScreen() {
 
     try {
       const convo = await ensureConversation();
-      const { data: sent } = await postMessage(convo.id, text);
+      // Upload first: attaching an id that does not exist yet would be refused.
+      let mediaIds: string[] = [];
+      if (photo) {
+        setUploading(true);
+        try {
+          mediaIds = [await uploadImage(photo.file, newIdempotencyKey())];
+        } finally {
+          setUploading(false);
+        }
+      }
+      const { data: sent } = await postMessage(convo.id, text, mediaIds);
+      if (photo) {
+        URL.revokeObjectURL(photo.preview);
+        setPhoto(null);
+      }
       setMessages((prev) => [...prev, sent]);
       setDraft("");
 
@@ -136,7 +154,9 @@ export function AskScreen() {
           ? cause.isDependencyUnavailable
             ? "The assistant service is unavailable right now. Your question was not sent."
             : cause.message
-          : t("errorUnreachable"),
+          : cause instanceof UploadError
+            ? cause.message
+            : t("errorUnreachable"),
       );
     } finally {
       setSending(false);
@@ -169,7 +189,7 @@ export function AskScreen() {
 
   return (
     <AppShell title={t("navAsk")}>
-      <div className="mx-auto flex max-w-[48rem] flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <ContextStrip field={activeField} />
 
         <Card className="flex min-h-[18rem] flex-col p-0">
@@ -206,7 +226,30 @@ export function AskScreen() {
               placeholder="Ask about your field"
               disabled={sending}
             />
-            <Button type="submit" size="lg" busy={sending} disabled={draft.trim() === ""}>
+            <input
+              ref={fileInput}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(",")}
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (photo) URL.revokeObjectURL(photo.preview);
+                setPhoto({ file, preview: URL.createObjectURL(file) });
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              onClick={() => fileInput.current?.click()}
+              disabled={sending}
+              aria-label="Attach a photo"
+            >
+              <ImagePlus aria-hidden className="size-4" />
+            </Button>
+            <Button type="submit" size="lg" busy={sending} disabled={draft.trim() === "" && !photo}>
               <Send aria-hidden className="size-4" />
               Send
             </Button>
@@ -219,12 +262,41 @@ export function AskScreen() {
           </Callout>
         ) : null}
 
-        {/* Voice input is part of P1-08 but needs the media upload path, which
-            is unverified. Saying so beats a microphone button that discards
-            what the farmer said. */}
+        {photo ? (
+          <Card className="flex items-center gap-3 p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not a remote asset */}
+            <img
+              src={photo.preview}
+              alt="Photo you are about to attach"
+              className="size-14 shrink-0 rounded-control object-cover"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-ink">{photo.file.name}</p>
+              <p className="text-xs text-slate">
+                {uploading ? "Uploading…" : "Attached to your next question"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                URL.revokeObjectURL(photo.preview);
+                setPhoto(null);
+              }}
+              disabled={sending}
+              aria-label="Remove the photo"
+            >
+              <X aria-hidden className="size-4" />
+            </Button>
+          </Card>
+        ) : null}
+
+        {/* Voice input still needs a recorder and a transcription step, so it is
+            named rather than offered: a microphone that discards what a farmer
+            said is worse than no microphone. */}
         <Callout tone="info" className="text-xs">
-          Voice questions and photo attachments are not wired up yet, so only typed questions work
-          on this screen for now.
+          You can attach a photo. Voice questions are not wired up yet, so speak-to-ask is not
+          available on this screen for now.
         </Callout>
       </div>
     </AppShell>
@@ -232,8 +304,12 @@ export function AskScreen() {
 }
 
 /** Posted separately so `send()` reads linearly. */
-async function postMessage(conversationId: string, text: string) {
-  return conversationsApi.postMessage(conversationId, { text }, newIdempotencyKey());
+async function postMessage(conversationId: string, text: string, mediaIds: string[] = []) {
+  return conversationsApi.postMessage(
+    conversationId,
+    mediaIds.length ? { text, media_ids: mediaIds } : { text },
+    newIdempotencyKey(),
+  );
 }
 
 function ContextStrip({ field }: { field: Field | null }) {

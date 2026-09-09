@@ -18,8 +18,9 @@ import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
+import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
-import { catalog as catalogApi, fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
+import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
 import type { DataMode, Field, Recommendation, Season } from "@/lib/api/contract";
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -326,12 +327,8 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
 
-  const cropsQuery = useApiQuery(
-    [uid, "catalog", "crops"],
-    (signal) => catalogApi.crops({ signal, limit: 100 }),
-    { enabled: Boolean(uid) },
-  );
-  const crop = (cropsQuery.data?.items ?? []).find((c) => c.id === season.crop_id) ?? null;
+  const { cropFor } = useCrops();
+  const crop = cropFor(season.crop_id);
 
   const recommendationQuery = useApiQuery(
     [uid, "season", season.id, "recommendation"],

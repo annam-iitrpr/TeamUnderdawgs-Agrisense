@@ -55,7 +55,7 @@ export function NotificationsScreen() {
 
   return (
     <AppShell title="Notifications">
-      <div className="mx-auto max-w-[52rem] space-y-4">
+      <div className="space-y-4">
         {status === "initialising" || query.isLoading ? (
           <div className="space-y-3" aria-busy="true">
             <Skeleton className="h-16 w-full rounded-card" />

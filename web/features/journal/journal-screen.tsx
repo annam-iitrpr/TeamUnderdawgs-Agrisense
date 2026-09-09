@@ -12,6 +12,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button, Callout, Card, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useActiveField } from "@/features/fields/active-field";
+import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
 import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
 import type { Field, Season } from "@/lib/api/contract";
@@ -85,7 +86,7 @@ export function JournalScreen() {
 
   return (
     <AppShell title="Journal">
-      <div className="mx-auto max-w-[52rem] space-y-4">
+      <div className="space-y-4">
         {visible.length > 1 ? (
           <FieldPicker fields={visible} activeId={activeId} onSelect={setActiveId} />
         ) : null}
@@ -206,6 +207,7 @@ function SeasonEntries({
 }) {
   const [adding, setAdding] = useState(false);
   const [filters, setFilters] = useState<ReadonlySet<JournalAction>>(new Set());
+  const { nameFor } = useCrops();
 
   const journalQuery = useApiQuery(
     [uid, "journal", season.id, season.version],
@@ -227,9 +229,8 @@ function SeasonEntries({
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate">{field.name}</p>
-          <p className="mt-0.5 break-all text-h3 font-semibold">{season.crop_id}</p>
-          <p className="mt-0.5 text-xs text-slate">
-            Crop names need the catalogue, which is not being served yet.
+          <p className="mt-0.5 break-words text-h3 font-semibold capitalize">
+            {nameFor(season.crop_id)}
           </p>
         </div>
         {!adding ? (
