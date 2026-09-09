@@ -238,3 +238,44 @@ untested. Those move to the live-local integration slice.
 - The generated types at `web/lib/generated/api.ts` are present but unused;
   nothing here proves this branch's request shapes match them.
 - The authentication blocker from slice 4 is unchanged.
+
+## Slice 7 — retired the provisional API types for the generated contract
+
+Phase 3 asked for this directly in its interface requests, and the reason is
+sound: two independent definitions of the same shapes will drift.
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 |
+| Lint | `npx next lint` | exit 0, clean |
+| Unit tests | `npx vitest run` | exit 0 — 74 passed / 74 total, 5 files |
+| Drift guard, negative test | inserted a bogus path, ran `tsc` | **failed as intended**: `Type '"/api/v1/this-route-does-not-exist"' is not assignable to type 'keyof paths'`; clean again after reverting |
+
+`web/lib/api/types.ts` is deleted. `contract.ts` now aliases the generated
+schemas, `envelope.ts` derives `Meta`/`Provenance`/`ErrorDetail` from them, and
+`routes.ts` provides typed calls for the 27 routes Phase 1 consumes.
+
+**The provisional guesses were wrong in ways that would have broken at runtime**,
+which is the concrete argument for having done this before building screens:
+
+| Field | Guessed | Actual contract |
+|---|---|---|
+| `entered_area_unit` | `ha \| acre` | `ha \| acre \| sqm \| kanal` |
+| Water availability | `available_water_litres` | `available_water_m3` |
+| `date_confidence` | `exact \| approximate \| unknown` | `confirmed \| estimated \| unknown` |
+| `stage_source` | `farmer_confirmed \| agronomist \| gdd_estimate \| unknown` | `farmer \| observed \| model \| unknown` |
+| Soil values | flat numbers | `Measurement` objects with unit, analyte, method and `missing_reason` |
+| Field location | loose lat/lon fields | a `Location` object with `source: gps \| map \| manual \| village` |
+
+What was guessed correctly: the `{data, meta}` envelope, the
+`{error, request_id}` error body, and the five-language enum — so IR-003 was
+answered in the affirmative on the parts the screens depend on most.
+
+The contract's prose-only rules are now enforced in code and covered by tests:
+idempotency keys stay inside 8–128 characters, list limits clamp to 1–100, a
+null cursor is omitted rather than serialised, and absent metadata still
+defaults to `data_mode: unavailable` rather than `live`.
+
+**Not verified:** no call has been made against the running API. Route paths and
+payload types are checked against the generated contract, which is a compile-time
+guarantee, not an integration one.

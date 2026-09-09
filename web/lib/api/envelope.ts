@@ -1,43 +1,29 @@
 /**
- * The v1 response envelope and error shape.
+ * Error handling and envelope helpers.
  *
- * PROVISIONAL. `contracts/openapi.yaml` does not exist yet and generated types
- * are Phase 3-owned (`web/lib/generated/**`). These declarations are written
- * from the build spec's tables so Phase 1 can be built and tested now; they are
- * replaced by generated types when the bootstrap lands. Tracked as
- * interface-requests.md IR-003.
+ * The types themselves now come from the generated contract via `./contract`.
+ * This file holds only the behaviour the UI needs on top of them: mapping an
+ * HTTP status to something a screen can react to, deciding whether a retry
+ * could plausibly help, and pulling field-level messages out of a 422.
  */
+import type { DataMode, ErrorDetail, Meta, Provenance } from "./contract";
 
-/** How much of what is on screen is real. Rendered as a visible badge. */
-export type DataMode = "live" | "estimated" | "demo" | "mixed" | "unavailable";
-
-export type Provenance = {
-  source: string;
-  live: boolean;
-  fetched_at: string | null;
-  /** Present when a different provider stood in for the intended one. */
-  substituted_for?: string | null;
-  note?: string | null;
-};
-
-export type Meta = {
-  request_id: string;
-  schema_version: string;
-  data_mode: DataMode;
-  generated_at: string;
-  provenance: Provenance[];
-  warnings: string[];
-  /** Present on 202 responses. */
-  job_id?: string | null;
-};
+export type { DataMode, ErrorDetail, Meta, Provenance };
 
 export type Envelope<T> = { data: T; meta: Meta };
 
-/** Lists are keyset-paginated; `next_cursor` null means the end. */
-export type Page<T> = { items: T[]; next_cursor: string | null };
+/** Structural page shape; concrete routes return the generated page type. */
+export type Page<T> = { items: T[]; next_cursor?: string | null };
 
-/** A value the server could not determine, with the reason it could not.
- *  Unknown is never represented as 0. */
+/**
+ * A value the server could not determine, with the reason.
+ *
+ * The contract expresses this per-field (a nullable value beside a
+ * `missing_reason`, as on `Measurement`). This wrapper is for the places where
+ * Phase 1 carries the pair around internally. It exists so that "unknown" and
+ * "zero" stay distinguishable in component props — the contract is clear that
+ * an unknown must never render as 0.
+ */
 export type Unknowable<T> = { value: T | null; unknown_reason?: string | null };
 
 /* ────────────────────────────────────────────────────────────────── errors */
@@ -53,7 +39,7 @@ export type ApiErrorCode =
   | "network"
   | "unknown";
 
-/** Maps the HTTP statuses the spec assigns to each condition. */
+/** Maps the statuses the contract assigns to each condition. */
 export function codeForStatus(status: number): ApiErrorCode {
   switch (status) {
     case 401:
@@ -113,6 +99,18 @@ export class ApiError extends Error {
   get isVersionConflict(): boolean {
     return this.code === "version_conflict";
   }
+
+  /**
+   * True when a dependency the server needs is unavailable.
+   *
+   * This is a first-class, expected state rather than a bug: Phase 3 answers
+   * 503 `DEPENDENCY_UNAVAILABLE` when, for example, no `ReferenceBundle` can be
+   * built, and the UI must say so honestly instead of showing a fabricated
+   * result or a generic failure.
+   */
+  get isDependencyUnavailable(): boolean {
+    return this.code === "dependency_unavailable";
+  }
 }
 
 function defaultRetryable(code: ApiErrorCode): boolean {
@@ -135,7 +133,24 @@ export function fieldErrors(error: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(details as Record<string, unknown>)) {
     if (typeof value === "string") out[key] = value;
+    else if (typeof value === "number" || typeof value === "boolean") out[key] = String(value);
     else if (Array.isArray(value) && typeof value[0] === "string") out[key] = value[0];
   }
   return out;
+}
+
+/**
+ * Metadata for responses that carry none (204s, and non-conforming bodies we
+ * still accept). `unavailable` is the honest default: it must never present as
+ * `live`.
+ */
+export function emptyMeta(): Meta {
+  return {
+    request_id: "",
+    schema_version: "1.0",
+    data_mode: "unavailable",
+    generated_at: new Date().toISOString(),
+    provenance: [],
+    warnings: [],
+  };
 }
