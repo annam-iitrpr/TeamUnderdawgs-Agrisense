@@ -100,8 +100,10 @@ def test_unimplemented_science_capabilities_report_dependency_state_rather_than_
         response = asha.get(path)
         assert response.status_code == 503
         assert response.json()['error'] == {'code': 'DEPENDENCY_UNAVAILABLE', 'message': response.json()['error']['message'], 'details': {}, 'retryable': True}
+    # Planning needs historical climate, which needs a provider key; without one it says so.
     comparison = asha.post('/planning/compare', {'field_id': field['id'], 'proposed_season': {'start_date': '2026-10-01', 'end_date': '2027-02-01'}, 'candidate_crop_ids': ['rice']})
     assert comparison.status_code == 503
+    assert comparison.json()['error']['code'] == 'DEPENDENCY_UNAVAILABLE'
 
 
 def test_archiving_requires_closed_seasons_and_health_probes_answer(asha, field, season, harness):
@@ -210,3 +212,48 @@ def test_a_page_boundary_does_not_skip_or_repeat_records_sharing_a_timestamp(ash
         if not cursor:
             break
     assert len(seen) == len(set(seen)) == 5
+
+
+async def test_planning_compares_crops_against_past_climate_never_a_forecast(asha, field, monkeypatch):
+    """A ten-day forecast is not a season's climate, so planning uses reanalysis."""
+    from agrisense.contracts_generated import models as c
+    from agrisense.platform import science
+
+    captured: dict[str, object] = {}
+
+    async def climate(location, period, as_of, settings):
+        captured['period'] = period
+        return c.ClimateBundle(location=location, period=period, daily=[],
+                               provenance=[c.Provenance(source='reanalysis', data_mode='estimated')],
+                               data_mode='estimated')
+
+    def compare(snapshot, references, climate_bundle):
+        captured['snapshot'] = snapshot
+        captured['climate'] = climate_bundle
+        return c.CropComparison(candidates=[], data_mode='estimated',
+                                warnings=['No reviewed regional records for this location.'])
+
+    monkeypatch.setattr(science, 'climate_for', climate)
+    monkeypatch.setattr(science, 'facade', lambda name: compare)
+
+    response = asha.post('/planning/compare', {
+        'field_id': field['id'],
+        'proposed_season': {'start_date': '2026-10-01', 'end_date': '2027-02-01'},
+        'candidate_crop_ids': ['rice', 'wheat'], 'available_water_m3': 5000.0})
+    assert response.status_code == 200, response.text
+    body = response.json()['data']
+    # Absent reviewed evidence is a structured comparison with reasons, not a 503.
+    assert body['candidates'] == []
+    assert body['warnings']
+    assert captured['climate'].data_mode == 'estimated'
+    # The snapshot carries the caller's own field, and the request it actually made.
+    assert captured['snapshot'].field.id == field['id']
+    assert captured['snapshot'].request.candidate_crop_ids == ['rice', 'wheat']
+
+
+def test_planning_refuses_a_field_that_is_not_the_callers(ravi, field):
+    refused = ravi.post('/planning/compare', {
+        'field_id': field['id'],
+        'proposed_season': {'start_date': '2026-10-01', 'end_date': '2027-02-01'},
+        'candidate_crop_ids': ['rice']})
+    assert refused.status_code == 404

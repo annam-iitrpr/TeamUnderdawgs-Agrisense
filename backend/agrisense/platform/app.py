@@ -75,7 +75,18 @@ def build_dispatcher(app: FastAPI, method: str, path: str, request_model, respon
             identifier = request.path_params.get('id', '')
             query = {key: value for key, value in request.query_params.items()}
 
+            # The only route needing a live upstream fetch. Ownership is checked first, so a
+            # foreign field is refused before anything is requested from a provider.
+            prepared = None
+            if (method, path) == ('POST', '/planning/compare'):
+                from agrisense.platform import science as science_gateway
+                service.own(d.FieldRow, body.field_id)
+                prepared = await science_gateway.compare(
+                    session, actor.tenant_id, actor.farmer_id, body, settings)
+
             def run():
+                if prepared is not None:
+                    return prepared
                 return service.execute(method, path, identifier, body, query)
 
             if (method, path) in IDEMPOTENT:

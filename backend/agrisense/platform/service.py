@@ -371,7 +371,8 @@ class DomainService:
         if path.startswith('/agronomist/'):
             return self.agronomist(path,body,query)
         if path=='/planning/compare':
-            self.own(d.FieldRow,body.field_id);raise unavailable('Crop planning science integration')
+            # Awaited by the dispatcher before this runs; reaching here means that was skipped.
+            raise unavailable('Crop planning')
         if path.startswith('/catalog/'):
             return self.catalog(path,query)
         if path=='/seasons/{id}/evaluate':

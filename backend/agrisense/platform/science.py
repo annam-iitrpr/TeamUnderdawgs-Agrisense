@@ -9,7 +9,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -109,6 +109,70 @@ def translate(exc: Exception, capability: str) -> PlatformError:
     error = unavailable(capability)
     error.details = {'dependency': type(exc).__name__}
     return error
+
+
+async def climate_for(location: c.Location, period: c.DateInterval, as_of: datetime, settings) -> c.ClimateBundle:
+    """Historical reanalysis for the planning window, taken from past years.
+
+    A ten-day forecast is not a season's climate. Phase 2 is explicit that reanalysis must
+    never be presented as a forecast, so the bundle is labelled estimated and its provenance
+    names the source.
+    """
+    try:
+        from agrisense.science.contract_bridge import measurement
+        from agrisense.science.history import MeteoblueHistoryProvider
+        from agrisense.science.providers import JsonTransport
+    except ImportError as exc:
+        raise unavailable('Historical climate') from exc
+    if not settings.meteoblue_api_key:
+        raise unavailable('Historical climate')
+
+    # The same calendar window in the previous complete year, which is available reanalysis.
+    start = period.start_date.replace(year=period.start_date.year - 1)
+    end = period.end_date.replace(year=period.end_date.year - 1)
+    provider = MeteoblueHistoryProvider(JsonTransport(), api_key=settings.meteoblue_api_key)
+    try:
+        bundle = await provider.history((location.latitude, location.longitude), start, end, as_of)
+    except Exception as exc:
+        raise translate(exc, 'Historical climate') from exc
+
+    days = [c.ForecastDay(local_date=date.fromisoformat(row.date),
+                          minimum_temperature_c=measurement(row.tmin_c, '°C'),
+                          maximum_temperature_c=measurement(row.tmax_c, '°C'),
+                          rain_mm=measurement(row.rain_mm, 'mm'),
+                          et0_mm=measurement(row.et0_mm, 'mm'))
+            for row in bundle.daily]
+    return c.ClimateBundle(
+        location=location, period=c.DateInterval(start_date=start, end_date=end), daily=days,
+        provenance=[c.Provenance(source=bundle.provider, retrieved_at=as_of, data_mode='estimated',
+                                 note='Historical reanalysis for the same window last year, not a forecast.')],
+        data_mode='estimated', warnings=list(bundle.warnings))
+
+
+async def compare(session: Session, tenant_id: str, farmer_id: str, request: c.PlanningRequest,
+                  settings) -> c.CropComparison:
+    """Plan against reviewed references and past climate. Nothing here is a forecast."""
+    as_of = d.utcnow()
+    field = session.scalar(select(d.FieldRow).where(
+        d.FieldRow.id == request.field_id, d.FieldRow.tenant_id == tenant_id,
+        d.FieldRow.farmer_id == farmer_id))
+    if field is None:
+        raise unavailable('Field snapshot')
+    seasons = list(session.scalars(select(d.SeasonRow).where(
+        d.SeasonRow.field_id == field.id, d.SeasonRow.tenant_id == tenant_id,
+        d.SeasonRow.status != 'closed')))
+    soil = list(session.scalars(select(d.SoilRow).where(
+        d.SoilRow.field_id == field.id, d.SoilRow.tenant_id == tenant_id)))
+    snapshot = c.PlanningSnapshot.model_validate({
+        'as_of': as_of, 'field': field.payload, 'request': request.model_dump(mode='json'),
+        'existing_seasons': [row.payload for row in seasons],
+        'soil_observations': [row.payload for row in soil]})
+    climate = await climate_for(snapshot.field.centroid, request.proposed_season, as_of, settings)
+    try:
+        result = facade('compare_crops')(snapshot, references(), climate)
+    except Exception as exc:
+        raise translate(exc, 'Crop planning') from exc
+    return result if isinstance(result, c.CropComparison) else c.CropComparison.model_validate(result)
 
 
 async def evaluate(session: Session, tenant_id: str, season_id: str) -> tuple[c.EvaluationBundle, c.ForecastBundle, c.SeasonSnapshot]:
