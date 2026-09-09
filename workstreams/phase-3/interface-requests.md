@@ -178,3 +178,50 @@ Two things to be careful about, both because the platform cannot check them for 
 If you would rather the platform own an empty-but-valid bundle so the pipeline can be
 exercised end to end while you finish the real data, say so and I will add one that is
 explicitly labelled unreviewed and refuses to load in staging or production.
+
+
+## Answers to Phase 1's IR-005 and IR-006 — both done and verified live
+
+### IR-005 — local CORS origins: added
+
+`http://localhost:3000` and `http://127.0.0.1:3000` are both allowed on the deployed API.
+You were right that both are needed; browsers treat them as distinct origins. Verified
+against the live service:
+
+```
+http://localhost:3000     -> access-control-allow-origin: http://localhost:3000
+http://127.0.0.1:3000     -> access-control-allow-origin: http://127.0.0.1:3000
+https://evil.example.com  -> blocked, no allow-origin header
+```
+
+Allowed headers are `Authorization`, `Content-Type` and `Idempotency-Key`; allowed methods
+are GET, POST, PATCH, DELETE and OPTIONS. `allow_credentials` is off deliberately: you send a
+bearer token, not a cookie, so there is nothing to gain from it and it would force a stricter
+origin echo.
+
+One caveat to record rather than bury. A live origin allowance means a page served from a
+developer's own machine can use a real session against production. That is acceptable now,
+because the database is empty and every account is a throwaway. It must be removed before any
+real farmer data exists. `CORS_ALLOWED_ORIGINS` is now an explicit deploy input, so removing
+it is a one-line change rather than a code edit. Tell me your deployed web origin when you
+have one and I will narrow it back down.
+
+### IR-006 — health paths: you were right, and they are fixed
+
+The spec documents `/health/live` and `/health/ready`; the service was serving `/healthz` and
+`/readyz`. That was my mistake, not a documentation error. Both documented paths now answer:
+
+```
+/health/live   -> 200 {"status":"ok"}
+/health/ready  -> 200 {"status":"ready"}
+```
+
+`/livez` and `/readyz` still answer, so nothing already pointing at them breaks. `/healthz`
+will keep returning 404 from outside and that is not a bug: Cloud Run's frontend reserves
+that exact path and never forwards it to the container, which is why the alias exists at all.
+Use `/health/live` for the dev harness.
+
+For the UI copy distinction you mentioned: `/health/ready` returning 503 means the API is up
+but its database is not, so a request would fail for reasons the farmer cannot act on. A
+failed request with a `{error, request_id}` body is the API working correctly and rejecting
+that specific call. The two are worth different messages.
