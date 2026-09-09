@@ -130,3 +130,36 @@ def test_a_task_whose_window_has_passed_expires_rather_than_staying_pending(harn
         assert science.expire_stale_tasks(session) == 1
         session.commit()
         assert session.scalar(select(d.TaskRow)).status == 'expired'
+
+
+async def test_a_single_pass_reports_each_stage_and_survives_one_failing_stage(harness, season, monkeypatch):
+    from agrisense.platform import reminders, worker_main
+    sessions = harness.app.state.sessions
+    settings = harness.app.state.settings
+
+    outcome = await worker_main.one_pass(settings, sessions)
+    assert set(outcome) >= {'jobs', 'reminders', 'expired_tasks'}
+    assert 'analytics' not in outcome  # no dataset configured
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError('dispatch is down')
+
+    monkeypatch.setattr(reminders, 'dispatch', explode)
+    survived = await worker_main.one_pass(settings, sessions)
+    assert survived['reminders'] == 0
+    assert 'expired_tasks' in survived, 'a failing stage stopped the later stages'
+
+
+async def test_the_entry_point_exits_zero_on_a_quiet_pass_and_non_zero_on_failure(harness, monkeypatch):
+    from agrisense.platform import worker_main
+    settings = harness.app.state.settings
+    monkeypatch.setattr(worker_main, 'get_settings', lambda: settings)
+    monkeypatch.setattr(worker_main.d, 'make_engine', lambda _s: harness.app.state.engine)
+    monkeypatch.setattr(harness.app.state.engine, 'dispose', lambda: None)
+    assert await worker_main.main([]) == 0
+
+    async def fail(*_args):
+        raise RuntimeError('database gone')
+
+    monkeypatch.setattr(worker_main, 'one_pass', fail)
+    assert await worker_main.main([]) == 1
