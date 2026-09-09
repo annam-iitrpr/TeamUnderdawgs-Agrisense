@@ -134,7 +134,17 @@ existing and must render `null` as "not enough data".
 
 ---
 
-## IR-005 — please allow `http://localhost:3000` as a CORS origin
+## IR-005 — WITHDRAWN: CORS was not the problem
+
+**Withdrawn 2026-09-10, before Phase 3 acted on it.** Probing from
+`http://localhost:3000`: a simple GET and a POST carrying `Content-Type` and
+`Idempotency-Key` — which requires a preflight — both reached the deployed API
+and returned a normal `401`. Neither was blocked. The failure that prompted this
+request was local: `NEXT_PUBLIC_API_BASE` still pointed at `127.0.0.1:8000`,
+where nothing was listening. Field creation from the browser now works against
+the live API. No change is needed. Original text kept below for the record.
+
+### Original request
 
 **Current state.** The live API at
 `https://agrisense-api-788265611154.asia-south1.run.app` allows a single origin

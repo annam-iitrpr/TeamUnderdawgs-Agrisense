@@ -441,3 +441,88 @@ tested before any of the six screens.
 
 **Not built yet:** the six onboarding screens themselves. This slice is the
 logic beneath them.
+
+## Slice 11 — P1-02 onboarding, verified end to end against the live API
+
+**This is the first Phase 1 feature that is genuinely integrated**: browser →
+real Firebase auth → live Cloud Run API → Cloud SQL, with a persisted record to
+show for it.
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 |
+| Lint | `npx next lint` | exit 0, clean |
+| Unit tests | `npx vitest run` | exit 0 — 108/108 |
+| Browser walk-through | dev server against the live API | all six steps exercised |
+| **Field created** | `POST /api/v1/fields` from the browser | **201**, redirected to `/?field=45470b013e054b38860e181a0ab86158` |
+| **Persisted server-side** | `GET /api/v1/fields` with a real ID token | 1 field, `data_mode: live` |
+| **Idempotency** | same `Idempotency-Key` POSTed twice | both 201, **same id**, one field created |
+
+### The persisted record
+
+```json
+{ "id": "45470b013e054b38860e181a0ab86158", "name": "North field",
+  "area_ha": 1.011714, "entered_area": 2.5, "entered_area_unit": "acre",
+  "irrigation_method": "drip", "version": 1,
+  "centroid": {"latitude": 30.90099, "longitude": 75.8573,
+               "precision_m": 14.0, "source": "gps"} }
+```
+
+`2.5 acre` became `1.011714 ha` — the correct conversion at the intended
+six-decimal precision — while the farmer's own `2.5` and `acre` were preserved
+alongside it, which is exactly what the echo-back on screen showed.
+
+### Behaviour verified in the browser
+
+- **Consent gating.** `Next` is disabled until the required service consent is
+  ticked. The two optional opt-ins are separate controls, labelled Optional, and
+  neither is needed to proceed — bundling them would make consent coerced.
+- **Draft restore.** Reloading mid-flow returned to the same step with every
+  answer intact and a "We kept what you had already entered" notice.
+- **Area echo-back.** Entering `2.5` with `acre` selected displayed "That is
+  **1.01 ha** (2.5 acre)". Switching to `kanal` recomputed to **0.13 ha** and
+  raised the ambiguity warning naming the Punjab kanal. This is the unit-slip
+  guard working: the farmer sees the consequence of the unit before saving.
+- **Approximate location is never passed off as GPS.** Entering a village or
+  pincode stores `source: "village"` with a 5 km precision and *cannot* satisfy
+  the step, because turning a place name into coordinates needs the location
+  catalogue, which is not being served. The screen says so and tells the farmer
+  to use GPS or come back — a blocked path with a stated reason rather than a
+  silent dead end.
+- **Crop and soil are deferrable.** Both steps advance without an answer, and
+  the field still saves — the spec requires missing *optional* data to raise a
+  visible request later rather than block onboarding. Selecting either crop
+  branch states plainly that the crop catalogue is unavailable instead of
+  offering an empty list or a hardcoded one.
+- **Failure handling.** Before the base URL was corrected the save attempt hit a
+  dead local backend, and the screen showed "We cannot reach AgriSense right
+  now", kept every answer, and left Save retryable. That was the network path
+  behaving correctly, and it was how the misconfiguration was found.
+
+### Idempotency is now a verified claim, not a promise
+
+The review screen tells the farmer "Saving creates this field once. If the
+connection drops and you try again, it will not create a duplicate." That was
+tested directly: the same `Idempotency-Key` POSTed twice returned **201 with the
+same field id both times**, and the account still held exactly one such field.
+The key is minted with the draft and persisted with it, so a retry after a
+timeout genuinely reuses it. The probe field was archived afterwards to leave
+the test account tidy.
+
+### Correction to IR-005
+
+CORS is **not** blocking local development. Probed from `http://localhost:3000`:
+a simple GET, and a POST carrying `Content-Type` and `Idempotency-Key` (which
+requires a preflight), both reached the API and returned a normal `401` rather
+than being blocked. The earlier failure was entirely local — `NEXT_PUBLIC_API_BASE`
+still pointed at `127.0.0.1:8000`, where nothing was listening. IR-005 is
+withdrawn.
+
+### Not covered
+
+The soil-card upload path is not built (media routes not wired on this screen);
+choosing "I have a card" says so. No season is created, because `SeasonCreate`
+requires a `crop_id` and the catalogue is unavailable. Geolocation itself was
+seeded rather than granted through a real permission prompt, so the GPS
+permission flow is untested. No Playwright coverage for this flow yet — it needs
+an authenticated fixture.
