@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens. Colour is never the only carrier of meaning anywhere in this
+ * app: every stress value from the ramp below is rendered next to a word from
+ * stressWord(), and every status chip carries an icon plus text.
+ */
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Noto Sans", "Noto Sans Devanagari", "Noto Sans Gurmukhi", "Noto Sans Telugu",
+    "Helvetica Neue", Arial, sans-serif;
+
+  /* Brand */
+  --forest: #0b5d3b;
+  --sprout: #3f9a5c;
+  --navy: #1f3d5c;
+  --amber: #e5a53a;
+  --amber-ink: #6b4708;
+  --clay: #b4472f;
+
+  /* Neutrals */
+  --ink: #14181b;
+  --slate: #5a6165;
+  --mist: #dfe3e5;
+  --paper: #f6f7f5;
+  --card: #ffffff;
+
+  /* Stress ramp, 0 to 9. Unknown is --mist and reads "Not applicable". */
+  --stress-none: #4a9c68;
+  --stress-low: #9bbf4f;
+  --stress-moderate: #e5a53a;
+  --stress-high: #d97534;
+  --stress-severe: #b4472f;
+}
+
+html {
+  font-family: var(--font-sans);
+  /* Never let a long crop name or a Telugu label force a sideways scroll. */
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  /* 16px floor: the spec's minimum body size for mixed-literacy readers. */
+  font-size: 1rem;
+}
+
+/* Visible focus for keyboard users on every interactive element. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer components {
+  /* Numbers that must line up column to column: scores, rupees, areas. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* A headline figure. Tabular so it does not jitter as it updates, and
+   * slightly tightened because these render large. */
+  .score-value {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.01em;
+  }
+
+  /* Loading placeholder. The snapshot referenced this class but never defined
+   * it, which made every "loading" state render as blank space. */
+  .skeleton {
+    background-image: linear-gradient(
+      90deg,
+      var(--mist) 25%,
+      color-mix(in srgb, var(--mist) 45%, var(--card)) 37%,
+      var(--mist) 63%
+    );
+    background-size: 200% 100%;
+    border-radius: 10px;
+    animation: shimmer 1.4s linear infinite;
+  }
+}
+
+/* Enter animation for content that replaces a skeleton. Defined here as a
+ * plain class because several components apply it directly. */
+.animate-rise {
+  animation: rise 180ms ease-out both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Respect users who ask the OS to reduce motion. Nothing here is load-bearing:
+ * the shimmer becomes a flat block and content simply appears. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background-image: none;
+    background-color: var(--mist);
+  }
+}

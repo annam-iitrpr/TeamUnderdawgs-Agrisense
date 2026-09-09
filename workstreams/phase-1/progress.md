@@ -50,9 +50,21 @@ Recorded per slice below as work proceeds.
 - `git checkout -b codex/phase-1-farmer-experience` → branch created on unborn HEAD.
 - `npm view firebase/zod/next/react/tailwindcss version` → 12.19.0 / 4.6.0 / 16.3.4 / 19.3.0 / 4.3.3. Held Next at `^15.1.6` and Tailwind at `^3.4.17` deliberately (D-003).
 
+### Slice 1 — design tokens, base styles, shared formatters
+
+- `npm install --no-audit --no-fund` → exit 0.
+- `npx tsc --noEmit` → exit 0.
+- `npx vitest run` → exit 0, 26/26 passing.
+- Defined the four utility classes the reference snapshot used but never
+  declared (`.skeleton`, `.animate-rise`, `.score-value`, `.tabular`), so
+  loading states are visible rather than blank (decisions.md D-005).
+- Added `lib/format.ts` as the single date/area/money formatter, pinned to
+  `Asia/Kolkata`, with unknown-not-zero handling throughout.
+
 ## Next concrete step
 
-Install dependencies, verify typecheck/lint/build run clean on the ported base, then land the design-system and i18n slices.
+Land the five-language i18n dictionary, then the provisional typed API client
+and the `contract-fixture` layer, then begin P1-01 authentication screens.
 
 ## Integration requests
 
