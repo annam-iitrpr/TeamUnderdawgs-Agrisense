@@ -85,6 +85,15 @@ export const CONSUMED_PATHS = [
   "/api/v1/soil/extractions",
   "/api/v1/soil/extractions/{id}/confirm",
   "/api/v1/jobs/{id}",
+  "/api/v1/media/uploads",
+  "/api/v1/media/{id}/complete",
+  "/api/v1/media/{id}/access",
+  "/api/v1/reminders/{id}",
+  "/api/v1/agronomist/summary",
+  "/api/v1/agronomist/fields",
+  "/api/v1/agronomist/stress-map",
+  "/api/v1/agronomist/evidence",
+  "/api/v1/agronomist/models",
 ] as const satisfies ReadonlyArray<keyof import("./contract").paths>;
 
 /* ── profile ─────────────────────────────────────────────────────────────── */
@@ -374,4 +383,87 @@ export const soil = {
 export const jobs = {
   get: (id: string, o: Opts = {}): Promise<Result<Job>> =>
     apiRequest(`/jobs/${encodeURIComponent(id)}`, { signal: o.signal }),
+};
+
+/* ── media ───────────────────────────────────────────────────────────────── */
+
+export const media = {
+  /** 201: returns an upload ticket. The object is not usable until completed. */
+  requestUpload: (
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<unknown>> =>
+    apiRequest("/media/uploads", {
+      method: "POST",
+      body,
+      idempotencyKey,
+      signal: o.signal,
+    }),
+
+  complete: (
+    id: string,
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<unknown>> =>
+    apiRequest(`/media/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      body,
+      idempotencyKey,
+      signal: o.signal,
+    }),
+
+  /** Short-lived, owner-only read URL. Never cache or log the returned link. */
+  access: (id: string, o: Opts = {}): Promise<Result<unknown>> =>
+    apiRequest(`/media/${encodeURIComponent(id)}/access`, { signal: o.signal }),
+};
+
+/* ── reminders (mutations) ───────────────────────────────────────────────── */
+
+export const reminderMutations = {
+  create: (
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<Reminder>> =>
+    apiRequest("/reminders", { method: "POST", body, idempotencyKey, signal: o.signal }),
+
+  patch: (
+    id: string,
+    body: { expected_version: number } & Record<string, unknown>,
+    o: Opts = {},
+  ): Promise<Result<Reminder>> =>
+    apiRequest(`/reminders/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body,
+      signal: o.signal,
+    }),
+
+  remove: (id: string, o: Opts = {}): Promise<Result<unknown>> =>
+    apiRequest(`/reminders/${encodeURIComponent(id)}`, { method: "DELETE", signal: o.signal }),
+};
+
+/* ── agronomist ──────────────────────────────────────────────────────────── */
+
+/**
+ * Role-gated. A farmer account answers 403 here, and that is the correct
+ * result rather than an error to hide — the UI must not offer these views to
+ * someone who cannot use them, and must never fake a role client-side.
+ */
+export const agronomist = {
+  summary: (o: Opts = {}): Promise<Result<unknown>> =>
+    apiRequest("/agronomist/summary", { signal: o.signal }),
+
+  fields: (o: ListOpts = {}): Promise<Result<Page<Field>>> =>
+    apiRequest("/agronomist/fields", { query: pageQuery(o), signal: o.signal }),
+
+  stressMap: (o: ListOpts = {}): Promise<Result<Page<unknown>>> =>
+    apiRequest("/agronomist/stress-map", { query: pageQuery(o), signal: o.signal }),
+
+  evidence: (o: ListOpts = {}): Promise<Result<Page<unknown>>> =>
+    apiRequest("/agronomist/evidence", { query: pageQuery(o), signal: o.signal }),
+
+  models: (o: Opts = {}): Promise<Result<unknown>> =>
+    apiRequest("/agronomist/models", { signal: o.signal }),
 };

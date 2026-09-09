@@ -2,22 +2,15 @@
 
 import { Skeleton } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
-import { SevenDayPlan } from "@/features/plan/seven-day-plan";
+import { NotificationsScreen } from "@/features/plan/notifications-list";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-/**
- * The seven-day plan (P1-09).
- *
- * This route previously held a placeholder for P1-03 crop comparison, which is
- * blocked on the crop catalogue. The plan is the more useful occupant of the
- * "Plan" tab in the meantime, and comparison will need its own route anyway
- * since it is entered from a field rather than from navigation.
- */
-export default function PlanPage() {
+export default function NotificationsPage() {
   const { status } = useAuth();
   const router = useRouter();
 
+  // Alerts are addressed to one farmer, so this is not reachable unsigned.
   useEffect(() => {
     if (status === "signed-out") router.replace("/sign-in");
   }, [status, router]);
@@ -31,5 +24,5 @@ export default function PlanPage() {
     );
   }
 
-  return <SevenDayPlan />;
+  return <NotificationsScreen />;
 }

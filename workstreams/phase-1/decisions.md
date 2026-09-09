@@ -149,3 +149,41 @@ which real `Storage` supports through property proxying but a plain class does
 not. It now uses `key()`/`length` — which is what the auth provider's
 `clearPerUserState()` actually uses, so the test is closer to the real code path
 than it was before.
+
+
+## D-010 — Faster cadence from 2026-09-10, at the operator's direction
+
+**Decision.** Larger batched commits with short messages, browser verification
+once per feature rather than once per slice, and no more negative-testing of
+guards.
+
+**Why.** Build-sprint clock. The operator asked for it explicitly and named the
+trade-off correctly: the per-slice ceremony was real overhead.
+
+**What is NOT being dropped.** Typecheck, lint, unit tests and Playwright still
+run before every commit; the secret scan still runs before every commit; and
+nothing is reported as verified that was not actually observed. The honesty
+rules are the point of the project, not the ceremony around them.
+
+**What is being given up, stated plainly.** Negative-testing proved two guards
+were real (the `keyof paths` route guard and the overflow assertion). Guards
+added from here on are unproven until something breaks them.
+
+## D-011 — Three features built in parallel by forked agents
+
+**Decision.** P1-07 (journal), P1-09 (tasks/reminders/seven-day plan) and P1-11
+(agronomist dashboard) were built concurrently by three forked agents sharing
+this session's context.
+
+**How conflicts were prevented.** Each fork was given an exclusive directory
+(`web/features/journal/**`, `web/features/plan/**`,
+`web/features/agronomist/**`) plus its own route files, and an explicit
+forbidden list covering every shared file. The one file they would all have
+needed — `lib/api/routes.ts` — was extended with the media, reminder-mutation
+and agronomist helpers *before* they launched, so none of them had to touch it.
+They were also barred from running builds, tests or git, because three
+concurrent `next build`/`tsc` runs share `.next/` and `tsbuildinfo`.
+
+**Consequence.** Verification and integration are centralised here: one
+typecheck, lint, test and browser pass over the merged result, and I fix
+whatever the forks got wrong at the type boundary.

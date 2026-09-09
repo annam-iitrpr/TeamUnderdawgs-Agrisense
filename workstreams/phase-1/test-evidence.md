@@ -634,3 +634,67 @@ differently.
 
 **Not covered:** pincode-only queries were not tested (only a place name), and
 the probe draft was cleared afterwards so no test state remains on the device.
+
+## Slice 14 — P1-07, P1-09 and P1-11 built in parallel
+
+Three features authored concurrently by forked agents on disjoint directories
+(D-011), then verified and integrated in one pass here.
+
+| Check | Result |
+|---|---|
+| Typecheck | exit 0 — **one** error across all three features, the MapLibre CSS import, predicted by its author |
+| Lint | clean |
+| Unit tests | 108/108 |
+| Production build | exit 0 — 21 routes; MapLibre stayed out of the shared bundle (103 kB) via lazy import |
+| Browser | `/journal`, `/plan`, `/notifications`, `/agronomist` all 200, no console errors |
+
+The CSS import was kept rather than deleted: MapLibre's stylesheet renders the
+attribution control, and tile providers generally require attribution to be
+visible, so dropping it to satisfy the compiler would have created a licensing
+problem. `web/types/assets.d.ts` declares it instead.
+
+### Observed states
+
+- **`/journal`** — "No season to record against", explaining that a journal
+  belongs to a crop season, that adding a crop needs the catalogue, and that
+  "this is a problem on our side, not something you have done". The field is
+  named so it is clear which one has no crop.
+- **`/plan`** — "Nothing to do this week" with the reason tasks do not exist
+  yet, the reminders panel explaining reminders attach to a season, and an
+  explicit line stating that marking a task done records what you did while
+  reading an alert only marks the message seen, "and neither is assumed from
+  the other". That is the P1-09 distinction the spec is most insistent about.
+- **`/agronomist`** — the 403 rendered as "You do not have access to this",
+  plus a statement that access is granted server-side against account
+  membership and "cannot be switched on from this device". The screen offers no
+  retry and no role toggle, which is the spec's prohibition made visible.
+
+### Contract mismatches the forks found (my directives were wrong, not the code)
+
+| Assumed | Actual |
+|---|---|
+| `JournalEntry.confirmation_state` | `observation_quality: unreviewed \| confirmed \| rejected` |
+| `JournalEntry.quantity` + `quantity_unit` | `quantities?: Measurement[]` |
+| `JournalEntry.field_id`, `captured_at`, `revision`, `product_id` | none exist |
+| `Task.superseded_by_task_id` | **does not exist** — P1-09 requirement 5 is unimplementable as written (IR-007) |
+| `Task.field_id` | none — only `season_id` (IR-007) |
+| `Task.priority: medium` | `low \| normal \| high \| critical` |
+| `Task.reason_codes[]` | a single `reason` object |
+| A role on the farmer record | **none** — `Farmer` has no roles field, so gating is on the server's 403, which is the better arrangement |
+| `AgronomistSummary` time window | absent, so proportions render as "n of N" with no period claimed |
+| Filterable district/crop/product on `Field` | absent, so only name/irrigation/archived filters are offered, with the omission explained |
+
+### Deliberately not built, and labelled as such in the UI
+
+Journal photo and voice upload (the ticket → signed PUT → SHA-256 complete path
+is unverified, and a picker that silently dropped files is worse than none);
+attachment viewing; reminder *creation* (`ReminderCreate` needs a `season_id`
+that cannot exist while the catalogue is 503, so a form would 422 unfixably).
+
+### Not verified
+
+No task, notification or reminder mutation has been exercised against real data
+— all three lists are empty for the test account, so completion, snooze, read
+and 409-conflict paths are code-complete but unproven. No journal entry has been
+created, for the same reason. The agronomist panels beyond the gate are
+unreachable without a role grant.

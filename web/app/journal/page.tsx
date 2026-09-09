@@ -1,18 +1,28 @@
 "use client";
 
-import { NotBuiltYet } from "@/features/pwa/not-built-yet";
+import { Skeleton } from "@/components/ui";
+import { useAuth } from "@/features/auth/auth-provider";
+import { JournalScreen } from "@/features/journal/journal-screen";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function JournalPage() {
-  return (
-    <NotBuiltYet
-      title="Journal"
-      requirement="P1-07 · season journal and action capture"
-      summary="A timeline of what actually happened on the field — watering, fertiliser, biological and pesticide sprays, weeding, observations and harvest — with photos and voice notes reviewed and confirmed before anything is saved as fact."
-      dependsOn={[
-        "GET /api/v1/seasons/{id}/journal",
-        "POST /api/v1/seasons/{id}/journal",
-        "POST /api/v1/media/uploads",
-      ]}
-    />
-  );
+  const { status } = useAuth();
+  const router = useRouter();
+
+  // The journal is a farmer's own record, so it is not reachable unsigned.
+  useEffect(() => {
+    if (status === "signed-out") router.replace("/sign-in");
+  }, [status, router]);
+
+  if (status === "signed-out" || status === "initialising") {
+    return (
+      <main id="main" className="mx-auto w-full max-w-[52rem] space-y-4 px-4 py-6" aria-busy="true">
+        <Skeleton className="h-16 w-full rounded-card" />
+        <Skeleton className="h-32 w-full rounded-card" />
+      </main>
+    );
+  }
+
+  return <JournalScreen />;
 }

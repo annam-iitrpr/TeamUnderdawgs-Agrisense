@@ -192,3 +192,60 @@ copy.
 **Reason.** Low priority and blocking nothing — raised only because the
 documented paths and the deployed behaviour currently disagree, and that is the
 kind of mismatch that is cheap to fix now and confusing later.
+
+
+---
+
+## IR-007 — `Task` has no supersede pointer, and no `field_id`
+
+**Current state.** `Schema<"Task">` carries `status: pending|done|snoozed|
+cancelled|expired`, a `reason` object, a `due` interval, a prose `title`,
+`priority: low|normal|high|critical`, and `season_id`. It does **not** carry:
+
+- any pointer to a replacement task (`superseded_by_task_id` or similar), or
+- a `field_id`.
+
+**Why the supersede pointer matters.** The Phase 1 spec requires that "weather
+changes can cancel or supersede a spray task; indicate the new window and
+preserve the old audit entry", and that "a stale reminder must not keep
+instructing a now-blocked spray". With only `expired`/`cancelled` to go on, the
+UI can retire the old task but **cannot tell the farmer which window replaced
+it** — which is the actionable half of the message. Today Phase 1 routes those
+statuses to a history list, which is honest but incomplete.
+
+**Request.** Either add a nullable `superseded_by_task_id` (and ideally
+`supersedes_task_id`), or confirm the intended way for a client to link an
+expired spray task to its replacement — for example a shared
+`risk_episode_id`, since Phase 3's own notes mention deduplicating on a risk
+episode.
+
+**Why `field_id` matters.** A task names a season, so a card cannot say which
+*field* it belongs to without a separate season→field lookup for every task.
+With several active seasons, "spray tomorrow 06:00–08:00" is ambiguous about
+which field it means, and the spec requires every card to identify its season
+and field. A denormalised `field_id` on `Task` (and on `JournalEntry`, which has
+the same gap) would remove an N+1 lookup from the two busiest screens.
+
+**Affected tests.** P1-09's superseded-reminder journey, and the multi-field
+task disambiguation case.
+
+---
+
+## IR-008 — `kanal` needs a region, or a documented convention
+
+**Current state.** `entered_area_unit` accepts `kanal`. A kanal is 5,445 sq ft
+(0.0505857 ha) in Punjab and Haryana, and 4,500 sq ft elsewhere in India —
+about 17% smaller.
+
+**Request.** Confirm which convention the backend assumes when it stores
+`area_ha`, or state that the client is responsible for the conversion and that
+the contract's `area_ha` is authoritative regardless of unit.
+
+**Reason.** Area scales every irrigation volume and every rupee figure for the
+season, so a 17% error is not cosmetic. Phase 1 currently converts with the
+Punjab value (pilot geography), flags the unit as ambiguous in the UI, and
+echoes the resulting hectares back for confirmation — see decisions.md D-008.
+If the backend also converts, we risk double-converting or disagreeing.
+
+**Affected tests.** The area normalisation unit tests, and any comparison
+between `entered_area` and `area_ha` on a stored field.
