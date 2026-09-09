@@ -1,0 +1,100 @@
+"""Provider-to-contract-to-evaluation regression; synthetic, no API/auth claim."""
+
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from unittest.mock import patch
+
+import httpx
+import pytest
+
+from agrisense.contracts_generated import models as api
+from agrisense.science.facade import build_weather_bundle, evaluate_season
+from agrisense.science.providers import JsonTransport, ProviderUnavailable
+from agrisense.science.references import reference_bundle
+
+
+@pytest.mark.asyncio
+async def test_ten_day_provider_flow_preserves_weather_with_invalid_solar():
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    calls = []
+
+    def respond(request):
+        calls.append(request.url.path)
+        if request.url.path.endswith("Hourly"):
+            rows = []
+            for index in range(240):
+                stamp = (now + timedelta(hours=index)).strftime("%Y/%m/%d %H:%M:%S")
+                for label, value in (
+                    ("TempAir_Hourly (C)", "30"),
+                    ("HumidityRel_Hourly (pct)", "60"),
+                    ("WindSpeed_Hourly (m/s)", "2"),
+                    ("Precip_HourlySum (mm)", "0"),
+                    ("GlobalRadiation_HourlySum (Wh/m2)", "-0.66" if index == 100 else "0"),
+                ):
+                    rows.append({"date": stamp, "offset": 0, "measureLabel": label, "value": value})
+            return httpx.Response(200, json=rows)
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "date": (now + timedelta(days=i)).strftime("%Y/%m/%d"),
+                    "measureLabel": label,
+                    "dailyValue": value,
+                }
+                for i in range(10)
+                for label, value in (
+                    ("TempAir_DailyMin (C)", "20"),
+                    ("TempAir_DailyMax (C)", "35"),
+                    ("Precip_DailySum (mm)", "0"),
+                )
+            ],
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        transport = JsonTransport(client=client, minimum_interval_seconds=0)
+        with (
+            patch.dict("os.environ", {"CEHUB_API_KEY": "synthetic-key"}, clear=True),
+            patch("agrisense.science.providers.JsonTransport", return_value=transport),
+        ):
+            forecast = await build_weather_bundle(
+                api.Location(latitude=21.1, longitude=79.1, source="manual"), 10, now
+            )
+    assert len(calls) == 2
+    assert len(forecast.hourly) == 240
+    assert len(forecast.daily) == 10
+    assert forecast.hourly[100].radiation_w_m2.value is None
+    assert forecast.hourly[100].radiation_w_m2.missing_reason == "provider_value_invalid"
+    assert forecast.hourly[99].radiation_w_m2.value == 0
+    assert forecast.hourly[100].temperature_c.value == 30
+    root = Path(__file__).resolve().parents[3]
+    snapshot = api.SeasonSnapshot.model_validate_json(
+        (root / "contracts/fixtures/cotton.snapshot.json").read_text()
+    )
+    snapshot.as_of = now
+    result = evaluate_season(snapshot, forecast, reference_bundle())
+    assert result.recommendation.stress_curve
+    assert result.recommendation.status == "insufficient_data"
+    assert result.recommendation.selected_window is None
+    assert result.economics.profit.p50 is None
+    api.EvaluationBundle.model_validate_json(result.model_dump_json())
+
+
+@pytest.mark.asyncio
+async def test_outage_diagnostics_survive_contract_bridge_without_credentials():
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(403, text="synthetic-key"))
+    ) as client:
+        transport = JsonTransport(client=client, minimum_interval_seconds=0)
+        with (
+            patch.dict("os.environ", {"CEHUB_API_KEY": "synthetic-key"}, clear=True),
+            patch("agrisense.science.providers.JsonTransport", return_value=transport),
+            pytest.raises(ProviderUnavailable) as caught,
+        ):
+            await build_weather_bundle(
+                api.Location(latitude=21.1, longitude=79.1, source="manual"),
+                10,
+                datetime.now(UTC),
+            )
+    assert "cehub:http_403" in caught.value.diagnostics
+    assert "synthetic-key" not in str(caught.value)
+    assert "synthetic-key" not in str(caught.value.diagnostics)

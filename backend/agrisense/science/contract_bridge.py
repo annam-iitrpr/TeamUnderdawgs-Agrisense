@@ -72,6 +72,7 @@ def from_contract(forecast: api.ForecastBundle) -> WeatherBundle:
                 radiation_wm2=None if radiation is None else radiation.value,
                 wind_height_m=row.wind_height_m,
                 source=forecast.provider,
+                radiation_missing_reason=None if radiation is None else radiation.missing_reason,
             )
         )
     days = []
@@ -114,7 +115,9 @@ def to_contract(bundle: WeatherBundle, location: api.Location) -> api.ForecastBu
         # v1 mandates a nonempty coverage interval. Never fabricate one for unavailable.
         from .providers import ProviderUnavailable
 
-        raise ProviderUnavailable(bundle.provider, "empty_coverage_contract_requires_additive_fix")
+        raise ProviderUnavailable(
+            bundle.provider, "empty_coverage_contract_requires_additive_fix", bundle.warnings
+        )
     provenance = [
         api.Provenance(
             source=bundle.provider,
@@ -141,7 +144,12 @@ def to_contract(bundle: WeatherBundle, location: api.Location) -> api.ForecastBu
                 wind_height_m=row.wind_height_m,
                 rain_mm=measurement(row.rain_mm, "mm", provenance=provenance),
                 vpd_kpa=measurement(vpd, "kPa", provenance=provenance),
-                radiation_w_m2=measurement(row.radiation_wm2, "W/m²", provenance=provenance),
+                radiation_w_m2=measurement(
+                    row.radiation_wm2,
+                    "W/m²",
+                    row.radiation_missing_reason or "input_missing",
+                    provenance=provenance,
+                ),
             )
         )
     days = [

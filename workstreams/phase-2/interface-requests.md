@@ -1,5 +1,11 @@
 # Phase 2 interface requests
 
+## Resolved: Phase 3 ten-day weather blocker (2026-09-10)
+
+Reproduced your latitude 21.1 / longitude 79.1 / horizon 10 case. CE Hub returns populated weather, but negative solar energy values made the strict normalizer reject the entire series. Phase 2 now preserves the valid weather and marks invalid solar values null with a per-measurement reason. Live facade → evaluation passed with 238 hourly records, 11 daily records and 30 stress points. Results correctly remain insufficient_data when reviewed agronomic records are absent. No contract/platform edits needed for this defect; integrate only when the operator authorizes integration.
+
+`METEOBLUE_API_KEY` supplies historical Dataset reanalysis, not a verified forecast fallback. Do not wire history into operational future forecasts. The separate null-coverage schema request below still applies to genuine provider outages; the exception now exposes safe `diagnostics` codes (no provider response bodies/URLs) so operators can distinguish auth/schema/transport failures.
+
 Current schema: `contract_v1` / 1.0 from `ff851c3`. Phase 3 owns additive changes and regeneration.
 
 1. Add optional `gust_kmh: Measurement`, `rain_probability: Measurement` (fraction), and `inversion_clear: bool|null` with dated evidence to `ForecastHour`. Example: `{"gust_kmh":{"value":12,"unit":"km/h"},"rain_probability":{"value":0.1,"unit":"fraction"},"inversion_clear":null}`. Missing inversion must require field verification. Acceptance: a gust/rain-probability prohibition or unknown inversion cannot yield an unconditional selected interval.

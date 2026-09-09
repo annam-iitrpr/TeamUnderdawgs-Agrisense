@@ -2,6 +2,8 @@
 
 Base `contract_v1` at `ff851c3`; branch `codex/phase-2-intelligence`.
 
+Latest integration fix (2026-09-10): the 10-day Nagpur empty-coverage failure was caused by negative CE Hub radiation values invalidating all weather. Invalid solar values now remain null with `provider_value_invalid`; valid temperature/rain/wind/daily series survive. Live generated-facade evaluation passed with 238 hours and 30 stress points. No platform/schema changes are needed for this fix. No branches merged. `probe_science_live.py --env ../agrisense.env` now defaults to the reported 10-day/Nagpur case. A passed probe is a provider/science check with synthetic identity, not authenticated endpoint verification.
+
 Implemented pure modules: `science/stress.py`, `water.py`, `units.py`, `economics.py` under `backend/agrisense/`. Nine arithmetic tests cover source goldens, independent FAO example, missing storage, flooded-paddy guard, money/product forms and zero yield.
 
 The required generated-contract facade is in progress. Platform must continue returning explicit unavailable until it is delivered. Do not route around this with legacy constant weather or indicative ROI. No HTTP/auth/database files modified.

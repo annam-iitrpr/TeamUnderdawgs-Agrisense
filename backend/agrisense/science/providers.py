@@ -23,8 +23,9 @@ from .weather import Daily, Hour, WeatherBundle, utc
 class ProviderUnavailable(Exception):
     """Only safe codes cross the provider boundary; never expose credentialed URLs."""
 
-    def __init__(self, provider: str, code: str):
+    def __init__(self, provider: str, code: str, diagnostics: tuple[str, ...] = ()):
         self.provider, self.code = provider, code
+        self.diagnostics = diagnostics
         super().__init__(f"{provider}: {code}")
 
 
@@ -154,6 +155,7 @@ def parse_cehub(
         raise ValueError("CE Hub returned no records")
     rows: dict[datetime, dict[str, Any]] = {}
     seen: set[tuple[datetime, str]] = set()
+    invalid_radiation = False
     for record in payload:
         label = record.get("measureLabel")
         if label not in CE_LABELS:
@@ -171,15 +173,27 @@ def parse_cehub(
             continue
         # `value` was observed live. Other variants require separate verified fixtures.
         raw = record.get("value")
-        value = None if raw is None or raw == "" else float(raw)
         field = CE_LABELS[label]
+        if field == "radiation_wm2":
+            # Live long-horizon CE Hub responses contain negative solar energy.
+            # Reject that measurement, not the independently valid weather series.
+            try:
+                value = None if raw is None or raw == "" else radiation_wm2(float(raw), 1)
+                if value is not None:
+                    finite(value, "radiation", 0, 1600)
+            except (ValueError, TypeError):
+                value = None
+                invalid_radiation = True
+                rows.setdefault(timestamp, {})["radiation_missing_reason"] = (
+                    "provider_value_invalid"
+                )
+        else:
+            value = None if raw is None or raw == "" else float(raw)
         if value is not None:
             if field in ("wind_kmh", "gust_kmh"):
                 value = wind_kmh(value, "m/s")
             elif field == "rain_probability":
                 value /= 100
-            elif field == "radiation_wm2":
-                value = radiation_wm2(value, 1)
         rows.setdefault(timestamp, {})[field] = value
     if not rows:
         raise ValueError("no hourly coverage in requested interval")
@@ -198,7 +212,8 @@ def parse_cehub(
             "model_update_time_semantics_unconfirmed",
             "interval_semantics_unconfirmed",
             "inversion_requires_field_verification",
-        ),
+        )
+        + (("invalid_radiation_measurements",) if invalid_radiation else ()),
         variable_sources=tuple((field, "cehub:Meteoblue") for field in CE_LABELS.values()),
     )
 

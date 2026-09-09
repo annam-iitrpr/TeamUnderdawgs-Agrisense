@@ -35,6 +35,35 @@ class NormalizationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parse_cehub(records, retrieved_at=NOW, start_at=NOW, end_at=NOW + timedelta(days=1))
 
+    def test_invalid_solar_measurement_preserves_other_weather(self):
+        from agrisense.contracts_generated.models import Location
+        from agrisense.science.contract_bridge import to_contract
+
+        for invalid in ("-0.66", "-0.37", "NaN", "inf", "1700", "invalid"):
+            bundle = parse_cehub(
+                [self.ce(), self.ce(invalid, "GlobalRadiation_HourlySum (Wh/m2)")],
+                retrieved_at=NOW,
+                start_at=NOW,
+                end_at=NOW + timedelta(days=10),
+            )
+            self.assertEqual(bundle.hours[0].wind_kmh, 7.2)
+            self.assertIsNone(bundle.hours[0].radiation_wm2)
+            self.assertIn("invalid_radiation_measurements", bundle.warnings)
+            contract = to_contract(bundle, Location(latitude=21.1, longitude=79.1, source="manual"))
+            self.assertEqual(
+                contract.hourly[0].radiation_w_m2.missing_reason, "provider_value_invalid"
+            )
+
+    def test_zero_solar_is_a_valid_measurement(self):
+        bundle = parse_cehub(
+            [self.ce("0", "GlobalRadiation_HourlySum (Wh/m2)")],
+            retrieved_at=NOW,
+            start_at=NOW,
+            end_at=NOW + timedelta(days=1),
+        )
+        self.assertEqual(bundle.hours[0].radiation_wm2, 0)
+        self.assertNotIn("invalid_radiation_measurements", bundle.warnings)
+
     def test_openmeteo_preceding_hour_shift(self):
         data = {
             "utc_offset_seconds": 0,

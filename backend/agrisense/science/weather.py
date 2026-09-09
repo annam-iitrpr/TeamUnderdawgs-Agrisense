@@ -29,6 +29,7 @@ class Hour:
     inversion_clear: bool | None = None
     source: str = "unknown"
     interval_hours: int = 1
+    radiation_missing_reason: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "start_at", utc(self.start_at))

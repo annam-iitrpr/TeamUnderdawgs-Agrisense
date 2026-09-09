@@ -3,6 +3,16 @@
 Branch: `codex/phase-2-intelligence`. Shared early base: `contract_v1`, `ff851c3`.
 Last verified commit: this milestone (see Git history). Full `agrisense-contract-v1` runtime bootstrap remains unpublished.
 
+## Resumed 2026-09-10 — weather integration blocker
+
+- Fresh clone at `e6301e3`, same Phase 2 branch; no merge or cherry-pick. Read all three supplied phase specifications. Read-only inspection of Phase 3 confirms its gateway requests 10 days near Nagpur.
+- Fresh baseline: 98 tests pass. The previous session's reported 103 included uncommitted history/calibration work that is absent from origin; those files were not recovered by cloning.
+- Reproduced live: 10-day CE Hub request returned 2,023 hourly measurement rows but normalized to unavailable; 2-day request succeeded. Negative solar values (-0.66/-0.37 Wh/m²) caused the whole forecast to be discarded.
+- Fix preserves valid weather and rejects only invalid solar measurements to null with `provider_value_invalid`. Zero remains zero; negative/nonfinite core weather and conflicting timestamps still reject. Provider failure diagnostic codes now survive the contract bridge.
+- Live facade/evaluation probe at Phase 3's location/horizon: 238 hours, 11 daily records, 30 stress points, 8 invalid solar measurements explicitly missing; structured insufficient_data, no unsupported product/value claim.
+- 102 scoped tests pass, including provider → generated contract → evaluation regression and credential-safe failure diagnostics. No authenticated HTTP/browser claim.
+- Next: publish this isolated fix, then restore the unfinished historical-weather slice and verification. Reviewed reference datasets and empirical model labels remain externally blocked.
+
 | Requirement | State | Evidence / remaining work |
 | --- | --- | --- |
 | P2-01 weather | in-progress | Live CE Hub metadata and batched hourly probe HTTP 200; normalization and contract bridge underway |
