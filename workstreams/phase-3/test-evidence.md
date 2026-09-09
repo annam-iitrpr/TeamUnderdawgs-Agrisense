@@ -90,8 +90,31 @@ change on either side. The pipeline runs to the weather fetch and stops there wi
 `ProviderUnavailable: none: empty_coverage_contract_requires_additive_fix`, with both CE Hub
 and meteoblue keys present. Reported to Phase 2; the worktree was removed and nothing merged.
 
+## WhatsApp verified in production
+
+`META_APP_SECRET` was supplied, so inbound ingestion is live. The access token was validated
+against the Graph API first: a Meta sandbox test number, quality rating GREEN. All three
+secrets are read from Secret Manager.
+
+Against the deployed webhook:
+
+| Case | Result |
+|---|---|
+| Subscription verification with the configured token | 200, challenge echoed |
+| Subscription verification with a wrong token | 403 |
+| Correctly signed delivery | 200 |
+| Unsigned delivery | 403 |
+| Delivery with a forged signature | 403 |
+| The same message id delivered three times | one stored row |
+
+The stored row contains `from_hash` and no phone number. The sender was not linked to any
+account, so no channel was created and no job was queued: an unknown sender is never guessed
+into an account. The test row was deleted afterwards.
+
+Outbound remains in outbox mode. Nothing has been sent to anyone.
+
 ## Not yet run
 
-No browser session, no live weather, WhatsApp or Gemini call, and no Cloud Run revision
-deployed. `META_APP_SECRET` and Gemini configuration are absent from the supplied environment,
-so those capabilities remain disabled rather than partially exercised.
+No browser session, no live weather or Gemini call, and no outbound WhatsApp message, and no Cloud Run revision
+deployed. Gemini configuration is still absent, so the assistant and soil extraction remain disabled
+rather than partially exercised.
