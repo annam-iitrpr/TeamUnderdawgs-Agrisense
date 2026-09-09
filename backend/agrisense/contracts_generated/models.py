@@ -18,7 +18,7 @@ Positive = Annotated[float, PydanticField(gt=0)]
 Nonnegative = Annotated[float, PydanticField(ge=0)]
 Language = Literal['en', 'hi', 'mr', 'pa', 'te']
 DataMode = Literal['live', 'estimated', 'demo', 'mixed', 'unavailable']
-JsonScalar = str | float | bool | None
+JsonScalar = str | int | float | bool | None
 
 
 class ContractModel(BaseModel):
@@ -617,6 +617,12 @@ class Message(MessageCreate):
 
 
 class ProposedMutation(ContractModel):
+    """A drafted change awaiting confirmation.
+
+    Two versions appear here and they are not interchangeable. `version` is this proposal's
+    own version and is what `/proposals/{id}/confirm` expects in its body. `expected_version`
+    is the version of the record being changed, which the server checks for itself.
+    """
     id: Id
     conversation_id: Id
     message_id: Id

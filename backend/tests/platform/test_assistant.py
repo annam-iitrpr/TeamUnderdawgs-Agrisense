@@ -246,3 +246,31 @@ async def test_a_proposal_can_be_read_before_it_is_confirmed(harness, asha, ravi
         session.commit()
     # An expired proposal reads as expired rather than looking confirmable.
     assert asha.get(f'/proposals/{proposal_id}').json()['data']['status'] == 'expired'
+
+
+async def test_confirm_takes_the_proposals_own_version_not_the_targets(
+        harness, asha, season, monkeypatch):
+    """Two version fields sit on a proposal and mean different things."""
+    draft = ('{"kind":"proposal","text":"Record it?","operation":"journal.create",'
+             f'"target_id":"{season["id"]}","expected_version":1,'
+             '"values":{"action":"watered","occurred_at":"2026-09-09T04:00:00Z"}}')
+    StubModel(draft).install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages', {'text': 'I watered'})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+    with harness.app.state.sessions() as session:
+        proposal_id = session.scalar(select(d.ProposalRow)).id
+
+    body = asha.get(f'/proposals/{proposal_id}').json()['data']
+    # The proposal's own version is what confirm expects.
+    accepted = asha.post(f'/proposals/{proposal_id}/confirm', {'expected_version': body['version']})
+    assert accepted.status_code == 200, accepted.text
+    assert len(asha.get(f'/seasons/{season["id"]}/journal').json()['data']['items']) == 1
+
+
+def test_an_integer_detail_stays_an_integer(asha, field):
+    """A version rendered as 1.0 reads as a bug to a client parsing it."""
+    stale = asha.patch(f'/fields/{field["id"]}', {'expected_version': 99, 'name': 'x'})
+    assert stale.status_code == 409
+    current = stale.json()['error']['details']['current_version']
+    assert current == 1 and isinstance(current, int) and not isinstance(current, bool)

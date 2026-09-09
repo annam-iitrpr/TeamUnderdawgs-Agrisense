@@ -1392,6 +1392,9 @@
                   "type": "string"
                 },
                 {
+                  "type": "integer"
+                },
+                {
                   "type": "number"
                 },
                 {
@@ -4562,6 +4565,7 @@
       },
       "ProposedMutation": {
         "additionalProperties": false,
+        "description": "A drafted change awaiting confirmation.\n\nTwo versions appear here and they are not interchangeable. `version` is this proposal's\nown version and is what `/proposals/{id}/confirm` expects in its body. `expected_version`\nis the version of the record being changed, which the server checks for itself.",
         "properties": {
           "conversation_id": {
             "maxLength": 128,
@@ -4613,6 +4617,9 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "integer"
                 },
                 {
                   "type": "number"
@@ -4823,6 +4830,9 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "integer"
                 },
                 {
                   "type": "number"
@@ -5128,6 +5138,9 @@
                 "anyOf": [
                   {
                     "type": "string"
+                  },
+                  {
+                    "type": "integer"
                   },
                   {
                     "type": "number"

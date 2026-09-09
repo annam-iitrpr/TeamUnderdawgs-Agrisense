@@ -1732,6 +1732,9 @@
                 "type": "string"
               },
               {
+                "type": "integer"
+              },
+              {
                 "type": "number"
               },
               {
@@ -2035,6 +2038,9 @@
               "anyOf": [
                 {
                   "type": "string"
+                },
+                {
+                  "type": "integer"
                 },
                 {
                   "type": "number"

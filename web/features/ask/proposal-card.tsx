@@ -77,7 +77,9 @@ export function ProposalCard({
       setActionError(null);
       try {
         const call = kind === "confirm" ? proposalsApi.confirm : proposalsApi.cancel;
-        await call(proposal.id, proposal.expected_version, newIdempotencyKey());
+        // The proposal's own version, not expected_version: that one is the target
+        // record's version and the server checks it itself.
+        await call(proposal.id, proposal.version, newIdempotencyKey());
         setOutcome(kind === "confirm" ? "confirmed" : "cancelled");
         if (kind === "confirm") onApplied?.();
       } catch (cause) {
