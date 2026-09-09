@@ -104,3 +104,66 @@ in progress.md and is not claimed as evidence yet.
 backend (progress.md blocker 3). The envelope shape is provisional per IR-003 —
 if Phase 3's actual envelope differs, these tests pass while the integration
 would fail, which is exactly why IR-003 asks for confirmation.
+
+## Slice 4 — P1-01 authentication screens (partial)
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 |
+| Lint | `npx next lint` | exit 0 — "No ESLint warnings or errors" |
+| Production build | `npx next build` | exit 0 after a real fix (below); 5 routes prerendered |
+| Unit tests | `npx vitest run` | exit 0 — 62 passed / 62 total, 4 files |
+| Browser | dev server on `:3000`, Chrome | `/sign-in`, `/sign-up` inspected; no console errors, no hydration warnings |
+
+### Defects found and fixed in this slice
+
+1. **Build failure.** `useSearchParams()` in `/sign-in` opted the route out of
+   static prerendering and `npx next build` failed outright. Fixed by isolating
+   the `?reason=expired` read into a child component behind a `<Suspense>`
+   boundary. Caught only because the production build was actually run — the
+   dev server did not complain.
+2. **Mixed-language validation errors.** Submitting the empty form and then
+   switching language left the two field errors in English under Telugu labels.
+   Cause: the resolved *string* was stored in React state at submit time.
+   Fixed by storing translation *keys* and resolving them at render, across
+   sign-in, sign-up and reset-password. Verified in the browser: errors now
+   read "మీ ఇమెయిల్ చిరునామా ఇవ్వండి." in Telugu.
+3. **Password toggle overlap.** The toggle was absolutely positioned over the
+   input with a fixed `pr-[5.5rem]` reservation. The Telugu label
+   ("పాస్‌వర్డ్ చూపించు") is materially wider than "Show password", so typed
+   text could run underneath it. Fixed by giving the toggle its own flex cell
+   inside the bordered wrapper, with focus-within styling preserved.
+
+### Verified in the browser
+
+- All five languages render in native script in the switcher, including
+  Gurmukhi and Telugu — no tofu boxes with the Noto fallbacks added.
+- Selecting Telugu translates the whole screen, and the choice survives a full
+  page reload (localStorage), with `<html lang>` updated.
+- Empty-form submission marks both fields invalid, shows an icon **and** text
+  for each error, and moves focus to the first invalid input.
+- The emulator banner is visible whenever the emulator URL is configured, so
+  local test accounts cannot be mistaken for real ones.
+
+### External blocker — the mandatory dev-account test is NOT done
+
+The spec requires every device to create a test farmer through the real
+email/password sign-up screen against the Firebase Auth Emulator, sign out,
+sign back in, and refresh. **That has not been performed.** Neither `java` nor
+`firebase-tools` is installed on this machine, so the Auth Emulator cannot
+start:
+
+```
+$ java -version   → command not found
+$ firebase --version → could not determine executable to run
+```
+
+Consequently **no sign-in, sign-up, session-persistence, token-refresh or
+cross-account denial path has been exercised against a real identity
+provider.** What is verified is rendering, validation, focus management,
+localisation and the production build. Per the spec, a check skipped for a
+missing prerequisite is an external blocker and not evidence that the
+integration works, so P1-01 stays `in-progress`, not `verified`.
+
+Unblocking needs either a JDK plus `firebase-tools` locally, or the team's real
+Firebase web config for a staging test account.

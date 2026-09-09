@@ -18,8 +18,8 @@ Status vocabulary: `pending` · `in-progress` · `verified` · `external-blocked
 
 | ID | Requirement | Status | Note |
 |---|---|---|---|
-| P1-00 | Workstream scaffolding, design system, i18n, API client | in-progress | Foundation slices |
-| P1-01 | Authentication and account continuity | pending | Needs Firebase project or Auth Emulator |
+| P1-00 | Workstream scaffolding, design system, i18n, API client | verified | Typecheck, lint, build and 62 unit tests pass |
+| P1-01 | Authentication and account continuity | in-progress | Screens, validation, localisation and build verified in browser. **Auth round trip NOT exercised** — no Auth Emulator on this machine (blocker 5) |
 | P1-02 | Progressive onboarding and field setup | pending | |
 | P1-03 | Crop selection, warnings, top-five comparison | pending | Needs `POST /planning/compare` |
 | P1-04 | Home dashboard, field switching, data requests | pending | |
@@ -39,6 +39,7 @@ These are recorded as blockers, not worked around with invented data.
 2. **No `contracts/openapi.yaml`.** All request/response types in `web/lib/api/` are hand-written from the spec's tables and are provisional until Phase 3 generates authoritative types into `web/lib/generated/**` (Phase 3-owned).
 3. **No backend to call.** `web/**` is being built against the `contract-fixture` profile. No slice is reported as integrated until it runs in `live-local` against the real API.
 4. **No Firebase Auth Emulator config from bootstrap.** P1-01 needs either the emulator (bootstrap-owned config) or the team Firebase project's web config. Local env values are held outside git.
+5. **Auth Emulator cannot run on this machine.** Neither `java` nor `firebase-tools` is installed, so the mandatory dev-account discipline (sign up through the real UI, sign out, sign back in, refresh, then call the API with an issued token) has not been performed. Rendering, validation and localisation are verified in a browser; the authentication round trip is not. Unblocking needs a JDK plus `firebase-tools`, or the team's real Firebase web config and a staging test account.
 
 ## Executed commands and results
 
@@ -72,10 +73,32 @@ Recorded per slice below as work proceeds.
   forcing fabricated translations to satisfy the compiler.
 - `REVIEW_STATUS` records all four non-source languages as `pending-review`.
 
+### Slice 3 — provisional v1 API client and query discipline
+
+- `npx tsc --noEmit` → exit 0; `npx vitest run` → 57/57.
+- Envelope, provisional domain types, auth-aware client, query-key isolation.
+
+### Slice 4 — P1-01 authentication screens (partial)
+
+- `npx tsc --noEmit` → exit 0; `npx next lint` → no warnings or errors;
+  `npx next build` → exit 0, 5 routes prerendered; `npx vitest run` → 62/62.
+- Verified in a browser at `/sign-in` and `/sign-up`: five-language switching,
+  Telugu persistence across reload, empty-form validation with icon-plus-text
+  errors, focus moved to the first invalid input, no console or hydration
+  errors.
+- Three real defects found and fixed: a production build failure from
+  `useSearchParams()` outside a Suspense boundary; validation errors frozen in
+  the language active at submit time; and a password toggle that could overlap
+  typed text in languages with longer labels. Details in test-evidence.md.
+- **Not done:** the authentication round trip. See blocker 5.
+
 ## Next concrete step
 
-Provisional typed API client plus the `contract-fixture` layer, then the P1-01
-authentication screens against the Firebase Auth Emulator.
+Either unblock the Auth Emulator (JDK + `firebase-tools`) to complete P1-01's
+round-trip evidence, or proceed to P1-02 onboarding forms, which can be built
+and unit-tested without a live identity provider. Recommend proceeding with
+P1-02 and returning to P1-01 evidence once tooling or the team's Firebase
+config is available.
 
 ## Integration requests
 
