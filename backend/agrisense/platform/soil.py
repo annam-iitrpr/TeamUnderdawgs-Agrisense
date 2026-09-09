@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import media
+from agrisense.platform import genai_client, media
 from agrisense.platform.errors import PlatformError, unavailable
 
 log = logging.getLogger('agrisense.platform.soil')
@@ -44,22 +44,14 @@ MEASURED = ('ph', 'organic_carbon', 'nitrogen', 'phosphorus', 'potassium')
 
 
 def client(settings: Settings):
-    if not settings.gemini_available:
-        raise unavailable('Soil card extraction')
-    try:
-        from google import genai
-    except ImportError as exc:
-        raise unavailable('Soil card extraction') from exc
-    if settings.gemini_backend == 'vertex':
-        return genai.Client(vertexai=True, project=settings.google_cloud_project,
-                            location=settings.google_cloud_location or 'asia-south1')
-    return genai.Client(api_key=settings.gemini_api_key)
+    return genai_client.get(settings)
 
 
 def read_card(settings: Settings, data: bytes, content_type: str) -> dict[str, Any]:
     from google.genai import types
     try:
-        response = client(settings).models.generate_content(
+        model = client(settings)
+        response = model.models.generate_content(
             model=settings.gemini_model,
             contents=[types.Part.from_bytes(data=data, mime_type=content_type), 'Transcribe this card.'],
             config={'system_instruction': INSTRUCTIONS, 'response_mime_type': 'application/json',

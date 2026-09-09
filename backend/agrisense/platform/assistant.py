@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform.errors import PlatformError, unavailable
+from agrisense.platform import genai_client
+from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.assistant')
 PROPOSAL_TTL = timedelta(minutes=30)
@@ -55,16 +56,7 @@ Use a proposal only when the farmer clearly asked to record or change something.
 
 def client(settings: Settings):
     """Resolved lazily and refused when unconfigured, so nothing is fabricated locally."""
-    if not settings.gemini_available:
-        raise unavailable('Conversational assistant')
-    try:
-        from google import genai
-    except ImportError as exc:
-        raise unavailable('Conversational assistant') from exc
-    if settings.gemini_backend == 'vertex':
-        return genai.Client(vertexai=True, project=settings.google_cloud_project,
-                            location=settings.google_cloud_location or 'asia-south1')
-    return genai.Client(api_key=settings.gemini_api_key)
+    return genai_client.get(settings)
 
 
 def grounding(session: Session, tenant_id: str, farmer_id: str, conversation: d.ConversationRow) -> dict[str, Any]:
@@ -111,7 +103,8 @@ def history(session: Session, conversation_id: str, tenant_id: str) -> list[dict
 
 def ask(settings: Settings, records: dict[str, Any], turns: list[dict[str, str]]) -> dict[str, Any]:
     prompt = json.dumps({'records': records, 'conversation': turns}, separators=(',', ':'))
-    response = client(settings).models.generate_content(
+    model = client(settings)
+    response = model.models.generate_content(
         model=settings.gemini_model,
         contents=prompt,
         config={'system_instruction': INSTRUCTIONS, 'response_mime_type': 'application/json',
