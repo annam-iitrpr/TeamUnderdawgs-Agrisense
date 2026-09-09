@@ -85,7 +85,7 @@ export function FieldDashboard() {
           title="No fields yet"
           message="Register a field and AgriSense can start telling you when to spray, how much water it needs, and what the season is worth."
           action={
-            <Link href="/onboarding">
+            <Link href="/onboarding?add=1">
               <Button size="lg">
                 <Plus aria-hidden className="size-4" />
                 Add your first field
@@ -180,7 +180,7 @@ function FieldSwitcher({
     return (
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <FieldSummary field={active} />
-        <Link href="/onboarding" className="text-sm font-semibold text-forest underline">
+        <Link href="/onboarding?add=1" className="text-sm font-semibold text-forest underline">
           Add another field
         </Link>
       </Card>
@@ -226,7 +226,7 @@ function FieldSwitcher({
           ))}
           <li className="pt-1">
             <Link
-              href="/onboarding"
+              href="/onboarding?add=1"
               className="flex min-h-[48px] items-center gap-2 rounded-control border border-dashed border-mist px-3 text-sm font-semibold text-forest"
             >
               <Plus aria-hidden className="size-4" />

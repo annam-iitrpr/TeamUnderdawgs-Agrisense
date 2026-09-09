@@ -39,7 +39,7 @@ import {
   type StepId,
 } from "./draft";
 import { Check, ChevronLeft, Loader2, MapPin, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const STEP_TITLE: Record<StepId, string> = {
@@ -57,6 +57,8 @@ export function OnboardingFlow() {
   const router = useRouter();
   const uid = user?.uid ?? null;
 
+  const searchParams = useSearchParams();
+  const addingAnother = searchParams.get("add") === "1";
   const [draft, setDraft] = useState<OnboardingDraft | null>(null);
   const [restored, setRestored] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,16 +66,25 @@ export function OnboardingFlow() {
 
   // Restore an interrupted onboarding, or start a fresh one. The idempotency
   // key is minted here, once, and then lives in the draft.
+  //
+  // A farmer adding a second field has already agreed to all of this. Asking
+  // again reads as a wall in front of a routine action, so the consent step is
+  // skipped and recorded as already given when they arrive with ?add=1.
   useEffect(() => {
     if (!uid) return;
     const existing = loadDraft(uid);
     if (existing) {
       setDraft(existing);
       setRestored(true);
-    } else {
-      setDraft(newDraft(newIdempotencyKey()));
+      return;
     }
-  }, [uid]);
+    const fresh = newDraft(newIdempotencyKey());
+    if (addingAnother) {
+      fresh.consents = { service: true, modelLearning: false, notifications: false };
+      fresh.step = STEPS.indexOf("location");
+    }
+    setDraft(fresh);
+  }, [uid, addingAnother]);
 
   const update = useCallback(
     (mutate: (d: OnboardingDraft) => void) => {
