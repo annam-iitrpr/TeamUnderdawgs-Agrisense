@@ -426,6 +426,10 @@ export const proposals = {
 /* ── soil and jobs ───────────────────────────────────────────────────────── */
 
 export const soil = {
+  /** Read the extracted draft, so a farmer sees the values before confirming them. */
+  get: (id: string, o: Opts = {}): Promise<Result<SoilObservation>> =>
+    apiRequest(`/soil/extractions/${encodeURIComponent(id)}`, { signal: o.signal }),
+
   /** 202: extraction runs as a job and produces a DRAFT observation. Nothing
    *  becomes authoritative until the farmer confirms it. */
   extract: (

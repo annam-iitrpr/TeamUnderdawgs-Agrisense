@@ -307,6 +307,18 @@ class DomainService:
             if row.status!='ready':raise PlatformError('MEDIA_NOT_READY','This file is still being processed.',409)
             url,expires=media.store(self.settings).access_url(row.object_key)
             return c.MediaAccess(url=url,expires_at=datetime.fromtimestamp(expires,UTC))
+        if path=='/soil/extractions/{id}':
+            # A farmer cannot confirm values they cannot see, so the draft is readable first.
+            return self.own(d.SoilRow,id).payload
+        if path=='/soil/extractions/{id}/confirm':
+            row=self.own(d.SoilRow,id,True);self.version(row,body.expected_version)
+            value=body.observation.model_copy(update={'id':row.id,'field_id':row.payload['field_id'],
+                'source':'farmer','confirmation_state':'confirmed','version':row.version+1,
+                'attachment_id':row.payload.get('attachment_id'),
+                'original_ocr':row.payload.get('original_ocr')})
+            row.version=value.version;row.payload=dump(value)
+            self.own(d.FieldRow,value.field_id)
+            return value
         if path=='/soil/extractions':
             self.own(d.FieldRow,body.field_id)
             asset=self.own(d.MediaRow,body.media_id)

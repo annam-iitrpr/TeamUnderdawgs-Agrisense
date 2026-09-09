@@ -33,6 +33,7 @@ ROUTES = [
     ('POST', '/media/{id}/complete', MediaComplete, MediaAsset, 200),
     ('GET', '/media/{id}/access', None, MediaAccess, 200),
     ('POST', '/soil/extractions', SoilExtractionRequest, Job, 202),
+    ('GET', '/soil/extractions/{id}', None, SoilObservation, 200),
     ('POST', '/soil/extractions/{id}/confirm', SoilConfirmRequest, SoilObservation, 200),
     ('GET', '/tasks', None, Page[Task], 200),
     ('PATCH', '/tasks/{id}', TaskPatch, Task, 200),

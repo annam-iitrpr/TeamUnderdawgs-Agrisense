@@ -19,6 +19,7 @@ import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, UnknownValue }
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
 import { AddSeasonForm } from "@/features/crops/add-season-form";
+import { SoilCardUpload } from "@/features/soil/soil-card-upload";
 import { RemoveField } from "./remove-field";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
@@ -113,7 +114,14 @@ export function FieldDashboard() {
     >
       <div className="space-y-4">
         <FieldSwitcher fields={visible} activeId={activeId} onSelect={setActiveId} />
-        {active ? <FieldPanel key={active.id} field={active} uid={uid} /> : null}
+        {active ? (
+          <FieldPanel
+            key={active.id}
+            field={active}
+            uid={uid}
+            onFieldChanged={() => fieldsQuery.refetch()}
+          />
+        ) : null}
       </div>
     </AppShell>
   );
@@ -261,7 +269,15 @@ function FieldSummary({ field }: { field: Field }) {
  * Keyed on the field id by the caller, so switching fields remounts rather than
  * letting the previous field's data linger for a frame under the new heading.
  */
-function FieldPanel({ field, uid }: { field: Field; uid: string | null }) {
+function FieldPanel({
+  field,
+  uid,
+  onFieldChanged,
+}: {
+  field: Field;
+  uid: string | null;
+  onFieldChanged: () => void;
+}) {
   const { t } = useLanguage();
 
   const seasonsQuery = useApiQuery(
@@ -297,6 +313,9 @@ function FieldPanel({ field, uid }: { field: Field; uid: string | null }) {
 
       <div className="space-y-4">
         <DataRequests field={field} seasonCount={activeSeasons.length} />
+        {field.soil_summary == null ? (
+          <SoilCardUpload field={field} onSaved={onFieldChanged} />
+        ) : null}
         <Shortcuts />
       </div>
     </div>
@@ -503,9 +522,7 @@ function DataRequests({ field, seasonCount }: { field: Field; seasonCount: numbe
   if (seasonCount === 0) {
     requests.push({ label: "Add the crop for this field", href: "/onboarding" });
   }
-  if (field.soil_summary == null) {
-    requests.push({ label: "Add a soil test", blocked: "Upload not built yet" });
-  }
+  // Soil is handled inline by its own card below, not as a link to somewhere else.
   if (field.irrigation_method == null) {
     requests.push({ label: "Say how you water this field", href: "/onboarding" });
   }

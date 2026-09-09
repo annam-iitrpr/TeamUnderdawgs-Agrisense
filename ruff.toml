@@ -1,7 +1,8 @@
 # One lint contract for the whole repository, so backend, contracts and scripts agree.
 target-version = "py312"
 line-length = 100
-extend-exclude = ["backend/.venv", "web", "backend/migrations/versions"]
+# .claude holds vendored tooling installed by its own CLI; it is not our source.
+extend-exclude = ["backend/.venv", "web", "backend/migrations/versions", ".claude"]
 
 [lint]
 # Pinned explicitly so a ruff upgrade cannot silently change what CI enforces.

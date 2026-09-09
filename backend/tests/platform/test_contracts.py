@@ -27,7 +27,7 @@ def test_all_operations_have_concrete_envelopes_and_auth():
             assert op['security']==[{'firebaseBearer':[]}]
             assert op['responses']['422']['content']['application/json']['schema']['$ref'].endswith('/ErrorResponse')
             if method=='post':assert any(p['name']=='Idempotency-Key' and p['required'] for p in op['parameters'])
-    assert count==58==len(ROUTES)
+    assert count==59==len(ROUTES)
     def refs(node):
         if isinstance(node,dict):
             if '$ref' in node:assert node['$ref'].split('/')[-1] in doc['components']['schemas']

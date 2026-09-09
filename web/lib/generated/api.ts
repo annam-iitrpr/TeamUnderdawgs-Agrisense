@@ -295,6 +295,9 @@ get: { responses: { 200: components["schemas"]["Envelope[WaterEstimate]"]; 401: 
 "/api/v1/soil/extractions": {
 post: { requestBody: components["schemas"]["SoilExtractionRequest"]; responses: { 202: components["schemas"]["Envelope[Job]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
 };
+"/api/v1/soil/extractions/{id}": {
+get: { responses: { 200: components["schemas"]["Envelope[SoilObservation]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
+};
 "/api/v1/soil/extractions/{id}/confirm": {
 post: { requestBody: components["schemas"]["SoilConfirmRequest"]; responses: { 200: components["schemas"]["Envelope[SoilObservation]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
 };
