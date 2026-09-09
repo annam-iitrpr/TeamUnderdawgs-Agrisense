@@ -207,7 +207,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Meta only needs an acknowledgement; nothing about the account is disclosed here.
         return Response(status_code=200)
 
+    # Cloud Run's frontend reserves /healthz and does not forward it to the container, so the
+    # container probes use that path while external monitoring uses /livez.
     @app.get('/healthz', include_in_schema=False)
+    @app.get('/livez', include_in_schema=False)
     async def healthz() -> dict[str, str]:
         return {'status': 'ok'}
 
