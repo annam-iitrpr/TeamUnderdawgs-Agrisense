@@ -111,7 +111,10 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       <div
         role="group"
         aria-labelledby="language-label"
-        className="flex flex-wrap gap-0.5 rounded-full border border-mist bg-card p-0.5"
+        // Never wraps: a rounded pill that breaks onto two rows loses its shape and
+        // the row stops reading as one control. Five scripts of differing width do not
+        // fit a narrow phone header, so it scrolls sideways there instead.
+        className="flex max-w-full flex-nowrap items-center gap-0.5 overflow-x-auto rounded-full border border-mist bg-card p-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {LANGUAGES.map((option) => (
           <button
@@ -121,7 +124,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
             aria-pressed={language === option.code}
             lang={option.code}
             className={cn(
-              "min-h-[36px] rounded-full px-3 text-xs font-semibold transition-colors duration-[120ms]",
+              "min-h-[36px] shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors duration-[120ms]",
               language === option.code ? "bg-forest text-white" : "text-slate hover:text-ink",
             )}
           >

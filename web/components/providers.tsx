@@ -1,6 +1,6 @@
 "use client";
 
-import { api, type ConfigResponse } from "@/lib/api";
+import type { ConfigResponse } from "@/lib/api";
 import { LANGUAGES, type Language, t as translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Check, Database, Globe, Wifi } from "lucide-react";
@@ -40,9 +40,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // screen reader announces Hindi content with an English voice.
       document.documentElement.lang = saved;
     }
-    // The badge must never block the page, so a failure here is silent and the
-    // badge simply does not render.
-    api.config().then(setConfig).catch(() => setConfig(null));
+    // The pre-contract /api/config route does not exist in v1 and 404s on every page
+    // load. Provenance now travels on each response's `meta` instead, so nothing is
+    // requested here and the badge renders only if a caller supplies config directly.
   }, []);
 
   const setLanguage = useCallback((l: Language) => {

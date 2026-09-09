@@ -27,12 +27,30 @@ export function AuthShell({
   const { status, missingConfig, usingEmulator } = useAuth();
 
   return (
-    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-[27rem] flex-col px-4 py-6">
-      <div className="flex items-center justify-between gap-3">
+    // Full width on every screen. The form itself stays a comfortable reading
+    // measure, but on a desktop that measure sits inside a real page rather than
+    // a phone-width column with empty space either side of it.
+    <main id="main" className="flex min-h-dvh w-full flex-col lg:flex-row">
+      <aside className="hidden bg-forest px-10 py-12 text-white lg:flex lg:w-[42%] lg:max-w-[34rem] lg:flex-col lg:justify-between">
+        <div>
+          <p className="text-h2 font-semibold">{t("appName")}</p>
+          <p className="mt-2 text-sm text-white/80">{t("tagline")}</p>
+        </div>
+        <p className="max-w-[26rem] text-sm leading-relaxed text-white/70">
+          Your field records, water and spending stay yours. Advice is only shown when the
+          evidence supports it, and every number says where it came from.
+        </p>
+      </aside>
+
+      <div className="flex w-full flex-1 justify-center px-4 py-6 sm:px-6 lg:px-10 lg:py-12">
+        <div className="flex w-full max-w-[28rem] flex-col">
+      <div className="flex items-center justify-between gap-3 lg:hidden">
         <div>
           <p className="text-h2 font-semibold text-forest">{t("appName")}</p>
           <p className="text-xs text-slate">{t("tagline")}</p>
         </div>
+      </div>
+      <div className="mt-3 flex justify-start lg:mt-0 lg:justify-end">
         <LanguageSwitcher />
       </div>
 
@@ -63,6 +81,8 @@ export function AuthShell({
       <div className="mt-5">{children}</div>
 
       {footer ? <div className="mt-6 text-sm text-slate">{footer}</div> : null}
+        </div>
+      </div>
     </main>
   );
 }
