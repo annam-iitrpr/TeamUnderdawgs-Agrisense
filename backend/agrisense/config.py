@@ -47,7 +47,9 @@ class Settings(BaseSettings):
     whatsapp_send_mode: Literal['outbox','live'] = 'outbox'
     gemini_backend: Literal['developer','vertex'] = 'developer'
     gemini_api_key: str = ''
-    gemini_model: str = ''
+    # Newest flash generation: a farmer waits for this reply, and the task is grounded
+    # record-keeping rather than deep reasoning, so latency matters more than a larger model.
+    gemini_model: str = 'gemini-3.8-flash'
     google_cloud_project: str = ''
     google_cloud_location: str = ''
     gcs_media_bucket: str = ''

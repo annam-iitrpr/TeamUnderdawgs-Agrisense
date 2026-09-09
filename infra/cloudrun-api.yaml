@@ -90,6 +90,13 @@ spec:
             # deliberate deploy-time decision rather than a default.
             - name: WHATSAPP_SEND_MODE
               value: "${WHATSAPP_SEND_MODE}"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agrisense-gemini-api-key
+                  key: latest
+            - name: GEMINI_MODEL
+              value: "${GEMINI_MODEL}"
           startupProbe:
             httpGet:
               path: /health/live

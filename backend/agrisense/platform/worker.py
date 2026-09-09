@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
-from agrisense.platform import assistant, privacy, reminders, science
+from agrisense.platform import assistant, privacy, reminders, science, soil
 from agrisense.platform import db as d
 from agrisense.platform.errors import PlatformError
 
@@ -92,8 +92,10 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
             raise PlatformError('ERASURE_ACTOR_MISSING', 'This request could not be completed.', 422)
         privacy.erase(session, settings, row.tenant_id, row.farmer_id, user_id)
         return ERASED
-    if row.kind in ('soil.extract',):
-        raise PlatformError('DEPENDENCY_UNAVAILABLE', f'{row.kind} is not available yet.', 503, True)
+    if row.kind == 'soil.extract':
+        return soil.extract(session, settings, row.tenant_id, row.farmer_id,
+                            request['field_id'], request['media_id'])
+    # Every kind the platform enqueues is handled above; anything else is a bug, not a backlog.
     raise PlatformError('UNKNOWN_JOB_KIND', f'No handler for {row.kind}.', 422)
 
 

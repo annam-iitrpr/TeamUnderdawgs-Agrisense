@@ -22,6 +22,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # Defaults to the deployed web origin alone. Widen it deliberately, never by accident.
 export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-$CLOUD_RUN_WEB_URL}"
+# Outbound messaging stays queued unless this is set deliberately: live means real people.
+export WHATSAPP_SEND_MODE="${WHATSAPP_SEND_MODE:-outbox}"
+export GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 
 REPOSITORY="${ARTIFACT_REPOSITORY:-agrisense}"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD)"
