@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform.errors import unavailable
+from agrisense.platform.errors import PlatformError, unavailable
 
 log = logging.getLogger('agrisense.platform.science')
 FORECAST_HORIZON_DAYS = 10
@@ -96,14 +96,35 @@ def references() -> c.ReferenceBundle:
     raise unavailable('Reviewed reference catalog')
 
 
+def translate(exc: Exception, capability: str) -> PlatformError:
+    """A science-side failure is a dependency problem, not a platform bug.
+
+    Reporting it as a generic failure would tell a farmer nothing and would hide which
+    dependency was at fault, so the class name is carried in the details while the message
+    stays something a farmer can act on.
+    """
+    if isinstance(exc, PlatformError):
+        return exc
+    log.exception('%s failed inside the science boundary', capability)
+    error = unavailable(capability)
+    error.details = {'dependency': type(exc).__name__}
+    return error
+
+
 async def evaluate(session: Session, tenant_id: str, season_id: str) -> tuple[c.EvaluationBundle, c.ForecastBundle, c.SeasonSnapshot]:
     """Run one evaluation. Reuses a stored result whenever the inputs are unchanged."""
     as_of = d.utcnow()
     snapshot = build_season_snapshot(session, tenant_id, season_id, as_of)
-    forecast = await weather_for(snapshot.field.model_dump(mode='json'), as_of)
-    bundle = facade('evaluate_season')(snapshot, forecast, references())
-    if not isinstance(bundle, c.EvaluationBundle):
-        bundle = c.EvaluationBundle.model_validate(bundle)
+    try:
+        forecast = await weather_for(snapshot.field.model_dump(mode='json'), as_of)
+    except Exception as exc:
+        raise translate(exc, 'Weather forecast') from exc
+    try:
+        bundle = facade('evaluate_season')(snapshot, forecast, references())
+        if not isinstance(bundle, c.EvaluationBundle):
+            bundle = c.EvaluationBundle.model_validate(bundle)
+    except Exception as exc:
+        raise translate(exc, 'Scientific evaluation') from exc
     return bundle, forecast, snapshot
 
 

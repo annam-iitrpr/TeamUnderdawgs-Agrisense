@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import media
+from agrisense.platform import media, science
 from agrisense.platform.auth import Actor
 from agrisense.platform.errors import PlatformError, missing, unavailable
 
@@ -342,7 +342,7 @@ class DomainService:
         if path=='/planning/compare':
             self.own(d.FieldRow,body.field_id);raise unavailable('Crop planning science integration')
         if path.startswith('/catalog/'):
-            raise unavailable('Versioned reference catalog')
+            return self.catalog(path,query)
         if path=='/seasons/{id}/evaluate':
             season=self.active_season(id);self.version(season,body.expected_version)
             return self.job('science.evaluate',{'season_id':id,'expected_version':body.expected_version})
@@ -361,6 +361,26 @@ class DomainService:
             return result
         raise unavailable('This platform capability')
 
+    def catalog(self,path,query):
+        """Served from the Phase 2 reference bundle; the platform never invents catalog entries."""
+        if path=='/catalog/locations':raise unavailable('Location search')
+        bundle=science.references()
+        items=bundle.crops if path=='/catalog/crops' else bundle.products
+        try:
+            limit=int(query.get('limit','25'))
+            if not 1<=limit<=100:raise ValueError()
+        except ValueError as exc:
+            raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.') from exc
+        after=''
+        if query.get('cursor'):
+            try:after=base64.urlsafe_b64decode(query['cursor'].encode()).decode()
+            except (ValueError,UnicodeError) as exc:
+                raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.') from exc
+        ordered=sorted((dump(item) for item in items),key=lambda item:item['id'])
+        page=[item for item in ordered if item['id']>after][:limit+1]
+        next_cursor=base64.urlsafe_b64encode(page[limit-1]['id'].encode()).decode() if len(page)>limit else None
+        return {'items':page[:limit],'next_cursor':next_cursor}
+
     def agronomist(self,path,body,query):
         if self.actor.role not in ('agronomist','admin'):raise PlatformError('FORBIDDEN','An assigned agronomist role is required.',403)
         assignments=select(d.Assignment.farmer_id).where(d.Assignment.user_id==self.actor.user_id,d.Assignment.tenant_id==self.actor.tenant_id)
@@ -371,4 +391,6 @@ class DomainService:
         if path.endswith('/fields'):return {'items':[f.payload for f in fields[:100]],'next_cursor':None}
         if path.endswith('/stress-map'):return {'items':[dump(c.StressMapPoint(field_id=f.id,centroid=f.payload['centroid'],stress=None,missing_reason='No evaluated stress snapshot.')) for f in fields[:100]],'next_cursor':None}
         if path.endswith('/models'):return {'items':[r.payload for r in self.s.scalars(select(d.ModelRow).where(d.ModelRow.status=='approved').limit(100))],'next_cursor':None}
-        raise unavailable('Reviewed agronomist evidence and backtests')
+        if path.endswith('/evidence'):
+            return {'items':[dump(record) for record in science.references().evidence[:100]],'next_cursor':None}
+        raise unavailable('Reviewed backtests')

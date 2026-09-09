@@ -121,3 +121,33 @@ def test_archiving_requires_closed_seasons_and_health_probes_answer(asha, field,
         assert harness.get(path).json() == {'status': 'ok'}, path
     for path in ('/health/ready', '/readyz'):
         assert harness.get(path).json() == {'status': 'ready'}, path
+
+
+def test_the_catalog_is_served_from_the_reference_bundle_never_invented(asha, monkeypatch):
+    """Until Phase 2's bundle is present the catalog reports its dependency rather than guessing."""
+    from agrisense.contracts_generated import models as c
+    from agrisense.platform import science
+
+    assert asha.get('/catalog/crops').status_code == 503
+
+    bundle = c.ReferenceBundle(
+        version='test-bundle',
+        crops=[c.Crop(id=f'crop-{index}', name=f'Crop {index}', supported_for_biological_advice=index < 2)
+               for index in range(5)],
+        products=[])
+    monkeypatch.setattr(science, 'references', lambda: bundle)
+
+    page = asha.get('/catalog/crops', params={'limit': 2})
+    assert page.status_code == 200
+    body = page.json()['data']
+    assert [item['id'] for item in body['items']] == ['crop-0', 'crop-1']
+    assert body['next_cursor']
+
+    rest = asha.get('/catalog/crops', params={'limit': 10, 'cursor': body['next_cursor']}).json()['data']
+    assert [item['id'] for item in rest['items']] == ['crop-2', 'crop-3', 'crop-4']
+    assert rest['next_cursor'] is None
+    # Products come from the same bundle, and an empty catalog is an empty page, not an error.
+    assert asha.get('/catalog/products').json()['data']['items'] == []
+    assert asha.get('/catalog/crops', params={'limit': 0}).status_code == 422
+    # Location search has no source yet and says so rather than returning invented places.
+    assert asha.get('/catalog/locations', params={'q': 'nagpur'}).status_code == 503

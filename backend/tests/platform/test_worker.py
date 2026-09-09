@@ -163,3 +163,24 @@ async def test_the_entry_point_exits_zero_on_a_quiet_pass_and_non_zero_on_failur
 
     monkeypatch.setattr(worker_main, 'one_pass', fail)
     assert await worker_main.main([]) == 1
+
+
+async def test_a_science_side_failure_reports_the_dependency_rather_than_a_generic_error(
+        harness, season, monkeypatch):
+    """A provider that is down must not look like a platform bug to the farmer."""
+    from agrisense.platform import science
+
+    class ProviderUnavailable(Exception):
+        pass
+
+    async def refuse(*_args, **_kwargs):
+        raise ProviderUnavailable('no coverage')
+
+    monkeypatch.setattr(science, 'weather_for', refuse)
+    queued(harness, season['id'])
+    assert await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings) == 1
+    with harness.app.state.sessions() as session:
+        job = session.scalar(select(d.JobRow))
+        assert job.payload['error']['code'] == 'DEPENDENCY_UNAVAILABLE'
+        assert job.payload['error']['details']['dependency'] == 'ProviderUnavailable'
+        assert job.payload['error']['retryable'] is True
