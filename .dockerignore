@@ -1,0 +1,16 @@
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/tests
+.local
+*.env
+*.env.*
+.env
+.env.*
+**/*service-account*.json
+**/credentials*.json
+*.pem
+*.key

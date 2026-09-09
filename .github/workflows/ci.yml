@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["codex/**", "main"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (contracts, lint, tests, migrations)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        # Trust auth on a throwaway container that is only reachable from this job, so no
+        # password exists to be committed, rotated or mistaken for a real credential.
+        env:
+          POSTGRES_USER: agrisense
+          POSTGRES_DB: agrisense_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agrisense"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      AGRISENSE_ENV_FILE: /dev/null
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://agrisense@127.0.0.1:5432/agrisense_ci
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Install pinned dependencies
+        working-directory: backend
+        run: uv sync --frozen --group dev
+
+      - name: Contract artifacts are current
+        run: backend/.venv/bin/python scripts/generate_contracts.py --check
+
+      - name: Lint
+        run: backend/.venv/bin/python -m ruff check .
+
+      - name: Tests
+        working-directory: backend
+        run: .venv/bin/python -m pytest tests/platform -q
+
+      - name: Migrations apply, reverse and match the models
+        working-directory: backend
+        run: |
+          .venv/bin/python -m alembic upgrade head
+          .venv/bin/python -m alembic downgrade base
+          .venv/bin/python -m alembic upgrade head
+          .venv/bin/python -m alembic check
+
+      - name: No secret or README file is tracked
+        run: python3 scripts/security/check_staged.py --all-tracked
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Install pinned dependencies
+        working-directory: backend
+        run: uv sync --frozen --group dev
+      - name: Audit known advisories
+        working-directory: backend
+        # The local project itself is skipped; it is not published and has no advisory feed.
+        run: .venv/bin/python -m pip_audit --progress-spinner off --skip-editable
