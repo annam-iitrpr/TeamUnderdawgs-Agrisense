@@ -38,7 +38,7 @@ Status vocabulary: `pending` · `in-progress` · `verified` · `external-blocked
 | ID | Requirement | Status | Note |
 |---|---|---|---|
 | P1-00 | Workstream scaffolding, design system, i18n, API client | verified | Typecheck, lint, build and 62 unit tests pass |
-| P1-01 | Authentication and account continuity | in-progress | Screens, validation, localisation and build verified in browser. **Auth round trip NOT exercised** — no Auth Emulator on this machine (blocker 5) |
+| P1-01 | Authentication and account continuity | in-progress | Round trip **verified against real Firebase** (create, verify-mail, sign-out, wrong-password rejection, sign-in, refresh persistence). Remaining: authorized API call with the issued token, second-tenant denial, token-expiry recovery, WhatsApp identity linking |
 | P1-02 | Progressive onboarding and field setup | pending | |
 | P1-03 | Crop selection, warnings, top-five comparison | pending | Needs `POST /planning/compare` |
 | P1-04 | Home dashboard, field switching, data requests | pending | |
@@ -54,11 +54,13 @@ Status vocabulary: `pending` · `in-progress` · `verified` · `external-blocked
 
 These are recorded as blockers, not worked around with invented data.
 
-1. **No shared bootstrap tag.** Device 3 has not published `agrisense-contract-v1`; `origin` was empty at clone. Phase 1 is proceeding on a provisional base per D-001 and will realign when the tag lands.
-2. **No `contracts/openapi.yaml`.** All request/response types in `web/lib/api/` are hand-written from the spec's tables and are provisional until Phase 3 generates authoritative types into `web/lib/generated/**` (Phase 3-owned).
-3. **No backend to call.** `web/**` is being built against the `contract-fixture` profile. No slice is reported as integrated until it runs in `live-local` against the real API.
-4. **No Firebase Auth Emulator config from bootstrap.** P1-01 needs either the emulator (bootstrap-owned config) or the team Firebase project's web config. Local env values are held outside git.
-5. **Auth Emulator cannot run on this machine.** Neither `java` nor `firebase-tools` is installed, so the mandatory dev-account discipline (sign up through the real UI, sign out, sign back in, refresh, then call the API with an issued token) has not been performed. Rendering, validation and localisation are verified in a browser; the authentication round trip is not. Unblocking needs a JDK plus `firebase-tools`, or the team's real Firebase web config and a staging test account.
+1. ~~**No shared bootstrap tag.**~~ **RESOLVED.** Phase 3 published `contract_v1` and it is merged in (D-006).
+2. ~~**No `contracts/openapi.yaml`.**~~ **RESOLVED.** It exists (as JSON, schemas only — the route registry lives in `contracts/routes.py`), and generated TS types are at `web/lib/generated/api.ts`. Adopting them is the current slice, not a blocker.
+3. ~~**No backend to call.**~~ **PARTLY RESOLVED.** Phase 3 reports 57 routes serving `contract_v1` with Firebase auth, tenant isolation, versioning and idempotency, plus PostgreSQL at revision `7d0b0fa1bb6f`. Not yet exercised from this branch — running it locally needs Docker PostgreSQL and a backend venv. Until that happens, no Phase 1 slice may be reported as integrated.
+4. ~~**No Firebase Auth Emulator config from bootstrap.**~~ **RESOLVED** by using the team's real Firebase web config; see blocker 5.
+6. **`/seasons/{id}/evaluate` cannot complete.** Phase 3 records that nothing builds a `ReferenceBundle` on the Phase 2 side, so evaluation dead-letters with `DEPENDENCY_UNAVAILABLE` by design. P1-05 therefore cannot show a real readiness result yet, regardless of Phase 1 progress. Owned by Phase 2.
+7. **Gemini and `META_APP_SECRET` are absent from the supplied env.** Per Phase 3, AI features and WhatsApp ingestion stay disabled. Affects P1-08's assistant, which must degrade honestly rather than appear to work.
+5. ~~**Auth Emulator cannot run on this machine.**~~ **RESOLVED 2026-09-10.** `java`/`firebase-tools` are still absent, but the team's real Firebase web config in `agrisense.env` was used instead (public client config, emulator URL omitted), and the full dev-account round trip is now verified against the live `iitm02` project. See test-evidence.md slice 6. Outstanding sub-parts are tracked on the P1-01 row rather than as a blocker.
 
 ## Executed commands and results
 
@@ -111,14 +113,38 @@ Recorded per slice below as work proceeds.
   typed text in languages with longer labels. Details in test-evidence.md.
 - **Not done:** the authentication round trip. See blocker 5.
 
+### Slice 5 — merged the `contract_v1` bootstrap
+
+- Fixed the no-common-ancestor problem: `contract_v1` is now an ancestor of this
+  branch, so three-way integration behaves normally (D-006).
+- 12 conflicts resolved by ownership; `lib/locale/` rename to stop the
+  bootstrap's `lib/i18n.ts` shadowing this branch's module (D-007).
+- Fixed two real defects in the bootstrap's chart screens where an absent stress
+  type rendered as zero instead of unknown.
+- `tsc` 0, `next lint` clean, `next build` 0 with 15 routes, 62/62 unit tests,
+  both my screens and the legacy screens verified in a browser.
+
+### Slice 6 — P1-01 round trip against real Firebase
+
+- Pointed `web/.env.local` at the team's live Firebase project (`iitm02`) using
+  the public web config from `agrisense.env`, emulator URL omitted.
+- Verified in a browser: account creation, verification mail, sign-out,
+  wrong-password rejection with the non-enumerating message, sign-in, and
+  session persistence across a full reload. No console errors throughout.
+- Closes blocker 5. Details and what remains uncovered in test-evidence.md.
+
 ## Next concrete step
 
-Either unblock the Auth Emulator (JDK + `firebase-tools`) to complete P1-01's
-round-trip evidence, or proceed to P1-02 onboarding forms, which can be built
-and unit-tested without a live identity provider. Recommend proceeding with
-P1-02 and returning to P1-01 evidence once tooling or the team's Firebase
-config is available.
-
-## Integration requests
-
-See [interface-requests.md](interface-requests.md).
+1. Retire the provisional types in `web/lib/api/types.ts` in favour of
+   `web/lib/generated/api.ts` (explicitly requested by Phase 3, and prevents
+   drift). Real shapes differ from the guesses in ways that matter:
+   `entered_area_unit` has four values not two, water is `available_water_m3`
+   not litres, `date_confidence` is `confirmed|estimated|unknown`, and soil
+   values are `Measurement` objects.
+2. Desktop and PWA work, per the user directive relayed in Phase 3's interface
+   requests: the inherited phone-frame layout is not acceptable as the desktop
+   site. Acceptance is no horizontal overflow at 360/768/1280/1920px, an
+   installable manifest, and authenticated content never cached offline. Doing
+   this before the feature screens avoids building ten screens twice.
+3. Then P1-02 onboarding, P1-03 comparison and P1-04 dashboard against the live
+   API rather than fixtures, since the API now exists.

@@ -74,8 +74,7 @@ export default function HomePage() {
       <Card className="mt-4 p-4">
         <h2 className="text-h3 font-semibold">Not built yet</h2>
         <p className="mt-1.5 text-sm text-slate">
-          The farmer workflows below need the backend contract that Phase 3 has not published yet.
-          No placeholder figures are shown in their place.
+          The farmer workflows below are next. No placeholder figures are shown in their place.
         </p>
         <ul className="mt-3 space-y-1.5 text-sm text-slate">
           {[

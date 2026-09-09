@@ -199,6 +199,38 @@ error the spec calls out repeatedly. Both sites now coerce to `null`.
 Also cleared eight pre-existing unused-import lint warnings in the bootstrap's
 screens, so `next lint` is clean and a real warning will be visible in CI.
 
+## Slice 6 — P1-01 auth round trip verified against real Firebase
+
+The slice-4 blocker is **closed**. The Auth Emulator still cannot run here (no
+`java`, no `firebase-tools`), but `agrisense.env` carries the team's real
+Firebase **web** config — which is public client identification, not a secret —
+so `web/.env.local` was pointed at the live project (`iitm02`) with the emulator
+URL deliberately absent. The spec's fallback for exactly this case is a
+dedicated real test account, which is what was used.
+
+Test account: `device1.phase1@example.test`. The domain is reserved and
+undeliverable on purpose, so the verification mail cannot reach a real person.
+Credentials live only in the ignored local env; the account can be deleted from
+the Firebase console when no longer needed.
+
+| Step | Observed |
+|---|---|
+| Account creation through the real sign-up screen | Created on the live project; redirected to `/` |
+| Verification email | Sent — the "Confirm your email address" banner appears with a working resend action |
+| Sign out | Session cleared, redirected to `/sign-in` |
+| **Wrong password** | Rejected with "That email address and password do not match." — the deliberately non-enumerating message, so an unknown address and a wrong password are indistinguishable |
+| Sign in with correct password | Succeeded, landed on `/` with the account's email shown |
+| **Full page reload** | Session persisted; still signed in, no flash back to `/sign-in` |
+| Console | No errors, no exceptions, no hydration warnings across the whole sequence |
+
+This covers the spec's mandatory dev-account discipline: sign up through the
+real screen, sign out, sign back in through the same screen, refresh.
+
+**Still not covered, and not claimed:** no API call has been made with the
+issued ID token (the backend was not running during this slice), cross-account
+denial needs a second tenant account, and token-expiry/revocation recovery is
+untested. Those move to the live-local integration slice.
+
 ### What the merge did NOT verify
 
 - The bootstrap's backend was not run. `/field/1` reaching its error state
