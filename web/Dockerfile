@@ -1,0 +1,36 @@
+# Cloud Run image for the AgriSense web app.
+#
+# Uses `next start` rather than a standalone bundle so that web/next.config.ts stays
+# Phase 1-owned: enabling `output: "standalone"` would be a change to their file, and this
+# image works either way.
+FROM node:24-slim AS build
+ENV NEXT_TELEMETRY_DISABLED=1
+WORKDIR /app
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+# The API base is read at build time by Next, so it is a build argument rather than an env var.
+ARG NEXT_PUBLIC_API_BASE
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
+ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
+ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+RUN npm run build
+
+FROM node:24-slim
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+RUN useradd --system --uid 10001 --create-home web
+WORKDIR /app
+COPY --from=build --chown=web:web /app /app
+USER 10001
+EXPOSE 8080
+CMD ["sh", "-c", "exec npx next start --port ${PORT:-8080} --hostname 0.0.0.0"]

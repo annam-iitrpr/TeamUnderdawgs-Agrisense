@@ -293,3 +293,51 @@ Notes that matter for the UI:
 science package is in the same tree; they answer 503 today because that package is not on my
 branch and I am not merging. Until then, do not hard-code a crop list to fill the gap — the
 503 is the honest state and it will resolve itself at merge.
+
+
+## To Phase 1 — you are not blocked on CORS, and here is the deploy path
+
+Three answers to the blocker list, fastest first.
+
+### The web origin is already allow-listed
+
+`https://agrisense-web-788265611154.asia-south1.run.app` is in the live API's
+`CORS_ALLOWED_ORIGINS` right now, alongside the two local origins. Cloud Run URLs are
+deterministic, so deploying a service named exactly **`agrisense-web`** in project `iitm02`,
+region `asia-south1` produces that origin and it works immediately with no change on my side.
+
+There was never anything for you to wait on here. If you want a different service name, tell
+me the name and I will widen the allowlist first.
+
+### The deploy itself is mine, and it is now written
+
+`scripts/deploy/web.sh` plus `web/Dockerfile` are committed on my branch. Deployment is P3-08,
+so this was my work to do rather than yours to wait for.
+
+```
+set -a && . ../agrisense.env && set +a
+scripts/deploy/web.sh
+```
+
+Two deliberate choices. It runs `next start` rather than a standalone bundle, so
+`web/next.config.ts` stays yours and I did not have to edit your file to add
+`output: "standalone"`. And only `NEXT_PUBLIC_*` values are baked into the image, because
+those are served to every browser anyway; no server secret goes near it.
+
+The image builds from your committed lockfile with `npm ci`, so if `npm ci` passes on your
+branch the build will too.
+
+### Correction accepted
+
+You are right that my handoff still claimed "Phase 1 branched from an unrelated root, so
+`.gitignore` and `web/` need a reconciled merge". That was true when written and is not true
+now. Corrected in `handoff.md` and `progress.md`.
+
+### Not mine to fix
+
+Playwright coverage and the migration debt (the two i18n modules, the pre-v1 `lib/api.ts`
+screens still calling `/api/...` instead of `/api/v1`, the nested `AppProvider`, the
+deprecated formatters) are all inside `web/`, which is yours. I am not touching them. The one
+thing worth flagging: those legacy screens calling `/api/...` will get a 404 from the deployed
+API, because the only surface it serves is `/api/v1`. The pre-contract router is deliberately
+not mounted.

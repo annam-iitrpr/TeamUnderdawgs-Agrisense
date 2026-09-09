@@ -21,7 +21,7 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 | P3-09 env | in-progress | Supplied `agrisense.env` stays outside the repo. Firebase, Cloud SQL, WhatsApp incl. `META_APP_SECRET`, meteoblue and CEHub all present and exercised. Gemini configuration still absent |
 | P3-10 live setup | in-progress | Cloud SQL, Firebase Auth and Cloud Run all working. Weather, WhatsApp and Gemini still unexercised; `META_APP_SECRET` and Gemini configuration are absent |
 | P3-11 acceptance | in-progress | 82 automated tests green, plus verified production round trips for auth, persistence, media, export, erasure, throttling and location search. No browser suite run by Phase 3 |
-| P3-12 integration | in-progress | Phase 2 branched from `ff851c3` and shares ancestry. Phase 1 started from an unrelated root, so `.gitignore` and `web/` will need a reconciled merge |
+| P3-12 integration | in-progress | All three branches share ancestry: Phase 1 merged `contract_v1` and resolved their conflicts by ownership, Phase 2 branched from it. Science seam verified in a scratch worktree without merging. Merge itself awaits the user's instruction |
 
 ## Executed checks
 

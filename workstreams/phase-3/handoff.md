@@ -57,8 +57,9 @@ use the proxy. Never print or commit any value from that file.
    it must degrade honestly.
 3. Reminder scheduling with quiet hours and the notification delivery path.
 4. Deploy a Cloud Run revision; secrets go to Secret Manager, never into the service YAML.
-5. Integration: Phase 1 branched from an unrelated root, so `.gitignore` and `web/` need a
-   reconciled merge. Phase 2 shares ancestry from `ff851c3` and should merge cleanly.
+5. Integration: all three branches now share ancestry. Phase 1 merged `contract_v1` and
+   resolved their conflicts by ownership, so the unrelated-root reconciliation this file
+   previously listed is done and no longer outstanding.
 
 ## Open items owned by others
 

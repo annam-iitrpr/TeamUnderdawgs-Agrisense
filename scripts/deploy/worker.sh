@@ -22,6 +22,12 @@ ENV_VARS="APP_ENV=production,AGRISENSE_ENV_FILE=/dev/null,AGRISENSE_DATA_MODE=li
 ENV_VARS="$ENV_VARS,FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID},GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID}"
 ENV_VARS="$ENV_VARS,GOOGLE_CLOUD_LOCATION=${GCP_REGION},GCS_MEDIA_BUCKET=${GCS_MEDIA_BUCKET}"
 [[ -n "${ANALYTICS_DATASET:-}" ]] && ENV_VARS="$ENV_VARS,ANALYTICS_DATASET=${ANALYTICS_DATASET}"
+ENV_VARS="$ENV_VARS,GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.8-flash}"
+ENV_VARS="$ENV_VARS,WHATSAPP_SEND_MODE=${WHATSAPP_SEND_MODE:-outbox}"
+ENV_VARS="$ENV_VARS,WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}"
+SECRETS="DATABASE_URL=agrisense-database-url:latest,MEDIA_SIGNING_SECRET=agrisense-media-signing-secret:latest"
+SECRETS="$SECRETS,GEMINI_API_KEY=agrisense-gemini-api-key:latest"
+SECRETS="$SECRETS,WHATSAPP_ACCESS_TOKEN=agrisense-whatsapp-access-token:latest"
 
 ACTION=create
 gcloud run jobs describe "$JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 && ACTION=update
@@ -32,7 +38,7 @@ gcloud run jobs "$ACTION" "$JOB" \
   --service-account "$API_SERVICE_ACCOUNT" \
   --set-cloudsql-instances "$CLOUDSQL_INSTANCE_CONNECTION_NAME" \
   --set-env-vars "$ENV_VARS" \
-  --set-secrets "DATABASE_URL=agrisense-database-url:latest,MEDIA_SIGNING_SECRET=agrisense-media-signing-secret:latest" \
+  --set-secrets "$SECRETS" \
   --max-retries 1 --task-timeout 600 \
   --image "$API_IMAGE" --command python --args="-m,agrisense.platform.worker_main" \
   --memory 512Mi --cpu 1
