@@ -68,6 +68,28 @@ spec:
                 secretKeyRef:
                   name: agrisense-media-signing-secret
                   key: latest
+            # Inbound WhatsApp is a public URL; without the app secret every delivery is refused.
+            - name: META_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: agrisense-meta-app-secret
+                  key: latest
+            - name: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agrisense-whatsapp-verify-token
+                  key: latest
+            - name: WHATSAPP_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agrisense-whatsapp-access-token
+                  key: latest
+            - name: WHATSAPP_PHONE_NUMBER_ID
+              value: ${WHATSAPP_PHONE_NUMBER_ID}
+            # Queue only. Flipping this to live starts messaging real people, so it is a
+            # deliberate deploy-time decision rather than a default.
+            - name: WHATSAPP_SEND_MODE
+              value: ${WHATSAPP_SEND_MODE}
           startupProbe:
             httpGet:
               path: /health/live

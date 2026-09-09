@@ -133,6 +133,51 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
     return 'queued'
 
 
+def graph_url(settings: Settings) -> str:
+    version = settings.whatsapp_graph_api_version or 'v21.0'
+    return f'https://graph.facebook.com/{version}/{settings.whatsapp_phone_number_id}/messages'
+
+
+def send(settings: Settings, recipient: str, body: str) -> str:
+    """Deliver one message. Only called when live mode is explicitly configured."""
+    import httpx
+    if not (settings.whatsapp_access_token and settings.whatsapp_phone_number_id):
+        raise PlatformError('WHATSAPP_NOT_CONFIGURED', 'Outbound messaging is not configured.', 503, True)
+    try:
+        response = httpx.post(
+            graph_url(settings),
+            headers={'Authorization': f'Bearer {settings.whatsapp_access_token}'},
+            json={'messaging_product': 'whatsapp', 'to': recipient, 'type': 'text',
+                  'text': {'preview_url': False, 'body': body}},
+            timeout=10.0)
+        response.raise_for_status()
+        payload = response.json()
+    except httpx.HTTPError as exc:
+        # The provider's own error text can carry account details, so it is never re-raised verbatim.
+        log.warning('whatsapp send failed: %s', type(exc).__name__)
+        raise PlatformError('WHATSAPP_SEND_FAILED', 'The message could not be sent.', 503, True) from exc
+    return (payload.get('messages') or [{}])[0].get('id', '')
+
+
+def deliver_outbound(session: Session, settings: Settings, event: d.OutboxRow) -> str:
+    """Outbox consumer for queued messages. Refuses to send what policy says it may not."""
+    payload = event.payload or {}
+    if payload.get('send_mode') != 'live' or settings.whatsapp_send_mode != 'live':
+        return 'queued_not_sent'
+    if payload.get('requires_template'):
+        # Outside the 24 hour window only an approved template may be sent, and none is registered.
+        return 'template_required'
+    channel = session.get(d.ChannelRow, payload.get('channel_id'))
+    if channel is None or not channel.opted_in:
+        return 'not_opted_in'
+    recipient = (channel.payload or {}).get('msisdn')
+    if not recipient:
+        # Only a digest is stored, so a send needs a number the farmer supplied for this purpose.
+        return 'recipient_unknown'
+    send(settings, recipient, str(payload.get('body', ''))[:4000])
+    return 'sent'
+
+
 def queue_outbound(session: Session, settings: Settings, channel: d.ChannelRow, body: str) -> d.OutboxRow:
     """Outbound messages are queued, and only sent when live mode is explicitly configured."""
     if not channel.opted_in:

@@ -118,3 +118,68 @@ def test_outbound_outside_the_session_window_is_marked_as_needing_a_template(har
         # Nothing is sent from a test run; delivery stays queued.
         assert later.payload['send_mode'] == 'outbox'
         session.commit()
+
+
+def linked_channel(harness, asha):
+    code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
+    signed(harness, message(f'LINK {code}', 'wamid.link'))
+    with harness.app.state.sessions() as session:
+        return session.scalar(select(d.ChannelRow).where(d.ChannelRow.provider == 'whatsapp')).id
+
+
+def test_nothing_is_sent_while_the_deployment_is_in_outbox_mode(harness, asha, monkeypatch):
+    """Queueing is not sending. A misconfigured flip must not silently message farmers."""
+    calls = []
+    monkeypatch.setattr(whatsapp, 'send', lambda *args: calls.append(args) or 'wamid.out')
+    channel_id = linked_channel(harness, asha)
+    settings = harness.app.state.settings
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        event = whatsapp.queue_outbound(session, settings, channel, 'Irrigation is due today.')
+        session.commit()
+        assert whatsapp.deliver_outbound(session, settings, event) == 'queued_not_sent'
+    assert calls == []
+
+
+def test_a_message_outside_the_session_window_needs_a_template_and_is_not_sent(harness, asha, monkeypatch):
+    from datetime import timedelta
+    calls = []
+    monkeypatch.setattr(whatsapp, 'send', lambda *args: calls.append(args) or 'wamid.out')
+    channel_id = linked_channel(harness, asha)
+    settings = harness.app.state.settings.model_copy(update={'whatsapp_send_mode': 'live'})
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        channel.last_inbound_at = d.utcnow() - timedelta(days=2)
+        event = whatsapp.queue_outbound(session, settings, channel, 'Irrigation is due today.')
+        session.commit()
+        assert whatsapp.deliver_outbound(session, settings, event) == 'template_required'
+    assert calls == []
+
+
+def test_a_revoked_channel_is_not_messaged_even_if_something_was_already_queued(harness, asha, monkeypatch):
+    calls = []
+    monkeypatch.setattr(whatsapp, 'send', lambda *args: calls.append(args) or 'wamid.out')
+    channel_id = linked_channel(harness, asha)
+    settings = harness.app.state.settings.model_copy(update={'whatsapp_send_mode': 'live'})
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        event = whatsapp.queue_outbound(session, settings, channel, 'Irrigation is due today.')
+        session.commit()
+    assert asha.delete('/channels/whatsapp/link').status_code == 200
+    with harness.app.state.sessions() as session:
+        assert whatsapp.deliver_outbound(session, settings, event) == 'not_opted_in'
+    assert calls == []
+
+
+def test_a_send_never_happens_without_a_number_the_farmer_supplied(harness, asha, monkeypatch):
+    calls = []
+    monkeypatch.setattr(whatsapp, 'send', lambda *args: calls.append(args) or 'wamid.out')
+    channel_id = linked_channel(harness, asha)
+    settings = harness.app.state.settings.model_copy(update={'whatsapp_send_mode': 'live'})
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        event = whatsapp.queue_outbound(session, settings, channel, 'Irrigation is due today.')
+        session.commit()
+        # Only a digest is stored, so there is no number to send to unless one was supplied.
+        assert whatsapp.deliver_outbound(session, settings, event) == 'recipient_unknown'
+    assert calls == []
