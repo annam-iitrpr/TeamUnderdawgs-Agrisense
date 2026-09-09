@@ -22,9 +22,9 @@ import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 import { Button, Callout, Card, TextField } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError } from "@/lib/api/envelope";
-import { fields as fieldsApi } from "@/lib/api/routes";
+import { catalog as catalogApi, fields as fieldsApi } from "@/lib/api/routes";
 import { newIdempotencyKey } from "@/lib/api/client";
-import type { AreaUnit, LocationSource } from "@/lib/api/contract";
+import type { AreaUnit, LocationResult, LocationSource } from "@/lib/api/contract";
 import { AMBIGUOUS_UNITS, AREA_UNITS, parseArea, roundHectares } from "@/lib/area";
 import { formatArea } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ import {
   type OnboardingDraft,
   type StepId,
 } from "./draft";
-import { Check, ChevronLeft, Loader2, MapPin } from "lucide-react";
+import { Check, ChevronLeft, Loader2, MapPin, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -371,50 +371,7 @@ function LocationStep({ draft, update }: StepProps) {
         </Callout>
       ) : null}
 
-      <Card className="p-4">
-        <TextField
-          label="Village or pincode"
-          hint="Use this if you would rather not share exact location."
-          value={manual}
-          onChange={(e) => setManual(e.target.value)}
-          inputMode="text"
-        />
-        <Button
-          variant="secondary"
-          className="mt-3 w-full"
-          disabled={manual.trim() === ""}
-          onClick={() =>
-            update((d) => {
-              // A village or pincode resolves to a centroid, which is NOT the
-              // field's position. It is stored with a different source and a
-              // coarse precision so nothing downstream can mistake it for GPS.
-              d.location = {
-                latitude: null,
-                longitude: null,
-                source: "village",
-                precisionM: 5000,
-                label: manual.trim(),
-              };
-            })
-          }
-        >
-          Use this place
-        </Button>
-        {draft.location.source === "village" && draft.location.label ? (
-          <Callout tone="caution" className="mt-3 text-xs" title="Not enough to save yet">
-            <p>
-              <span className="font-semibold text-ink">{draft.location.label}</span> is recorded as
-              an approximate area, not your field&apos;s exact position. Turning it into
-              coordinates needs the location catalogue, which is not being served yet.
-            </p>
-            <p className="mt-2">
-              To finish now, use <span className="font-semibold text-ink">Use my location</span>
-              {" "}above. Otherwise come back when place search is working — what you have entered
-              is saved on this device.
-            </p>
-          </Callout>
-        ) : null}
-      </Card>
+      <PlaceSearch draft={draft} update={update} query={manual} setQuery={setManual} />
 
       {hasLocation ? (
         <Callout tone="success" title="Location captured">
@@ -430,6 +387,139 @@ function LocationStep({ draft, update }: StepProps) {
         </Callout>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Village and pincode search, backed by `GET /catalog/locations`.
+ *
+ * This is the path for a farmer who declines GPS, which the spec requires to be
+ * a real alternative rather than a dead end. The result's centroid IS saved as
+ * the field's coordinates — the contract requires a centroid — but with
+ * `source: "village"` and the provider's own coarse `precision_m`, so nothing
+ * downstream can mistake a settlement centroid for the field's actual position.
+ */
+function PlaceSearch({
+  draft,
+  update,
+  query,
+  setQuery,
+}: StepProps & { query: string; setQuery: (v: string) => void }) {
+  const { t } = useLanguage();
+  const [results, setResults] = useState<LocationResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function search() {
+    const q = query.trim();
+    if (q === "") return;
+    setSearching(true);
+    setError(null);
+    setResults(null);
+    try {
+      const { data } = await catalogApi.locations({ q, limit: 8 });
+      setResults(data.items);
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.isDependencyUnavailable
+            ? "Place search is unavailable right now. Try “Use my location” instead."
+            : cause.message
+          : t("errorUnreachable"),
+      );
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  const chosen = draft.location.source === "village" ? draft.location.label : null;
+
+  return (
+    <Card className="p-4">
+      <TextField
+        label="Village or pincode"
+        hint="Use this if you would rather not share exact location."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void search();
+          }
+        }}
+        inputMode="text"
+      />
+      <Button
+        variant="secondary"
+        className="mt-3 w-full"
+        disabled={query.trim() === ""}
+        busy={searching}
+        busyLabel="Searching"
+        onClick={() => void search()}
+      >
+        <Search aria-hidden className="size-4" />
+        Search
+      </Button>
+
+      {error ? (
+        <Callout tone="caution" className="mt-3 text-xs">
+          {error}
+        </Callout>
+      ) : null}
+
+      {results !== null && results.length === 0 ? (
+        <Callout tone="info" className="mt-3 text-xs">
+          No place matched “{query.trim()}”. Try the district name, or a nearby larger village.
+        </Callout>
+      ) : null}
+
+      {results && results.length > 0 ? (
+        <ul className="mt-3 space-y-1.5 border-t border-mist pt-3">
+          {results.map((place) => (
+            <li key={place.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  update((d) => {
+                    d.location = {
+                      latitude: place.centroid.latitude,
+                      longitude: place.centroid.longitude,
+                      // Never "gps": this is a settlement centroid.
+                      source: "village",
+                      precisionM: place.centroid.precision_m ?? 5000,
+                      label: [place.name, place.district, place.state]
+                        .filter(Boolean)
+                        .join(", "),
+                    };
+                  })
+                }
+                className="flex min-h-[52px] w-full items-start gap-2 rounded-control border border-mist bg-card px-3 py-2 text-left"
+              >
+                <MapPin aria-hidden className="mt-0.5 size-4 shrink-0 text-forest" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{place.name}</span>
+                  <span className="block truncate text-xs text-slate">
+                    {[place.district, place.state].filter(Boolean).join(", ")}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {chosen ? (
+        <Callout tone="success" className="mt-3 text-xs" title="Approximate location set">
+          <p>
+            <span className="font-semibold text-ink">{chosen}</span>
+          </p>
+          <p className="mt-1">
+            This is the centre of that place, not your field&apos;s exact position — advice will be
+            less specific than with GPS. You can replace it later.
+          </p>
+        </Callout>
+      ) : null}
+    </Card>
   );
 }
 

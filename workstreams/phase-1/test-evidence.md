@@ -582,3 +582,55 @@ remounts rather than briefly showing the previous field's data under the new
 heading. Only one field exists on the test account, so **the two-field race has
 not been exercised end to end** — it needs a second field and a throttled
 response, and is listed as pending rather than claimed.
+
+## Slice 13 — real place search removes the GPS-declined dead end
+
+Phase 3 shipped location search, and `GET /catalog/locations` now answers **200
+with live results**. That removes a dead end documented in slice 11: a farmer
+who declined GPS previously could not complete onboarding at all, because
+turning a place name into coordinates had no service behind it.
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 |
+| Lint | `npx next lint` | clean |
+| Unit tests | `npx vitest run` | 108/108 |
+| Playwright | `npx playwright test --project=desktop` | 24/24 |
+| Production build | `npx next build` | exit 0, `/onboarding` 8.73 kB |
+| **Live search** | typed "Ludhiana" in the browser | 2 real results from the deployed API |
+
+### What the search returned
+
+```
+Ludhiana   — Ludhiana district, Punjab
+Ludhiāna   — Bulandshahr district, Uttar Pradesh
+```
+
+Both are shown with district and state, which matters: two settlements share
+the name in different states, and picking the wrong one would put the field
+about 900 km away. Disambiguation is the farmer's to make, with the information
+needed to make it.
+
+### Draft state after selecting the Punjab result
+
+```json
+{ "label": "Ludhiana, Ludhiana district, Punjab",
+  "latitude": 30.91204, "longitude": 75.85379,
+  "precisionM": 5000, "source": "village" }
+```
+
+`nextEnabled: true` — the step is now satisfiable without GPS.
+
+The centroid **is** saved as the field's coordinates, because the contract
+requires one, but it carries `source: "village"` and a 5 km precision rather
+than `gps`, and the UI says in plain words that this is the centre of the place
+and not the field, so advice will be less specific. Nothing downstream can
+mistake a settlement centroid for a surveyed position.
+
+If the endpoint regresses to 503 the screen says place search is unavailable and
+points the farmer back at GPS, rather than silently returning no matches — an
+empty result and an unavailable service are different things and read
+differently.
+
+**Not covered:** pincode-only queries were not tested (only a place name), and
+the probe draft was cleared afterwards so no test state remains on the device.
