@@ -2,10 +2,12 @@
 
 import { Button, Callout, Card, TextField } from "@/components/ui";
 import { newIdempotencyKey } from "@/lib/api/client";
+import { uploadAttachment, UploadError } from "@/lib/media/upload";
 import { ApiError, fieldErrors } from "@/lib/api/envelope";
 import type { JournalCreate } from "@/lib/api/contract";
 import { seasons as seasonsApi } from "@/lib/api/routes";
 import { cn } from "@/lib/utils";
+import { Camera, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
   ACTION_META,
@@ -59,6 +61,9 @@ export function JournalEntryForm({
   const [action, setAction] = useState<JournalAction>("watered");
   const [occurredLocal, setOccurredLocal] = useState(nowInIstLocal);
   const [text, setText] = useState("");
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const photoInput = useRef<HTMLInputElement | null>(null);
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState<string>(ACTION_META.watered.defaultUnit ?? "litre");
   const [cost, setCost] = useState("");
@@ -130,10 +135,31 @@ export function JournalEntryForm({
 
     setSaving(true);
     try {
-      await seasonsApi.addJournalEntry(seasonId, body, idempotencyKey.current);
+      // Photos go up first: attaching an id for an object that does not exist yet
+      // would be refused, and losing the typed text with it would be worse.
+      let mediaIds: string[] = [];
+      if (photos.length > 0) {
+        setUploadingCount(photos.length);
+        try {
+          mediaIds = [];
+          for (const file of photos) {
+            mediaIds.push(await uploadAttachment(file, newIdempotencyKey()));
+            setUploadingCount((n) => Math.max(0, n - 1));
+          }
+        } finally {
+          setUploadingCount(0);
+        }
+      }
+      await seasonsApi.addJournalEntry(
+        seasonId,
+        mediaIds.length ? { ...body, media_ids: mediaIds } : body,
+        idempotencyKey.current,
+      );
       onSaved();
     } catch (cause) {
-      if (cause instanceof ApiError) {
+      if (cause instanceof UploadError) {
+        setError(cause.message);
+      } else if (cause instanceof ApiError) {
         const fields = fieldErrors(cause);
         if (Object.keys(fields).length > 0) setPerField(fields);
         setError(
@@ -248,17 +274,69 @@ export function JournalEntryForm({
           />
         </div>
 
-        {/*
-          Photo and voice attachment is deliberately NOT built here. The upload
-          path is a three-step flow — request a ticket, PUT the bytes to a
-          signed URL, then complete with a SHA-256 of the content — and none of
-          it has been exercised against the live service. A picker that appeared
-          to work and silently dropped the file would be worse than none.
-        */}
-        <Callout tone="info" className="text-xs" title="Photos and voice notes are not ready yet">
-          You can record what happened in words now. Attaching a photo or a voice note needs the
-          media upload path, which is not wired up on this screen.
-        </Callout>
+        <div>
+          <p className="text-sm font-semibold text-ink">Photos</p>
+          <p className="mt-0.5 text-xs text-slate">
+            A photo of what you saw is kept with this entry. It is a record of the field, not a
+            diagnosis.
+          </p>
+
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="sr-only"
+            onChange={(e) => {
+              const chosen = [...(e.target.files ?? [])];
+              e.target.value = "";
+              // Three is enough for one action and keeps a slow connection usable.
+              setPhotos((current) => [...current, ...chosen].slice(0, 3));
+            }}
+          />
+
+          {photos.length > 0 ? (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {photos.map((file, index) => (
+                <li key={`${file.name}-${index}`} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local object URL */}
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt={`Photo ${index + 1} for this entry`}
+                    className="size-20 rounded-control object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPhotos((c) => c.filter((_, i) => i !== index))}
+                    aria-label={`Remove photo ${index + 1}`}
+                    className="absolute -right-1.5 -top-1.5 grid size-6 place-items-center rounded-full border border-mist bg-card text-clay shadow-sm"
+                  >
+                    <X aria-hidden className="size-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {photos.length < 3 ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-2"
+              onClick={() => photoInput.current?.click()}
+              disabled={saving}
+            >
+              <Camera aria-hidden className="size-4" />
+              {photos.length === 0 ? "Add a photo" : "Add another"}
+            </Button>
+          ) : null}
+
+          {uploadingCount > 0 ? (
+            <p className="mt-2 text-xs text-slate" aria-live="polite">
+              Uploading {uploadingCount} photo{uploadingCount === 1 ? "" : "s"}…
+            </p>
+          ) : null}
+        </div>
 
         {error ? (
           <Callout tone="blocked" className="text-sm">

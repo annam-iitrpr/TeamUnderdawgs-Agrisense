@@ -65,6 +65,10 @@ Reply with JSON only, in one of these two shapes:
 {"kind": "proposal", "text": "...", "operation": "journal.create", "target_id": "...",
  "expected_version": 1, "values": {...}}
 
+When a voice note was attached, also include "heard": the farmer's words written out in the
+language they spoke. Write only what they actually said. If the recording is unclear, give the
+part you are confident of and leave the rest out rather than filling it in.
+
 Use a proposal only when the farmer clearly asked to record or change something."""
 
 
@@ -245,6 +249,15 @@ def reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
             # change, and a malformed one must not fail the whole reply.
             log.info('assistant proposal discarded: %s', type(error).__name__)
             drafted['text'] = drafted.get('text') or 'I could not prepare that change. Please make it directly.'
+
+    # A voice note leaves the farmer's own turn blank on screen. Writing back what was
+    # heard lets them read their question and check it was understood correctly.
+    heard = drafted.get('heard')
+    if isinstance(heard, str) and heard.strip():
+        asked = session.scalar(select(d.MessageRow).where(
+            d.MessageRow.id == message_id, d.MessageRow.tenant_id == tenant_id))
+        if asked is not None and not (asked.payload or {}).get('text', '').strip():
+            asked.payload = {**asked.payload, 'text': heard.strip()[:8000]}
 
     message = c.Message(id=d.new_id(), conversation_id=conversation_id, role='assistant',
                         text=str(drafted.get('text', ''))[:8000], created_at=d.utcnow(),

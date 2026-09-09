@@ -363,3 +363,41 @@ async def test_an_attachment_the_model_rejects_does_not_lose_the_reply(
     replies = [m for m in asha.get(f'/conversations/{convo["id"]}/messages').json()['data']['items']
                if m['role'] == 'assistant']
     assert len(replies) == 1 and 'could not play' in replies[0]['text']
+
+
+async def test_a_voice_question_is_written_back_so_the_farmer_can_read_it(
+        harness, asha, season, monkeypatch):
+    """A voice note leaves the farmer's own turn blank; the transcription fills it."""
+    import hashlib
+    from urllib.parse import urlsplit
+
+    wav = b'RIFF' + (36).to_bytes(4, 'little') + b'WAVEfmt ' + bytes(24) + b'data' + bytes(8)
+    ticket = asha.post('/media/uploads', {'filename': 'q.wav', 'content_type': 'audio/wav',
+                                          'size_bytes': len(wav)}).json()['data']
+    parts = urlsplit(ticket['upload_url'])
+    harness.put(f'{parts.path}?{parts.query}', content=wav)
+    asha.post(f'/media/{ticket["asset"]["id"]}/complete',
+              {'sha256': hashlib.sha256(wav).hexdigest()})
+
+    StubModel('{"kind":"answer","text":"No watering is recorded.",'
+              '"heard":"मैंने पिछली बार पानी कब दिया?"}').install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages',
+              {'text': '', 'media_ids': [ticket['asset']['id']]})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+
+    items = asha.get(f'/conversations/{convo["id"]}/messages').json()['data']['items']
+    asked = next(m for m in items if m['role'] == 'user')
+    assert asked['text'] == 'मैंने पिछली बार पानी कब दिया?'
+    assert asked['media_ids'] == [ticket['asset']['id']]
+
+
+async def test_a_typed_question_is_never_overwritten_by_a_transcription(
+        harness, asha, season, monkeypatch):
+    StubModel('{"kind":"answer","text":"ok","heard":"something else entirely"}').install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages', {'text': 'What did I spend?'})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+    items = asha.get(f'/conversations/{convo["id"]}/messages').json()['data']['items']
+    asked = next(m for m in items if m['role'] == 'user')
+    assert asked['text'] == 'What did I spend?'

@@ -317,6 +317,7 @@ function FieldPanel({
           <SoilCardUpload field={field} onSaved={onFieldChanged} />
         ) : null}
         <Shortcuts />
+        <RemoveField field={field} onRemoved={onFieldChanged} />
       </div>
     </div>
   );
@@ -341,9 +342,7 @@ function NoSeasonCard({
       <div className="mt-4">
         <AddSeasonForm field={field} existingSeasons={[]} onAdded={onAdded} />
       </div>
-      <div className="mt-4 border-t border-mist pt-4">
-        <RemoveField field={field} onRemoved={() => onAdded()} />
-      </div>
+
     </Card>
   );
 }

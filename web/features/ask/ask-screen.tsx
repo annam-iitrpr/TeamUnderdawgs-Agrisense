@@ -112,8 +112,15 @@ export function AskScreen() {
   }, [conversation]);
 
   async function send() {
+    if (draft.trim() === "" && !attachment) {
+      // Say what is missing rather than presenting a dead control.
+      setError("Type a question, attach a photo, or record a voice note first.");
+      return;
+    }
     const text = draft.trim();
-    if (text === "" || sending) return;
+    // A voice note or a photo on its own is a complete question, so an empty text
+    // box is not a reason to do nothing. Only a send already in flight is.
+    if (sending) return;
 
     setSending(true);
     setError(null);
@@ -228,7 +235,10 @@ export function AskScreen() {
               label="Your question"
               className="flex-1"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="Ask about your field"
               disabled={sending}
             />
@@ -268,18 +278,20 @@ export function AskScreen() {
                 });
               }}
             />
-            <Button type="submit" size="lg" busy={sending} disabled={draft.trim() === "" && !attachment}>
+            <Button type="submit" size="lg" busy={sending}>
               <Send aria-hidden className="size-4" />
               Send
             </Button>
           </form>
-        </Card>
 
-        {error ? (
-          <Callout tone="blocked" title={t("errorTitle")}>
-            {error}
-          </Callout>
-        ) : null}
+          {/* Beside the control that caused it, not further down the page where a
+              farmer on a phone would never see it. */}
+          {error ? (
+            <p role="alert" className="mt-2 text-sm text-clay">
+              {error}
+            </p>
+          ) : null}
+        </Card>
 
         {attachment ? (
           <Card className="flex items-center gap-3 p-3">
@@ -393,7 +405,20 @@ function Bubble({ message, onApplied }: { message: Message; onApplied?: () => vo
           mine ? "bg-forest text-white" : "border border-mist bg-card text-ink",
         )}
       >
-        <p className="whitespace-pre-wrap break-words">{message.text ?? ""}</p>
+        {/* A voice question shows a microphone beside the words that were heard, so the
+            farmer can tell at a glance which turns they spoke and check the transcription. */}
+        <div className="flex items-start gap-2">
+          {mine && message.media_ids && message.media_ids.length > 0 ? (
+            <Mic aria-label="Asked by voice" className="mt-0.5 size-4 shrink-0 opacity-80" />
+          ) : null}
+          <p className="min-w-0 whitespace-pre-wrap break-words">
+            {message.text?.trim()
+              ? message.text
+              : mine
+                ? "Voice note sent"
+                : ""}
+          </p>
+        </div>
         <p className={cn("mt-1 text-xs", mine ? "text-white/70" : "text-slate")}>
           {formatTime(message.created_at)}
         </p>
