@@ -21,18 +21,19 @@
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 import { cn } from "@/lib/utils";
 import { OfflineBanner } from "@/features/pwa/pwa-controls";
-import { BookOpen, Home, MessageCircleQuestion, Sprout, type LucideIcon } from "lucide-react";
+import { BookOpen, Home, MessageCircleQuestion, Sprout, type LucideIcon , User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-type NavItem = { href: string; icon: LucideIcon; labelKey: "navHome" | "navPlan" | "navJournal" | "navAsk" };
+type NavItem = { href: string; icon: LucideIcon; labelKey: "navHome" | "navPlan" | "navJournal" | "navAsk" | "navAccount" };
 
 const NAV: NavItem[] = [
   { href: "/", icon: Home, labelKey: "navHome" },
   { href: "/plan", icon: Sprout, labelKey: "navPlan" },
   { href: "/journal", icon: BookOpen, labelKey: "navJournal" },
   { href: "/ask", icon: MessageCircleQuestion, labelKey: "navAsk" },
+  { href: "/account", icon: User, labelKey: "navAccount" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -104,7 +105,7 @@ export function AppShell({
             </div>
             {/* Must be allowed to shrink: shrink-0 here pushed the phone header past the
                 viewport, and the language row inside scrolls on its own. */}
-            <div className="flex min-w-0 items-center gap-2">{headerActions}</div>
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">{headerActions}</div>
           </div>
         </header>
 

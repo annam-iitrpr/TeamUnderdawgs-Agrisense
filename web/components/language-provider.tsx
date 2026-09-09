@@ -103,7 +103,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { language, setLanguage, t } = useLanguage();
   return (
-    <div className={cn("flex items-center gap-1.5", className)}>
+    // min-w-0 is what lets the scrollable pill inside actually shrink: without it
+    // this flex item keeps its full content width and pushes the page sideways.
+    <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
       <Globe aria-hidden className="size-4 shrink-0 text-slate" />
       <span className="sr-only" id="language-label">
         {t("changeLanguage")}

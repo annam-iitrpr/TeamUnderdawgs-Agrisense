@@ -19,6 +19,7 @@ import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, UnknownValue }
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
 import { AddSeasonForm } from "@/features/crops/add-season-form";
+import { RemoveField } from "./remove-field";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
 import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
@@ -135,14 +136,27 @@ function DataModeBadge({ mode }: { mode: DataMode | undefined }) {
   return (
     <span
       className={cn(
-        "rounded-full border px-2.5 py-1 text-xs font-semibold",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold",
         mode === "live"
-          ? "border-sprout/40 text-forest"
+          ? "border-sprout/40 bg-sprout/10 text-forest"
           : mode === "demo"
-            ? "border-amber/50 text-amber-ink"
+            ? "border-amber/50 bg-amber/10 text-amber-ink"
             : "border-mist text-slate",
       )}
     >
+      {/* A live badge that looks identical to a stale one tells a farmer nothing.
+          The dot pulses only while data really is live; every other mode is still. */}
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 rounded-full",
+          mode === "live"
+            ? "animate-pulse bg-forest motion-reduce:animate-none"
+            : mode === "demo"
+              ? "bg-amber-ink"
+              : "bg-slate",
+        )}
+      />
       {label}
     </span>
   );
@@ -289,7 +303,13 @@ function FieldPanel({ field, uid }: { field: Field; uid: string | null }) {
   );
 }
 
-function NoSeasonCard({ field, onAdded }: { field: Field; onAdded: (season: Season) => void }) {
+function NoSeasonCard({
+  field,
+  onAdded,
+}: {
+  field: Field;
+  onAdded: (season?: Season) => void;
+}) {
   return (
     <Card className="p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate">{field.name}</p>
@@ -301,6 +321,9 @@ function NoSeasonCard({ field, onAdded }: { field: Field; onAdded: (season: Seas
 
       <div className="mt-4">
         <AddSeasonForm field={field} existingSeasons={[]} onAdded={onAdded} />
+      </div>
+      <div className="mt-4 border-t border-mist pt-4">
+        <RemoveField field={field} onRemoved={() => onAdded()} />
       </div>
     </Card>
   );

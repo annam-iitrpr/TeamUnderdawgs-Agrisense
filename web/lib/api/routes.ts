@@ -119,6 +119,18 @@ export const me = {
       idempotencyKey: newIdempotencyKey(),
       signal: o.signal,
     }),
+
+  /**
+   * 202 with a job. Erasure removes the records themselves rather than hiding
+   * them, and cannot be undone, so only call this behind an explicit
+   * confirmation.
+   */
+  deleteAccount: (o: Opts = {}): Promise<Result<Job>> =>
+    apiRequest("/me", {
+      method: "DELETE",
+      idempotencyKey: newIdempotencyKey(),
+      signal: o.signal,
+    }),
 };
 
 /* ── fields ──────────────────────────────────────────────────────────────── */
