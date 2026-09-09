@@ -29,12 +29,16 @@ export function VoiceRecorder({
   onError,
 }: {
   disabled?: boolean;
-  onRecorded: (file: File) => void;
+  onRecorded: (file: File, seconds: number) => void;
   onError: (message: string) => void;
 }) {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [level, setLevel] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
+  const audio = useRef<AudioContext | null>(null);
+  const frame = useRef<number | null>(null);
+  const secondsRef = useRef(0);
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -43,10 +47,15 @@ export function VoiceRecorder({
     if (tick.current) clearInterval(tick.current);
     stopTimer.current = null;
     tick.current = null;
+    if (frame.current) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    void audio.current?.close().catch(() => {});
+    audio.current = null;
     recorder.current?.stream.getTracks().forEach((t) => t.stop());
     recorder.current = null;
     setRecording(false);
     setElapsed(0);
+    setLevel(0);
   }, []);
 
   useEffect(() => cleanup, [cleanup]);
@@ -70,11 +79,33 @@ export function VoiceRecorder({
     }
     const chunks: Blob[] = [];
     const rec = new MediaRecorder(stream, { mimeType });
+
+    // Drive the bars from the real input level, so silence looks like silence
+    // and a farmer can tell the microphone is actually picking them up.
+    try {
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      context.createMediaStreamSource(stream).connect(analyser);
+      const bins = new Uint8Array(analyser.frequencyBinCount);
+      audio.current = context;
+      const sample = () => {
+        if (!audio.current) return;
+        analyser.getByteFrequencyData(bins);
+        const mean = bins.reduce((sum, v) => sum + v, 0) / bins.length;
+        setLevel(Math.min(1, mean / 90));
+        frame.current = requestAnimationFrame(sample);
+      };
+      sample();
+    } catch {
+      // A browser without Web Audio still records; it just gets a steady bar.
+    }
     rec.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
     };
     rec.onstop = () => {
       const blob = new Blob(chunks, { type: mimeType });
+      const seconds = secondsRef.current;
       cleanup();
       if (blob.size === 0) {
         onError("Nothing was recorded. Check the microphone and try again.");
@@ -82,21 +113,45 @@ export function VoiceRecorder({
       }
       // The extension follows the type so the server's own check agrees with it.
       const ext = mimeType.split("/")[1]?.split(";")[0] ?? "webm";
-      onRecorded(new File([blob], `question.${ext}`, { type: mimeType }));
+      onRecorded(new File([blob], `voice-note.${ext}`, { type: mimeType }), seconds);
     };
     recorder.current = rec;
     rec.start();
     setRecording(true);
-    tick.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    secondsRef.current = 0;
+    tick.current = setInterval(() => {
+      secondsRef.current += 1;
+      setElapsed(secondsRef.current);
+    }, 1000);
     // A recording that runs forever is a file nobody can upload.
     stopTimer.current = setTimeout(stop, MAX_RECORDING_MS);
   }
 
   if (recording) {
     return (
-      <Button type="button" variant="secondary" onClick={stop} aria-label="Stop recording">
-        <Square aria-hidden className="size-4 text-clay" />
-        <span className="tabular-nums">{elapsed}s</span>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={stop}
+        aria-label="Stop recording and attach"
+        className="border-clay/50"
+      >
+        <span aria-hidden className="flex h-4 items-end gap-[2px]">
+          {[0, 1, 2, 3].map((bar) => (
+            <span
+              key={bar}
+              className="w-[3px] rounded-full bg-clay transition-[height] duration-100 motion-reduce:transition-none"
+              style={{
+                // A floor keeps the bars visible in silence; the rest follows the voice.
+                height: `${Math.round(4 + level * 12 * (bar % 2 === 0 ? 1 : 0.7))}px`,
+              }}
+            />
+          ))}
+        </span>
+        <span className="tabular-nums">
+          {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
+        </span>
+        <Square aria-hidden className="size-3.5 text-clay" />
       </Button>
     );
   }

@@ -63,7 +63,12 @@ export function AskScreen() {
   const activeField = visible.find((f) => f.id === activeId) ?? null;
 
   const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  const [attachment, setAttachment] = useState<{
+    file: File;
+    preview: string;
+    kind: "photo" | "voice";
+    seconds?: number;
+  } | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -118,18 +123,18 @@ export function AskScreen() {
       const convo = await ensureConversation();
       // Upload first: attaching an id that does not exist yet would be refused.
       let mediaIds: string[] = [];
-      if (photo) {
+      if (attachment) {
         setUploading(true);
         try {
-          mediaIds = [await uploadAttachment(photo.file, newIdempotencyKey())];
+          mediaIds = [await uploadAttachment(attachment.file, newIdempotencyKey())];
         } finally {
           setUploading(false);
         }
       }
       const { data: sent } = await postMessage(convo.id, text, mediaIds);
-      if (photo) {
-        if (photo.preview) URL.revokeObjectURL(photo.preview);
-        setPhoto(null);
+      if (attachment) {
+        if (attachment.preview) URL.revokeObjectURL(attachment.preview);
+        setAttachment(null);
       }
       setMessages((prev) => [...prev, sent]);
       setDraft("");
@@ -235,8 +240,8 @@ export function AskScreen() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (photo) URL.revokeObjectURL(photo.preview);
-                setPhoto({ file, preview: URL.createObjectURL(file) });
+                if (attachment?.preview) URL.revokeObjectURL(attachment.preview);
+                setAttachment({ file, preview: URL.createObjectURL(file), kind: "photo" });
                 e.target.value = "";
               }}
             />
@@ -253,12 +258,17 @@ export function AskScreen() {
             <VoiceRecorder
               disabled={sending}
               onError={setError}
-              onRecorded={(file) => {
-                if (photo) URL.revokeObjectURL(photo.preview);
-                setPhoto({ file, preview: "" });
+              onRecorded={(file, seconds) => {
+                if (attachment?.preview) URL.revokeObjectURL(attachment.preview);
+                setAttachment({
+                  file,
+                  preview: URL.createObjectURL(file),
+                  kind: "voice",
+                  seconds,
+                });
               }}
             />
-            <Button type="submit" size="lg" busy={sending} disabled={draft.trim() === "" && !photo}>
+            <Button type="submit" size="lg" busy={sending} disabled={draft.trim() === "" && !attachment}>
               <Send aria-hidden className="size-4" />
               Send
             </Button>
@@ -271,12 +281,12 @@ export function AskScreen() {
           </Callout>
         ) : null}
 
-        {photo ? (
+        {attachment ? (
           <Card className="flex items-center gap-3 p-3">
-            {photo.preview ? (
+            {attachment.kind === "photo" ? (
               /* eslint-disable-next-line @next/next/no-img-element -- object URL, not a remote asset */
               <img
-                src={photo.preview}
+                src={attachment.preview}
                 alt="Photo you are about to attach"
                 className="size-14 shrink-0 rounded-control object-cover"
               />
@@ -286,24 +296,29 @@ export function AskScreen() {
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-ink">{photo.file.name}</p>
-              <p className="text-xs text-slate">
-                {uploading
-                  ? "Uploading…"
-                  : photo.preview
-                    ? "Attached to your next question"
-                    : "Voice note ready — press Send"}
+              {/* The farmer sees what they recorded, not the file the browser made. */}
+              <p className="truncate text-sm font-medium text-ink">
+                {attachment.kind === "voice"
+                  ? `Voice note · ${formatSeconds(attachment.seconds ?? 0)}`
+                  : attachment.file.name}
               </p>
+              <p className="text-xs text-slate">
+                {uploading ? "Sending…" : "Goes with your next question"}
+              </p>
+              {attachment.kind === "voice" && attachment.preview ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption -- the farmer's own recording
+                <audio src={attachment.preview} controls className="mt-1.5 h-8 w-full max-w-[16rem]" />
+              ) : null}
             </div>
             <Button
               type="button"
               variant="secondary"
               onClick={() => {
-                URL.revokeObjectURL(photo.preview);
-                setPhoto(null);
+                if (attachment.preview) URL.revokeObjectURL(attachment.preview);
+                setAttachment(null);
               }}
               disabled={sending}
-              aria-label="Remove the photo"
+              aria-label={attachment.kind === "voice" ? "Remove the voice note" : "Remove the photo"}
             >
               <X aria-hidden className="size-4" />
             </Button>
@@ -323,6 +338,10 @@ export function AskScreen() {
 }
 
 /** Posted separately so `send()` reads linearly. */
+function formatSeconds(total: number): string {
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 async function postMessage(conversationId: string, text: string, mediaIds: string[] = []) {
   return conversationsApi.postMessage(
     conversationId,
