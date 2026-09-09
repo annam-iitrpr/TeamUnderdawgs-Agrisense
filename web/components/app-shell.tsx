@@ -28,12 +28,14 @@ import type { ReactNode } from "react";
 
 type NavItem = { href: string; icon: LucideIcon; labelKey: "navHome" | "navPlan" | "navJournal" | "navAsk" | "navAccount" };
 
+/** Pinned to the foot of the sidebar, away from the working screens. */
+const ACCOUNT: NavItem = { href: "/account", icon: User, labelKey: "navAccount" };
+
 const NAV: NavItem[] = [
   { href: "/", icon: Home, labelKey: "navHome" },
   { href: "/plan", icon: Sprout, labelKey: "navPlan" },
   { href: "/journal", icon: BookOpen, labelKey: "navJournal" },
   { href: "/ask", icon: MessageCircleQuestion, labelKey: "navAsk" },
-  { href: "/account", icon: User, labelKey: "navAccount" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -87,8 +89,25 @@ export function AppShell({
             })}
           </ul>
         </nav>
-        <div className="border-t border-mist p-3">
-          <LanguageSwitcher />
+        {/* Account and language sit at the foot, below the working screens,
+            which is where a desktop app is expected to keep them. */}
+        <div className="mt-auto border-t border-mist p-3">
+          <Link
+            href={ACCOUNT.href}
+            aria-current={isActive(pathname, ACCOUNT.href) ? "page" : undefined}
+            className={cn(
+              "flex min-h-[48px] items-center gap-3 rounded-control px-3 text-sm font-semibold",
+              isActive(pathname, ACCOUNT.href)
+                ? "bg-[color-mix(in_srgb,var(--sprout)_14%,transparent)] text-forest"
+                : "text-slate hover:bg-[color-mix(in_srgb,var(--mist)_40%,transparent)] hover:text-ink",
+            )}
+          >
+            <ACCOUNT.icon aria-hidden className="size-5 shrink-0" />
+            <span>{t(ACCOUNT.labelKey)}</span>
+          </Link>
+          <div className="mt-2">
+            <LanguageSwitcher />
+          </div>
         </div>
       </aside>
 
@@ -132,7 +151,7 @@ export function AppShell({
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           <ul className="mx-auto flex max-w-[40rem]">
-            {NAV.map((item) => {
+            {[...NAV, ACCOUNT].map((item) => {
               const active = isActive(pathname, item.href);
               return (
                 <li key={item.href} className="flex-1">
