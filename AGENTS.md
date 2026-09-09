@@ -2,6 +2,9 @@
 
 Read `.agents/skills/karpathy-guidelines/SKILL.md`, `contracts/contract_v1.md`, and your branch's `workstreams/phase-N/progress.md`, decisions, handoff and diff before changes.
 
+Enable the shared hook once per clone: `git config core.hooksPath scripts/hooks`. It blocks
+any commit that CI would reject and any staged secret.
+
 User instructions take precedence. Do not commit any README or environment files, credentials, private keys, personal data or test auth state. Run `python3 scripts/security/check_staged.py` on every staged commit; supply the local secret file with `--secret-file` when available. Never print secret values. Update phase-specific progress and handoff after each verified slice. Commit working slices with descriptive conventional commit subjects; push only your branch without force.
 
 Ownership after bootstrap:

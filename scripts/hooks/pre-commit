@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Refuse a commit that CI would reject, and never let a secret reach the index.
+# Enable once per clone:  git config core.hooksPath scripts/hooks
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+PY="$ROOT/backend/.venv/bin/python"
+SECRETS="${AGRISENSE_ENV_FILE:-$ROOT/../agrisense.env}"
+
+ARGS=()
+[[ -f "$SECRETS" ]] && ARGS+=(--secret-file "$SECRETS")
+python3 "$ROOT/scripts/security/check_staged.py" "${ARGS[@]}"
+
+if [[ -x "$PY" ]]; then
+  "$PY" -m ruff check "$ROOT"
+  "$PY" "$ROOT/scripts/generate_contracts.py" --check
+else
+  echo "backend/.venv not found; skipping lint and contract check." >&2
+fi
