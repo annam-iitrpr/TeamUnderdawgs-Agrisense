@@ -12,12 +12,11 @@ import urllib.error
 import urllib.request
 
 import pytest
-from sqlalchemy.orm import Session
-
 from agrisense.config import Settings
 from agrisense.platform import db as d
 from agrisense.platform.auth import FirebaseVerifier, enroll
 from agrisense.platform.errors import PlatformError
+from sqlalchemy.orm import Session
 
 API_KEY = os.environ.get('FIREBASE_API_KEY', '')
 PROJECT = os.environ.get('FIREBASE_PROJECT_ID', '')
