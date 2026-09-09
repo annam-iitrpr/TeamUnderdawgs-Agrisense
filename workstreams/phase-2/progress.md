@@ -26,3 +26,13 @@ Last verified commit: this milestone (see Git history). Full `agrisense-contract
 - Phase 1 currently has independent root ancestry, visible at `e1503f9`; Phase 2 is based on Phase 3 so their backend merge has a common ancestor. No other branch modified.
 
 Next: publish the core arithmetic milestone; complete verified provider normalization, contract facade and honest missing-data outputs.
+
+## Verified milestone 2
+
+- Milestone 1 pushed as `d686c40`.
+- `PYTHONPATH=backend .venv/bin/python -m pytest backend/tests/science backend/tests/test_stress.py -q`: 63 passed, including 38 inherited baseline checks.
+- Bounded HTTPX transport, explicit unavailable/fallback states, CE Hub normalized measurements and Open-Meteo preceding-hour interval alignment implemented. Source times, unknown issue time, hashes, wind height and missingness retained.
+- Hourly engine rejects rainfast truncation, gaps, unsafe gusts, unknown inversion, insufficient equipment duration and stale weather; supports IST half-hour UTC grids.
+- CE Hub interval semantics remain unconfirmed: raw hourly input is available for diagnostics but cannot certify safe windows.
+- Shared schema does not yet transport gust/probability/inversion evidence; interface request published.
+- Next: implement facade against generated models and evidence-gated planning/closure.

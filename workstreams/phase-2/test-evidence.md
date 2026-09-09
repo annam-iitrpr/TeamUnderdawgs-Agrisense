@@ -7,3 +7,7 @@ Milestone 1: Python 3.12.10, `PYTHONPATH=backend python3 -m unittest discover -s
 Independent ET0 source: https://www.fao.org/4/x0490e/x0490e08.htm, example 18, Rn=13.28 MJ/m²/day and published ET0=3.88 mm/day. Initial fixture transcription failure corrected and rerun successfully.
 
 Not run: authenticated API, PostgreSQL integration, Playwright and hosted staging. These require the shared runtime; unit checks do not substitute for them.
+
+Milestone 2: combined science and inherited stress suite, 63 passed in 1.30 seconds. HTTPX mock boundaries cover 204, 401/403, redirects, circuit opening, retry-after, oversized payload and redaction. Live probe success is separate from fixture tests.
+
+Open-Meteo official hourly definitions (https://open-meteo.com/en/docs) identify rain, probability, gusts and radiation as preceding-hour aggregates. Normalizer shifts these to interval starts; terminal unknown stays null. CE Hub UTC offset and 2 m wind height observed live; modelUpdateTime timezone and sum interval convention remain unresolved.
