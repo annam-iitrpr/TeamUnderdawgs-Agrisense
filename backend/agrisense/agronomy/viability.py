@@ -8,7 +8,7 @@ long enough to be absorbed. The reason an hour was rejected is a first class out
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as Date
 from datetime import datetime
 from typing import Any
@@ -310,4 +310,11 @@ def spray_viability(hourly: list[HourlyWeather], candidate_days: list[Date] | No
         allowed = set(candidate_days)
         scored = [h for h in scored if h.timestamp.date() in allowed]
 
-    return RankedHours(scored, _build_windows(scored))
+    # Legacy HourlyWeather cannot carry verified label, gust, measurement-height,
+    # inversion or equipment inputs. Keep diagnostics but do not certify a window.
+    # The v1 science window engine enforces these on complete candidate intervals.
+    scored = [replace(hour, viable=False, score=0.0,
+                      rejection_rule="reviewed_safety_inputs_required",
+                      rejection_reason="Use the science facade with reviewed product and field safety inputs.")
+              for hour in scored]
+    return RankedHours(scored, [])

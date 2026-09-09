@@ -97,7 +97,7 @@ def test_frost_is_none_for_rice_and_wheat(crop):
     result = frost_stress(-5.0, crop)
     assert result.value is None
     assert result.applicable is False
-    assert "not applicable" in (result.note or "").lower()
+    assert "not parameterized" in (result.note or "").lower()
 
 
 def test_frost_worked_example_cotton():
@@ -157,7 +157,7 @@ def test_drought_percentile_without_history_is_not_applicable():
 
 def test_drought_raw_survives_zero_temperature():
     """Must not raise on a division by zero."""
-    assert drought_index_raw(10.0, 5.0, 20.0, 0.0).value is not None
+    assert drought_index_raw(10.0, 5.0, 20.0, 0.0).value is None
 
 
 def test_yield_risk_zero_inside_every_optimal_range():
@@ -219,7 +219,7 @@ def test_nitrogen_nue_bands():
 
     low = nitrogen_use_efficiency(1000, 100, 1200, 80, Crop.RICE)
     assert low.inputs["band"] == "low"
-    assert low.inputs["recommend_biostimulant"] is True
+    assert low.inputs["recommend_biostimulant"] is False
 
 
 def test_nitrogen_nue_rainfall_factor_matches_document_example():
@@ -236,9 +236,9 @@ def test_nitrogen_nue_undefined_without_application():
 
 def test_phosphorus_sf_divisor_flag_changes_the_cap():
     """The source divides three factors by four, capping SF at 0.75."""
-    assert C.PHOSPHORUS_SF_DIVISOR == 3.0, "default should be the corrected divisor"
+    assert C.PHOSPHORUS_SF_DIVISOR == 4.0, "source reproduction must retain divide-by-four"
     result = phosphorus_use_efficiency(5.0, 30.0, 6.0, 80.0, 1200.0, Crop.RICE)
-    assert result.inputs["soil_factor"] == pytest.approx(1.0)
+    assert result.inputs["soil_factor"] == pytest.approx(0.75)
 
 
 def test_phosphorus_nue_bands():
@@ -247,7 +247,7 @@ def test_phosphorus_nue_bands():
 
     low = phosphorus_use_efficiency(0.5, 100.0, 6.0, 80.0, 1200.0, Crop.RICE)
     assert low.inputs["band"] == "low"
-    assert low.inputs["recommend_biostimulant"] is True
+    assert low.inputs["recommend_biostimulant"] is False
 
 
 def test_phosphorus_undefined_without_application():

@@ -1,0 +1,29 @@
+{
+  "version": "advisory_v1.0.0",
+  "farmer_advice_approved": false,
+  "sources": [
+    {"id": "supplied-algorithm-tables", "source": "User-supplied phase 2 specification, algorithm pages 2–7", "use": "cardinal temperatures and source reproduction", "status": "transcribed_not_empirically_validated"},
+    {"id": "fao56-water", "source": "https://www.fao.org/4/X0490E/x0490e0e.htm", "use": "root-zone TAW, RAW and standard-demand balance", "status": "formula_reference"},
+    {"id": "fao56-example18", "source": "https://www.fao.org/4/x0490e/x0490e08.htm", "use": "independent daily ET0 calculation", "expected_et0_mm_day": 3.88, "status": "software_verified"},
+    {"id": "stull2011", "source": "https://doi.org/10.1175/JAMC-D-11-0143.1", "use": "standard-pressure approximate wet bulb", "status": "approximation_with_domain_limits"},
+    {"id": "cehub-metadata-20260910", "source": "https://services.cehub.syngenta-ais.com/swagger/v1.0/swagger.json", "use": "live Metadata and hourly field names", "metadata_sha256": "9a33a1070dac4b0b812ca643cb44c0ac498bc9bf9934b9362ac88cc13c299acb", "status": "credentialed_http_200_interval_semantics_pending"},
+    {"id": "openmeteo-hourly", "source": "https://open-meteo.com/en/docs", "use": "units and preceding-hour aggregation", "status": "documented_and_fixture_verified"}
+  ],
+  "unresolved": [
+    "source GDD base and ecotype definitions",
+    "source moisture percentage basis",
+    "rice/wheat repeated rain and soil optima",
+    "CE Hub modelUpdateTime timezone and aggregate interval convention",
+    "reviewed India district crop calendars and product label constraints",
+    "crop/product/stage response distributions",
+    "meteoblue exported Dataset query and station observation schema"
+  ],
+  "discrepancies": [
+    {"id": "night-example", "resolution": "use Tmin/night table, not Tmax/day constants"},
+    {"id": "cotton-36C", "resolution": "day heat is 6/9 at 36 C and 7.5/9 at 37 C"},
+    {"id": "drought-index", "resolution": "reference-only incompatible dimensions; never an irrigation trigger"},
+    {"id": "phosphorus-divisor", "resolution": "source /4 and candidate /3 are separately named"},
+    {"id": "source-risk-midpoints", "resolution": "reference_v1 uses explicit midpoint convention; advisory interval distance is separate"},
+    {"id": "readiness", "resolution": "bounded heuristic index, never success probability or yield protection"}
+  ]
+}

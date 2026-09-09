@@ -106,7 +106,7 @@ def frost_stress(tmin: float, crop: Crop) -> StressResult:
             "frost",
             None,
             inputs={"tmin": tmin, "crop": crop.value},
-            note="Not applicable for this crop. The source document records frost as NA.",
+            note="Not parameterized in the source; this does not mean the crop cannot suffer frost.",
             applicable=False,
         )
     if tmin > FROST_TRIGGER_TMIN_C:
@@ -142,7 +142,11 @@ def drought_index_raw(
     mean_temperature_c: float,
 ) -> StressResult:
     if mean_temperature_c == 0:
-        mean_temperature_c = 1e-09
+        return StressResult(
+            "drought_raw", None, inputs={"mean_temperature_c": 0},
+            note="Undefined at zero temperature; dimensional ambiguity makes this reference-only.",
+            applicable=False,
+        )
     value = precipitation_mm - evaporation_mm + soil_moisture / mean_temperature_c
     return StressResult(
         "drought_raw",
@@ -274,7 +278,8 @@ def nitrogen_use_efficiency(
             "rainfall_factor": round(rf, 4),
             "soil_moisture_factor": round(smf, 4),
             "band": band,
-            "recommend_biostimulant": band in frozenset({"low", "moderate"}),
+            "recommend_biostimulant": False,
+            "diagnostic_only": True,
         },
         note=f"{band.capitalize()} nitrogen use efficiency.",
     )
@@ -324,7 +329,8 @@ def phosphorus_use_efficiency(
             "soil_factor": round(sf, 4),
             "sf_divisor": PHOSPHORUS_SF_DIVISOR,
             "band": band,
-            "recommend_biostimulant": band in frozenset({"low", "moderate"}),
+            "recommend_biostimulant": False,
+            "diagnostic_only": True,
         },
         note=f"{band.capitalize()} phosphorus use efficiency.",
     )

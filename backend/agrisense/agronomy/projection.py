@@ -14,8 +14,6 @@ from typing import Any
 from .constants import STRESS_ONSET_THRESHOLD, Crop
 from .stress import (
     accumulate_gdd,
-    drought_index_percentile,
-    drought_index_raw,
     frost_stress,
     heat_stress_diurnal,
     heat_stress_nocturnal,
@@ -114,25 +112,10 @@ def project_stress(
     forecast_days = [(d.tmax_c, d.tmin_c) for d in forecast]
     accumulated = accumulate_gdd(forecast_days, crop)
 
-    total_precip = sum(d.precipitation_mm for d in forecast)
-    mean_temp = (
-        sum((d.tmax_c + d.tmin_c) / 2 for d in forecast) / len(forecast)
-        if forecast
-        else 1.0
-    )
-
-    est_evaporation = sum(d.solar_wh_m2 for d in forecast) / 1000.0 * 0.35
-
-    di_raw = drought_index_raw(
-        total_precip,
-        est_evaporation,
-        field_ctx.soil_moisture_pct,
-        mean_temp if mean_temp else 1.0,
-    )
-    di_pct = drought_index_percentile(
-        di_raw.value if di_raw.value else 0.0,
-        history_drought if history_drought else [],
-    )
+    # The supplied DI combines incompatible units and unspecified moisture.
+    # Never transform it into an advisory drought score; science.water supplies
+    # the explicit root-zone balance when its required inputs are available.
+    not_applicable.append("drought")
 
     season_yield_risk: float | None = None
     season_yield_risk_inputs: dict[str, Any] = {}
@@ -162,7 +145,7 @@ def project_stress(
             "heat_diurnal": diurnal.value,
             "heat_nocturnal": nocturnal.value,
             "frost": frost.value,
-            "drought": di_pct.value,
+            "drought": None,
         }
 
         days.append(
@@ -180,8 +163,6 @@ def project_stress(
 
         if not frost.applicable and "frost" not in not_applicable:
             not_applicable.append("frost")
-        if not di_pct.applicable and "drought" not in not_applicable:
-            not_applicable.append("drought")
 
         for stress_type, value in scores.items():
             if value is None or stress_type in onsets:

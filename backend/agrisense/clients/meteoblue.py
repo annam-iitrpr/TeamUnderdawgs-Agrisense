@@ -14,14 +14,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime, timedelta
 from datetime import date as Date
-from datetime import datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import httpx
 
 from agrisense.agronomy.types import DailyWeather
 from agrisense.config import Settings, get_settings
+from agrisense.science.history import history_query, parse_history
 
 from .base import DailyForecast, Provenance
 
@@ -46,33 +48,7 @@ class MeteoblueClient:
         self.timeout = timeout
 
     def _build_body(self, lat: float, lon: float, start: Date, end: Date) -> dict[str, Any]:
-        return {
-            "units": {
-                "temperature": "C",
-                "velocity": "km/h",
-                "length": "metric",
-                "energy": "watts",
-            },
-            "geometry": {
-                "type": "MultiPoint",
-                "coordinates": [[lon, lat]],
-            },
-            "format": "json",
-            "timeIntervals": [f"{start.isoformat()}T+00:00/{end.isoformat()}T+00:00"],
-            "timeIntervalsAlignment": "none",
-            "queries": [
-                {
-                    "domain": "ERA5T",
-                    "gapFillDomain": "ERA5",
-                    "timeResolution": "daily",
-                    "codes": [
-                        {"code": TEMPERATURE_CODE, "level": "2 m above gnd", "aggregation": "max"},
-                        {"code": TEMPERATURE_CODE, "level": "2 m above gnd", "aggregation": "min"},
-                        {"code": PRECIPITATION_CODE, "level": "sfc", "aggregation": "sum"},
-                    ],
-                }
-            ],
-        }
+        return history_query(lat, lon, start, end)
 
     def _cache_path(self, body: dict[str, Any]):
         digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:24]
@@ -103,6 +79,10 @@ class MeteoblueClient:
     async def _poll(self, client: httpx.AsyncClient, job_id: str, attempts: int = 30) -> Any:
         import asyncio
 
+        try:
+            job_id = str(UUID(job_id))
+        except ValueError:
+            raise MeteoblueError("invalid historical job identity") from None
         for _ in range(attempts):
             await asyncio.sleep(2.0)
             status = await client.get(f"{self.settings.meteoblue_base_url}/queue/status/{job_id}")
@@ -110,48 +90,40 @@ class MeteoblueClient:
             state = status.json()
 
             if state.get("status") == "finished":
-                result = await client.get(f"{self.settings.meteoblue_base_url}/queue/result/{job_id}")
+                result = await client.get(f"https://queueresults.meteoblue.com/{job_id}")
                 result.raise_for_status()
                 return result.json()
 
             if state.get("status") in {"error", "failed"}:
-                raise MeteoblueError(f"meteoblue job {job_id} failed")
+                raise MeteoblueError("historical job failed")
 
-        raise MeteoblueError(f"meteoblue job {job_id} did not finish in time")
+        raise MeteoblueError("historical job did not finish in time")
 
     async def history(self, lat: float, lon: float, start: Date, end: Date) -> DailyForecast:
         if not self.settings.meteoblue_available:
             raise MeteoblueError("No meteoblue API key configured")
 
-        payload = await self._post(self._build_body(lat, lon, start, end))
-
-        if not (isinstance(payload, list) and payload):
-            raise MeteoblueError("meteoblue returned an unexpected payload shape")
-
-        block = payload[0]
-        stamps = block["timeIntervals"][0]
-        codes = block["codes"]
-
-        def series(index: int) -> list[float | None]:
-            return codes[index]["dataPerTimeInterval"][0]["data"][0]
-
-        tmax, tmin, precip = series(0), series(1), series(2)
+        if end >= datetime.now(UTC).date():
+            raise MeteoblueError("historical data must precede today")
+        try:
+            payload = await self._post(self._build_body(lat, lon, start, end))
+            bundle = parse_history(payload, start=start, end=end, retrieved_at=datetime.now(UTC))
+        except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError):
+            raise MeteoblueError("historical data unavailable or invalid") from None
 
         out = []
-        for i, stamp in enumerate(stamps):
-            if tmax[i] is None or tmin[i] is None:
+        for day in bundle.daily:
+            if day.tmax_c is None or day.tmin_c is None:
                 continue
-
-            day = datetime.strptime(str(stamp)[:8], "%Y%m%d").date()
             out.append(
                 DailyWeather(
-                    date=day,
-                    tmax_c=float(tmax[i]),
-                    tmin_c=float(tmin[i]),
-                    precipitation_mm=float(precip[i] or 0.0),
-                    humidity_pct=60.0,
-                    wind_kmh=8.0,
-                    solar_wh_m2=5200.0,
+                    date=Date.fromisoformat(day.date),
+                    tmax_c=day.tmax_c,
+                    tmin_c=day.tmin_c,
+                    precipitation_mm=day.rain_mm,
+                    humidity_pct=None,
+                    wind_kmh=None,
+                    solar_wh_m2=None,
                 )
             )
 
@@ -163,12 +135,12 @@ class MeteoblueClient:
             provenance=Provenance(
                 source="meteoblue Dataset API, ERA5T reanalysis",
                 live=True,
-                note="Historical reanalysis. Humidity, wind and radiation use seasonal defaults.",
+                note="Historical reanalysis, not archived forecasts. Unrequested variables are unknown; days without temperature coverage omitted.",
             ),
         )
 
     async def season(self, lat: float, lon: float, sowing: Date, until: Date) -> DailyForecast:
-        end = min(until, Date.today() - timedelta(days=6))
+        end = min(until, datetime.now(UTC).date() - timedelta(days=6))
         if end <= sowing:
-            end = sowing + timedelta(days=1)
+            raise MeteoblueError("season has no available reanalysis history")
         return await self.history(lat, lon, sowing, end)

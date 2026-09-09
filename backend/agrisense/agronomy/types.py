@@ -17,10 +17,10 @@ class DailyWeather:
     date: Date
     tmax_c: float
     tmin_c: float
-    precipitation_mm: float
-    humidity_pct: float
-    wind_kmh: float
-    solar_wh_m2: float
+    precipitation_mm: float | None
+    humidity_pct: float | None
+    wind_kmh: float | None
+    solar_wh_m2: float | None
 
     def as_dict(self) -> dict[str, Any]:
         return {
