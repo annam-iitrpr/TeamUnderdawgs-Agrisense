@@ -158,3 +158,61 @@ def test_grounding_never_includes_another_farmers_records(harness, asha, ravi, s
     names = [f['name'] for f in records['fields']]
     assert 'Ravi private plot' not in names
     assert names == ['North plot']
+
+
+async def test_an_identifier_the_target_already_carries_does_not_destroy_the_proposal(
+        harness, asha, season, monkeypatch):
+    """The model repeats season_id inside values; the contract model forbids extra fields."""
+    draft = ('{"kind":"proposal","text":"Record it?","operation":"journal.create",'
+             f'"target_id":"{season["id"]}","expected_version":1,'
+             f'"values":{{"season_id":"{season["id"]}","action":"watered",'
+             '"occurred_at":"2026-09-09T04:00:00Z"}}')
+    StubModel(draft).install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages', {'text': 'I watered'})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+    with harness.app.state.sessions() as session:
+        proposal = session.scalar(select(d.ProposalRow))
+        assert proposal is not None, 'a repeated identifier discarded a valid proposal'
+        # The narrowing drops the echoed id rather than trusting it.
+        assert 'season_id' not in proposal.payload['new_values']
+
+
+async def test_a_malformed_draft_fails_the_proposal_not_the_whole_reply(
+        harness, asha, season, monkeypatch):
+    draft = ('{"kind":"proposal","text":"Recording.","operation":"journal.create",'
+             f'"target_id":"{season["id"]}","expected_version":1,'
+             '"values":{"action":"teleported","occurred_at":"not-a-timestamp"}}')
+    StubModel(draft).install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages', {'text': 'something odd'})
+    assert await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings) == 1
+    with harness.app.state.sessions() as session:
+        assert session.scalars(select(d.ProposalRow)).all() == []
+        job = session.scalar(select(d.JobRow))
+        assert job.status == 'succeeded', 'a bad draft failed the whole reply'
+    replies = [m for m in asha.get(f'/conversations/{convo["id"]}/messages').json()['data']['items']
+               if m['role'] == 'assistant']
+    assert len(replies) == 1 and replies[0]['proposal_ids'] == []
+
+
+async def test_an_empty_model_response_is_retried_rather_than_stored_as_a_reply(
+        harness, asha, season, monkeypatch):
+    """A spent output budget yields an empty body; that is a transient fault, not an answer."""
+    from agrisense.config import Settings
+    from agrisense.platform import assistant
+    from agrisense.platform.errors import PlatformError
+
+    class Empty:
+        text = '   '
+
+    class Models:
+        def generate_content(self, **kwargs): return Empty()
+
+    class Client:
+        models = Models()
+
+    monkeypatch.setattr(assistant, 'client', lambda settings: Client())
+    with pytest.raises(PlatformError) as raised:
+        assistant.ask(Settings(app_env='test'), {}, [])
+    assert raised.value.code == 'ASSISTANT_UNREADABLE' and raised.value.retryable is True

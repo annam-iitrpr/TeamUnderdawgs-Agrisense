@@ -13,6 +13,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -108,8 +109,11 @@ def ask(settings: Settings, records: dict[str, Any], turns: list[dict[str, str]]
         model=settings.gemini_model,
         contents=prompt,
         config={'system_instruction': INSTRUCTIONS, 'response_mime_type': 'application/json',
-                'temperature': 0.2, 'max_output_tokens': 1024})
+                'temperature': 0.2, 'max_output_tokens': 4096})
     text = getattr(response, 'text', '') or ''
+    if not text.strip():
+        # An empty body usually means the output budget was spent before any JSON was emitted.
+        raise PlatformError('ASSISTANT_UNREADABLE', 'The assistant could not answer. Please try again.', 503, True)
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -132,7 +136,13 @@ def build_proposal(session: Session, tenant_id: str, farmer_id: str, conversatio
     if target is None or (hasattr(target, 'farmer_id') and target.farmer_id != farmer_id):
         # A hallucinated identifier must never become a proposal against a real record.
         raise PlatformError('ASSISTANT_UNKNOWN_TARGET', 'That record could not be found.', 422)
-    values = model.model_validate(drafted.get('values') or {})
+    raw = drafted.get('values') or {}
+    if not isinstance(raw, dict):
+        raise PlatformError('ASSISTANT_UNSUPPORTED_OPERATION', 'That change cannot be proposed.', 422)
+    # The model tends to repeat identifiers the target already carries. Narrowing to the
+    # model's own fields drops those without letting anything unexpected through, since
+    # validation still runs and the target is resolved from target_id rather than the body.
+    values = model.model_validate({k: v for k, v in raw.items() if k in model.model_fields})
     proposal = c.ProposedMutation(
         id=d.new_id(), conversation_id=conversation_id, message_id=message_id, operation=operation,
         target_id=target.id, expected_version=target.version, old_values={}, new_values=values,
@@ -161,9 +171,10 @@ def reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
         try:
             proposal_ids.append(build_proposal(session, tenant_id, farmer_id, conversation_id,
                                                message_id, drafted).id)
-        except PlatformError as error:
-            # An unusable draft degrades to a plain answer; it is never applied or shown as a change.
-            log.info('assistant proposal discarded: %s', error.code)
+        except (PlatformError, ValidationError) as error:
+            # An unusable draft degrades to a plain answer; it is never applied or shown as a
+            # change, and a malformed one must not fail the whole reply.
+            log.info('assistant proposal discarded: %s', type(error).__name__)
             drafted['text'] = drafted.get('text') or 'I could not prepare that change. Please make it directly.'
 
     message = c.Message(id=d.new_id(), conversation_id=conversation_id, role='assistant',

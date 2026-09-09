@@ -149,3 +149,61 @@ def test_the_catalog_is_served_from_the_reference_bundle_never_invented(asha, mo
     # Products come from the same bundle, and an empty catalog is an empty page, not an error.
     assert asha.get('/catalog/products').json()['data']['items'] == []
     assert asha.get('/catalog/crops', params={'limit': 0}).status_code == 422
+
+
+def test_a_conversation_reads_in_the_order_it_happened(asha, season, harness):
+    """Ordering by id alone would order a conversation by random identifier."""
+    from datetime import timedelta
+
+    from agrisense.platform import db as d
+    from sqlalchemy import select
+
+    convo = asha.post('/conversations', {'season_id': season['id']}).json()['data']
+    texts = [f'message number {index}' for index in range(6)]
+    for text in texts:
+        assert asha.post(f'/conversations/{convo["id"]}/messages', {'text': text}).status_code == 201
+
+    # Force distinct creation times; the ids stay random, as they are in production.
+    with harness.app.state.sessions() as session:
+        base = d.utcnow()
+        for offset, row in enumerate(session.scalars(select(d.MessageRow).order_by(d.MessageRow.id))):
+            row.created_at = base + timedelta(seconds=offset)
+        session.commit()
+        expected = [row.payload['text'] for row in session.scalars(
+            select(d.MessageRow).order_by(d.MessageRow.created_at, d.MessageRow.id))]
+
+    seen, cursor = [], None
+    for _ in range(6):
+        page = asha.get(f'/conversations/{convo["id"]}/messages',
+                        params={'limit': 2, **({'cursor': cursor} if cursor else {})}).json()['data']
+        seen += [item['text'] for item in page['items']]
+        cursor = page['next_cursor']
+        if not cursor:
+            break
+    assert seen == expected, 'messages did not read in the order they happened'
+    assert len(seen) == len(texts)
+
+
+def test_a_page_boundary_does_not_skip_or_repeat_records_sharing_a_timestamp(asha, season, harness):
+    """Identical creation times are common in a burst, so the id must break the tie."""
+    from agrisense.platform import db as d
+    from sqlalchemy import select
+
+    convo = asha.post('/conversations', {'season_id': season['id']}).json()['data']
+    for index in range(5):
+        asha.post(f'/conversations/{convo["id"]}/messages', {'text': f'burst {index}'})
+    with harness.app.state.sessions() as session:
+        moment = d.utcnow()
+        for row in session.scalars(select(d.MessageRow)):
+            row.created_at = moment
+        session.commit()
+
+    seen, cursor = [], None
+    for _ in range(6):
+        page = asha.get(f'/conversations/{convo["id"]}/messages',
+                        params={'limit': 2, **({'cursor': cursor} if cursor else {})}).json()['data']
+        seen += [item['id'] for item in page['items']]
+        cursor = page['next_cursor']
+        if not cursor:
+            break
+    assert len(seen) == len(set(seen)) == 5

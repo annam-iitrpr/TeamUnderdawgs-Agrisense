@@ -7,7 +7,7 @@ import json
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -55,19 +55,38 @@ class DomainService:
         return {'id':payload['id'],'tenant_id':self.actor.tenant_id,'farmer_id':self.actor.farmer_id,'payload':payload,'version':payload.get('version',1)}
 
     def paginate(self,model,query:dict[str,str],**filters):
+        """Keyset pagination, oldest first.
+
+        Ordering by id alone would order a conversation by random identifier, so a farmer
+        would read their own messages out of sequence. Records that carry a creation time are
+        ordered by it, with the id breaking ties so the key stays unique and the page stable.
+        """
+        timed=hasattr(model,'created_at')
         try:
             limit=int(query.get('limit','25'))
             if not 1<=limit<=100:raise ValueError()
             cursor=query.get('cursor')
             after=base64.urlsafe_b64decode(cursor.encode()).decode() if cursor else ''
-            if len(after)>128:raise ValueError()
+            if len(after)>200:raise ValueError()
+            moment,_,last_id=after.rpartition('|') if timed else ('',None,after)
+            since=datetime.fromisoformat(moment) if timed and moment else None
         except (ValueError,UnicodeError) as exc:
             raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.') from exc
-        stmt=select(model).where(model.tenant_id==self.actor.tenant_id,model.id>after)
+        stmt=select(model).where(model.tenant_id==self.actor.tenant_id)
         if hasattr(model,'farmer_id'):stmt=stmt.where(model.farmer_id==self.actor.farmer_id)
         for k,v in filters.items():stmt=stmt.where(getattr(model,k)==v)
-        rows=list(self.s.scalars(stmt.order_by(model.id).limit(limit+1)))
-        next_cursor=base64.urlsafe_b64encode(rows[limit-1].id.encode()).decode() if len(rows)>limit else None
+        if timed:
+            if since is not None:
+                stmt=stmt.where(tuple_(model.created_at,model.id)>tuple_(since,last_id))
+            stmt=stmt.order_by(model.created_at,model.id)
+        else:
+            stmt=stmt.where(model.id>last_id).order_by(model.id)
+        rows=list(self.s.scalars(stmt.limit(limit+1)))
+        next_cursor=None
+        if len(rows)>limit:
+            edge=rows[limit-1]
+            key=f'{aware(edge.created_at).isoformat()}|{edge.id}' if timed else edge.id
+            next_cursor=base64.urlsafe_b64encode(key.encode()).decode()
         return {'items':[row.payload for row in rows[:limit]],'next_cursor':next_cursor}
 
     def idempotent(self,operation,key,body,action):
