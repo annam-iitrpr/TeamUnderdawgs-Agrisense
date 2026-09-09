@@ -1,0 +1,85 @@
+# ── Secrets and environment ────────────────────────────────────────────────
+# Never commit credentials. Real values live in the operator's local env only;
+# deployment secrets come from Secret Manager.
+.env
+.env.*
+!.env.example
+*.env
+agrisense.env
+**/.env
+**/.env.local
+**/.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+*-service-account.json
+gcp-credentials*.json
+firebase-adminsdk*.json
+secrets/
+.secrets/
+
+# ── Documentation held back until explicitly approved for commit ───────────
+# Tracked separately by the team; do not commit until instructed.
+README.md
+/README*
+
+# ── Node / Next.js ─────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+.eslintcache
+.npm/
+.pnpm-store/
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ── Test output, traces and browser state ──────────────────────────────────
+# Playwright storage-state files are credentials.
+test-results/
+playwright-report/
+playwright/.auth/
+blob-report/
+.playwright/
+storage-state*.json
+*.trace.zip
+coverage/
+
+# ── Local data, media and databases ────────────────────────────────────────
+.local/
+local-media/
+media/
+uploads/
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+
+# ── Logs ───────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# ── Editor and OS noise ────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
