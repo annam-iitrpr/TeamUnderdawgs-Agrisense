@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="AgriSense">
+  <rect width="32" height="32" rx="7" fill="#0B5D3B" />
+  <path d="M16 24c0-5 3-8.5 7-9.5-0.5 5-3.5 8.5-7 9.5z" fill="#3F9A5C" />
+  <path d="M16 24c0-4.5-2.6-7.6-6.2-8.6C10.2 20 12.8 23.1 16 24z" fill="#9BBF4F" />
+  <path d="M16 24V13" stroke="#F6F7F5" stroke-width="1.6" stroke-linecap="round" />
+</svg>

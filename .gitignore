@@ -1,0 +1,40 @@
+# Secrets: never stage environment files, credentials, or local identities.
+.env
+.env.*
+*.env
+*.env.*
+**/*service-account*.json
+**/*service_account*.json
+**/credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+# README publication requires explicit user authorization.
+[Rr][Ee][Aa][Dd][Mm][Ee]*
+# Local state and generated runtime output
+.local/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+*.db
+*.sqlite*
+*.log
+.DS_Store
+playwright-report/
+test-results/
+playwright/.auth/
+.firebase/
+*.tfstate*
+.terraform/
+*.tfvars

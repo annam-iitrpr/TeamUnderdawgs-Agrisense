@@ -1,0 +1,71 @@
+{
+  "$id": "https://agrisense.example/contracts/v1/events.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "aggregate_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Aggregate Id",
+      "type": "string"
+    },
+    "aggregate_version": {
+      "minimum": 1,
+      "title": "Aggregate Version",
+      "type": "integer"
+    },
+    "event_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "enum": [
+        "field.updated",
+        "season.updated",
+        "journal.confirmed",
+        "recommendation.issued",
+        "recommendation.superseded",
+        "task.completed",
+        "season.closed"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "payload_reference_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Payload Reference Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Tenant Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "aggregate_id",
+    "aggregate_version",
+    "tenant_id",
+    "occurred_at",
+    "payload_reference_id"
+  ],
+  "title": "DomainEvent",
+  "type": "object"
+}
