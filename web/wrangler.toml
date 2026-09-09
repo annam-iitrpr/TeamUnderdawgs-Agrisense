@@ -1,0 +1,8 @@
+# Static frontend only. The API, worker, database, media and scheduling all stay
+# on GCP; this serves prebuilt files and holds no secrets and no state.
+name = "agrisense-web"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./out"
+not_found_handling = "404-page"

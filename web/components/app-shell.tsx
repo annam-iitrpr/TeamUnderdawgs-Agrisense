@@ -102,7 +102,9 @@ export function AppShell({
                 {title ?? t("appName")}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
+            {/* Must be allowed to shrink: shrink-0 here pushed the phone header past the
+                viewport, and the language row inside scrolls on its own. */}
+            <div className="flex min-w-0 items-center gap-2">{headerActions}</div>
           </div>
         </header>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { DashboardShell } from "@/components/dashboard-shell";
+import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui";
 
 type Note = {
@@ -106,10 +106,7 @@ const OURS = [
 
 export default function AlgorithmNotesPage() {
   return (
-    <DashboardShell
-      title="Algorithm implementation notes"
-      subtitle="Five points in the Syngenta algorithm document need a stated decision before they can be implemented. Each is recorded here with the decision and the flag that reverses it."
-    >
+    <AppShell title="Algorithm notes">
       <div className="space-y-5">
         <Card className="p-4">
           <p className="max-w-[74ch] text-sm text-slate">
@@ -185,6 +182,6 @@ export default function AlgorithmNotesPage() {
           </dl>
         </Card>
       </div>
-    </DashboardShell>
+    </AppShell>
   );
 }

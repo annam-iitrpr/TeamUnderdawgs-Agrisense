@@ -1,3 +1,6 @@
+// Static export: the manifest is a fixed file, not a per-request response.
+export const dynamic = "force-static";
+
 import type { MetadataRoute } from "next";
 
 /**
