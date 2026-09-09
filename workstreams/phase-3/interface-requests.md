@@ -78,3 +78,66 @@ CORS currently allows a single origin, taken from `CLOUD_RUN_WEB_URL`. Tell me t
 deploy the web app to and I will set it; browser requests from any other origin will be
 blocked. For local development against the deployed API, say so and I will add
 `http://localhost:3000`.
+
+
+## Answers to Phase 1's IR-001 to IR-004
+
+No branch is being merged right now, at the user's direction. These are answers only.
+
+### IR-001 — bootstrap tag and realignment
+
+Answered by events: `contract_v1` is tagged at `ff851c3`, and Phase 1 has already merged it,
+so the branches share ancestry. Merging rather than rebasing was the right call and matches
+Phase 1's stated preference. There is no separate `agrisense-contract-v1` tag; `contract_v1`
+is the published interface, and it was deliberately published before the bootstrap gate
+finished rather than held back.
+
+### IR-002 — Phase 3-owned frontend files
+
+Phase 1 should keep `web/package.json`, `web/package-lock.json`, `web/tsconfig.json`,
+`web/tailwind.config.ts`, `web/next.config.ts`, `web/postcss.config.mjs`,
+`web/.eslintrc.json`, `web/vitest.config.ts` and `web/playwright.config.ts`. I am handing
+ownership of those to Phase 1 rather than overwriting them.
+
+The reason is that the situation changed after the spec was written: Phase 1 created working
+versions first, and I reverted my own edits to `web/package.json` specifically to avoid a
+conflict. Taking them back now would mean overwriting a tested toolchain with an untested
+one. Every constraint Phase 1 asked to preserve — the two added dependencies, strict
+TypeScript, un-suppressed lint and type checks in the Next build, and both Playwright
+profiles — is a constraint I would have imposed anyway, so there is nothing to reconcile.
+
+At integration, take Phase 1's version of those files. `AGENTS.md` will be corrected to match
+so the ownership table stops contradicting reality.
+
+### IR-003 — generated types and envelope
+
+`web/lib/generated/api.ts`, already generated and already merged into the Phase 1 branch.
+Import `Schema<"Field">`, `Schema<"Recommendation">` and so on, plus `paths` for per-route
+request and response shapes. Do not hand-edit it: it is produced by
+`scripts/generate_contracts.py` from `contracts/models.py`, and CI fails if the committed
+output is stale.
+
+The envelope is exactly `{data, meta}` on success and `{error, request_id}` on failure, with
+no variation across the 57 routes. `meta` always carries `request_id`, `schema_version`,
+`data_mode`, `generated_at`, `provenance`, `warnings`, and an optional `job_id`. `error`
+always carries `code`, `message`, `details` and `retryable`. `message` is safe to show to a
+farmer; `code` is what the UI should branch on. Submitted values are never echoed back in
+`details`.
+
+### IR-004 — insufficient data shape
+
+Confirmed, and it is enforced by the schema rather than by convention. In `Recommendation`,
+`readiness`, `need`, `timing_fit` and `viability` are each **required and independently
+nullable**. They are present in every payload and carry `null` when unknown; they are never
+omitted, and never zero to mean unknown. `status` is required, non-nullable, and one of
+`recommended`, `monitor`, `blocked`, `insufficient_data`, `out_of_scope`.
+
+So the UI can rely on the key existing and must render `null` as "not enough data", never as
+0%. The same rule holds throughout the contract: `Measurement.value` and every `Estimate`
+quantile are nullable, and each carries a `missing_reason` explaining why.
+
+### Still open, and blocking nothing on your side
+
+The live API is at `https://agrisense-api-788265611154.asia-south1.run.app`. CORS currently
+allows one origin. Tell me the web origin, or ask for `http://localhost:3000`, and I will
+set it.

@@ -10,7 +10,12 @@ User instructions take precedence. Do not commit any README or environment files
 Ownership after bootstrap:
 - Phase 1 `codex/phase-1-farmer-experience`: web app/components/features/lib (except generated), public/styles, frontend tests and workstreams/phase-1.
 - Phase 2 `codex/phase-2-intelligence`: backend agronomy/clients/science, science tests, science data/scripts, workstreams/phase-2.
-- Phase 3 `codex/phase-3-platform`: other backend paths, contracts and generated models, infra/scripts, CI, shared configuration, manifests/locks, workstreams/phase-3.
+- Phase 3 `codex/phase-3-platform`: other backend paths, contracts and generated models, infra/scripts, CI, shared configuration, backend manifests/locks, workstreams/phase-3.
+
+The frontend toolchain files (`web/package.json`, its lockfile, and the TypeScript, Tailwind,
+Next, PostCSS, ESLint, Vitest and Playwright configs) are Phase 1-owned, not Phase 3-owned.
+Phase 1 built working versions first, and overwriting a tested toolchain with an untested one
+would be a regression. `web/lib/generated/**` remains Phase 3-owned and generated.
 
 Request cross-owner changes in interface-requests.md. Never recreate scientific constants in the platform or authoritative calculations in JavaScript. Do not enable unauthenticated legacy routes. Synthetic fixtures must remain explicitly labeled.
 
