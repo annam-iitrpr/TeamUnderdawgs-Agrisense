@@ -45,6 +45,11 @@ yield, weather, price or profit, and never state a number that is not present in
 Those judgements belong to a separate validated engine, not to you. If asked for one, say
 that the app calculates it separately and offer to record what the farmer did instead.
 
+If the farmer attached a photo it is provided with this message and you can see it.
+Describe only what is visible. You may say a leaf looks discoloured; you may not name a
+disease, diagnose a deficiency, or recommend a treatment from a photograph. A photograph is
+an observation to record, never a diagnosis.
+
 If the records do not contain the answer, say so plainly. Never guess or fill a gap.
 
 Reply with JSON only, in one of these two shapes:
@@ -102,12 +107,19 @@ def history(session: Session, conversation_id: str, tenant_id: str) -> list[dict
             for row in reversed(rows)]
 
 
-def ask(settings: Settings, records: dict[str, Any], turns: list[dict[str, str]]) -> dict[str, Any]:
+def ask(settings: Settings, records: dict[str, Any], turns: list[dict[str, str]],
+        images: list[tuple[bytes, str]] | None = None) -> dict[str, Any]:
     prompt = json.dumps({'records': records, 'conversation': turns}, separators=(',', ':'))
     model = client(settings)
+    contents: list[Any] = [prompt]
+    if images:
+        from google.genai import types
+        # The farmer attached these to this turn, so the model is given them directly
+        # rather than being told a photo exists that it cannot see.
+        contents = [types.Part.from_bytes(data=data, mime_type=kind) for data, kind in images] + [prompt]
     response = model.models.generate_content(
         model=settings.gemini_model,
-        contents=prompt,
+        contents=contents,
         config={'system_instruction': INSTRUCTIONS, 'response_mime_type': 'application/json',
                 'temperature': 0.2, 'max_output_tokens': 4096})
     text = getattr(response, 'text', '') or ''
@@ -122,6 +134,37 @@ def ask(settings: Settings, records: dict[str, Any], turns: list[dict[str, str]]
     if not isinstance(parsed, dict) or parsed.get('kind') not in ('answer', 'proposal'):
         raise PlatformError('ASSISTANT_UNREADABLE', 'The assistant could not answer. Please try again.', 503, True)
     return parsed
+
+
+MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
+VIEWABLE = ('image/jpeg', 'image/png', 'image/webp')
+
+
+def attachments(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
+                message_id: str) -> list[tuple[bytes, str]]:
+    """Images the farmer attached to this turn, read from their own media only."""
+    row = session.scalar(select(d.MessageRow).where(
+        d.MessageRow.id == message_id, d.MessageRow.tenant_id == tenant_id,
+        d.MessageRow.farmer_id == farmer_id))
+    if row is None:
+        return []
+    images: list[tuple[bytes, str]] = []
+    for media_id in (row.payload or {}).get('media_ids', [])[:3]:
+        asset = session.scalar(select(d.MediaRow).where(
+            d.MediaRow.id == media_id, d.MediaRow.tenant_id == tenant_id,
+            d.MediaRow.farmer_id == farmer_id, d.MediaRow.status == 'ready'))
+        if asset is None:
+            continue
+        kind = (asset.payload or {}).get('content_type', '')
+        if kind not in VIEWABLE or (asset.payload or {}).get('size_bytes', 0) > MAX_ATTACHMENT_BYTES:
+            continue
+        try:
+            from agrisense.platform import media
+            images.append((media.store(settings).read(asset.object_key), kind))
+        except Exception:
+            # A photo that cannot be read is simply not shown to the model.
+            log.warning('attached media could not be read for the assistant')
+    return images
 
 
 def build_proposal(session: Session, tenant_id: str, farmer_id: str, conversation_id: str,
@@ -164,7 +207,10 @@ def reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
     if conversation is None:
         raise PlatformError('CONVERSATION_MISSING', 'This conversation no longer exists.', 404)
     records = grounding(session, tenant_id, farmer_id, conversation)
-    drafted = ask(settings, records, history(session, conversation_id, tenant_id))
+    images = attachments(session, settings, tenant_id, farmer_id, message_id)
+    if images:
+        records['attached_photos'] = len(images)
+    drafted = ask(settings, records, history(session, conversation_id, tenant_id), images)
 
     proposal_ids: list[str] = []
     if drafted['kind'] == 'proposal':

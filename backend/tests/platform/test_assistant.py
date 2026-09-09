@@ -18,8 +18,9 @@ class StubModel:
         self.prompts: list[str] = []
 
     def install(self, monkeypatch):
-        def ask(settings, records, turns):
+        def ask(settings, records, turns, images=None):
             self.prompts.append(str(records))
+            self.images = images or []
             import json
             return json.loads(self.payload)
         monkeypatch.setattr(assistant, 'ask', ask)
@@ -274,3 +275,50 @@ def test_an_integer_detail_stays_an_integer(asha, field):
     assert stale.status_code == 409
     current = stale.json()['error']['details']['current_version']
     assert current == 1 and isinstance(current, int) and not isinstance(current, bool)
+
+
+async def test_an_attached_photo_reaches_the_model(harness, asha, season, monkeypatch):
+    """A farmer who attaches a photo must not be told the assistant cannot see it."""
+    import hashlib
+    from urllib.parse import urlsplit
+
+
+    png = b'\x89PNG\r\n\x1a\x0a' + b'synthetic pixels'
+    ticket = asha.post('/media/uploads', {'filename': 'leaf.png', 'content_type': 'image/png',
+                                          'size_bytes': len(png)}).json()['data']
+    parts = urlsplit(ticket['upload_url'])
+    assert harness.put(f'{parts.path}?{parts.query}', content=png).status_code == 204
+    asset_id = ticket['asset']['id']
+    assert asha.post(f'/media/{asset_id}/complete',
+                     {'sha256': hashlib.sha256(png).hexdigest()}).status_code == 200
+
+    stub = StubModel('{"kind":"answer","text":"The leaf looks discoloured."}').install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages',
+              {'text': 'What do you see?', 'media_ids': [asset_id]})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+
+    assert stub.images, 'the attached photo never reached the model'
+    assert stub.images[0][1] == 'image/png'
+    assert stub.images[0][0] == png
+
+
+async def test_another_farmers_photo_is_never_attached(harness, asha, ravi, season, monkeypatch):
+    import hashlib
+    from urllib.parse import urlsplit
+
+    png = b'\x89PNG\r\n\x1a\x0a' + b'ravi private pixels'
+    ticket = ravi.post('/media/uploads', {'filename': 'r.png', 'content_type': 'image/png',
+                                          'size_bytes': len(png)}).json()['data']
+    parts = urlsplit(ticket['upload_url'])
+    harness.put(f'{parts.path}?{parts.query}', content=png)
+    ravi.post(f'/media/{ticket["asset"]["id"]}/complete', {'sha256': hashlib.sha256(png).hexdigest()})
+
+    stub = StubModel('{"kind":"answer","text":"ok"}').install(monkeypatch)
+    convo = conversation_for(asha, season)
+    # Asha references Ravi's asset id; the message itself is refused.
+    refused = asha.post(f'/conversations/{convo["id"]}/messages',
+                        {'text': 'look', 'media_ids': [ticket['asset']['id']]})
+    assert refused.status_code == 404
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+    assert not getattr(stub, 'images', [])
