@@ -271,6 +271,15 @@ class AuditRow(Base):
     occurred_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow)
     request_id: Mapped[str]=mapped_column(String(128))
 
+class RateLimitWindow(Base):
+    """One row per subject, bucket and fixed window. Shared so the budget holds across instances."""
+    __tablename__='rate_limit_windows'
+    subject: Mapped[str]=mapped_column(String(160),primary_key=True)
+    bucket: Mapped[str]=mapped_column(String(24),primary_key=True)
+    window_start: Mapped[int]=mapped_column(Integer,primary_key=True)
+    count: Mapped[int]=mapped_column(Integer,default=0)
+    __table_args__=(Index('ix_rate_limit_window_start','window_start'),)
+
 class ModelRow(Base):
     __tablename__='model_versions'
     id: Mapped[str]=mapped_column(String(128),primary_key=True)

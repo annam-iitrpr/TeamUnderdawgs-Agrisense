@@ -16,7 +16,7 @@ from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.contracts_generated.routes import ROUTES
 from agrisense.platform import db as d
-from agrisense.platform import media, whatsapp
+from agrisense.platform import limits, media, whatsapp
 from agrisense.platform.auth import Actor, FirebaseVerifier, enroll
 from agrisense.platform.errors import PlatformError
 from agrisense.platform.service import DomainService
@@ -34,7 +34,11 @@ def envelope(data: Any, request_id: str, warnings: list[str] | None = None) -> d
 
 def failure(error: PlatformError, request_id: str) -> JSONResponse:
     body = c.ErrorResponse(error=c.ErrorDetail(code=error.code, message=error.message, details=error.details, retryable=error.retryable), request_id=request_id)
-    return JSONResponse(body.model_dump(mode='json'), status_code=error.status)
+    headers = {}
+    if error.status == 429 and 'retry_after_seconds' in error.details:
+        # A client that honours this backs off correctly without guessing.
+        headers['Retry-After'] = str(error.details['retry_after_seconds'])
+    return JSONResponse(body.model_dump(mode='json'), status_code=error.status, headers=headers)
 
 
 def readable(exc: ValidationError) -> PlatformError:
@@ -58,9 +62,13 @@ def build_dispatcher(app: FastAPI, method: str, path: str, request_model, respon
             payload = json.loads(raw) if raw else None
         except json.JSONDecodeError:
             return failure(PlatformError('INVALID_JSON', 'The request body is not valid JSON.'), request_id)
+        client = request.client.host if request.client else 'unknown'
+        if not request.app.state.anonymous_guard.allow(client):
+            return failure(limits.too_many(60), request_id)
         session = request.app.state.sessions()
         try:
             actor: Actor = authorize(request, session)
+            limits.consume(request.app.state.sessions, actor.user_id, limits.budget_for(method, path))
             body = request_adapter.validate_python(payload if payload is not None else {}) if request_adapter else None
             service = DomainService(session, actor, request_id, settings)
             identifier = request.path_params.get('id', '')
@@ -120,6 +128,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.sessions = d.session_factory(engine)
     app.state.verifier = FirebaseVerifier(settings)
+    app.state.anonymous_guard = limits.AnonymousGuard()
 
     origins = [origin.strip() for origin in settings.cors_allowed_origins.split(',') if origin.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,

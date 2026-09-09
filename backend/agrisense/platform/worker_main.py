@@ -12,7 +12,7 @@ import logging
 import sys
 
 from agrisense.config import Settings, get_settings
-from agrisense.platform import analytics, reminders, science, worker
+from agrisense.platform import analytics, limits, reminders, science, worker
 from agrisense.platform import db as d
 
 log = logging.getLogger('agrisense.platform.worker_main')
@@ -30,6 +30,7 @@ async def one_pass(settings: Settings, sessions) -> dict[str, int]:
     session = sessions()
     try:
         outcome['expired_tasks'] = science.expire_stale_tasks(session)
+        outcome['pruned_rate_windows'] = limits.prune(session)
         session.commit()
     except Exception:
         session.rollback()
