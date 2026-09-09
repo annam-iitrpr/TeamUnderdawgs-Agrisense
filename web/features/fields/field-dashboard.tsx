@@ -19,8 +19,8 @@ import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, UnknownValue }
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
 import { useApiQuery } from "@/lib/api/query";
-import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
-import type { DataMode, Field, Season } from "@/lib/api/contract";
+import { catalog as catalogApi, fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
+import type { DataMode, Field, Recommendation, Season } from "@/lib/api/contract";
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveField } from "./active-field";
@@ -317,28 +317,42 @@ function NoSeasonCard({ field }: { field: Field }) {
 /**
  * The primary card once a season exists.
  *
- * It renders the season facts it has and states plainly that the recommendation
- * is not available, rather than showing a readiness figure. A score cannot be
- * invented client-side — Phase 1 never calculates agronomy — and an empty
- * progress bar would read as "no risk" rather than "not known".
+ * The crop name comes from the catalogue and the recommendation from the engine.
+ * Neither is invented here: an absent name shows the id, and an absent or
+ * insufficient recommendation says so rather than rendering an empty score,
+ * which would read as "no risk" instead of "not known".
  */
 function SeasonCard({ field, season }: { field: Field; season: Season }) {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+
+  const cropsQuery = useApiQuery(
+    [uid, "catalog", "crops"],
+    (signal) => catalogApi.crops({ signal, limit: 100 }),
+    { enabled: Boolean(uid) },
+  );
+  const crop = (cropsQuery.data?.items ?? []).find((c) => c.id === season.crop_id) ?? null;
+
+  const recommendationQuery = useApiQuery(
+    [uid, "season", season.id, "recommendation"],
+    (signal) => seasonsApi.latestRecommendation(season.id, { signal }),
+    { enabled: Boolean(uid) },
+  );
+  const recommendation = recommendationQuery.data ?? null;
+
   return (
     <Card className="p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate">
         {field.name} · {season.status}
       </p>
-      {/*
-        The contract's Season carries only crop_id — there is no crop_name on
-        it. Turning an id into a farmer-readable name ("Cotton") needs
-        /catalog/crops, which answers 503 while the reference bundle is
-        missing. Showing the raw id is ugly but honest; inventing a display
-        name from a hardcoded map would be a fabricated catalogue.
-      */}
-      <h2 className="mt-1 break-all text-h2 font-semibold">{season.crop_id}</h2>
-      <p className="mt-0.5 text-xs text-slate">
-        Crop names need the catalogue, which is not being served yet.
-      </p>
+      <h2 className="mt-1 break-words text-h2 font-semibold capitalize">
+        {crop?.name ?? season.crop_id}
+      </h2>
+      {crop && !crop.supported_for_biological_advice ? (
+        <p className="mt-0.5 text-xs text-slate">
+          Planning only. Biological product advice is not supported for this crop.
+        </p>
+      ) : null}
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
         <Fact label="Sown">
@@ -354,9 +368,11 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
           )}
         </Fact>
         <Fact label="Stage">
-          {season.stage ? (
+          {recommendation?.stage ?? season.stage ? (
             <>
-              <span className="capitalize">{season.stage.replace(/_/g, " ")}</span>
+              <span className="capitalize">
+                {(recommendation?.stage ?? season.stage ?? "").replace(/_/g, " ")}
+              </span>
               <span className="ml-1 text-xs text-slate">({season.stage_source})</span>
             </>
           ) : (
@@ -366,12 +382,91 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
         <Fact label="Area">{formatArea(season.allocated_area_ha, "ha")}</Fact>
       </dl>
 
-      <Callout tone="info" className="mt-4" title="No recommendation yet">
-        A spray window needs a weather forecast and the reviewed agronomic parameters. Neither is
-        being served yet, so AgriSense is not showing a readiness score — an empty score would
+      <RecommendationBlock
+        loading={recommendationQuery.isLoading}
+        recommendation={recommendation}
+      />
+    </Card>
+  );
+}
+
+/**
+ * What the engine actually concluded.
+ *
+ * `insufficient_data` is a real, meaningful outcome and is shown as one: the
+ * forecast was fetched and the stress computed, and the engine still declined
+ * to advise. That is different from the service being down, and different
+ * again from a zero score.
+ */
+function RecommendationBlock({
+  loading,
+  recommendation,
+}: {
+  loading: boolean;
+  recommendation: Recommendation | null;
+}) {
+  if (loading) return <Skeleton className="mt-4 h-20 w-full rounded-card" />;
+
+  if (!recommendation) {
+    return (
+      <Callout tone="info" className="mt-4" title="No evaluation yet">
+        This season has not been evaluated, so there is no readiness score. An empty score would
         read as &ldquo;no risk&rdquo;, which is a different claim from &ldquo;not known&rdquo;.
       </Callout>
-    </Card>
+    );
+  }
+
+  const reasons = recommendation.reasons ?? [];
+
+  if (recommendation.status === "insufficient_data") {
+    return (
+      <Callout tone="caution" className="mt-4" title="Not enough information to advise">
+        <p>
+          The weather was read and the crop stress worked out, but AgriSense will not name a
+          spray window without reviewed agronomic records for this crop and a confirmed product.
+        </p>
+        {reasons.length ? (
+          <ul className="mt-2 list-inside list-disc text-sm">
+            {reasons.slice(0, 3).map((reason) => (
+              <li key={reason.code}>{reason.code.replace(/_/g, " ")}</li>
+            ))}
+          </ul>
+        ) : null}
+      </Callout>
+    );
+  }
+
+  const tone =
+    recommendation.status === "recommended"
+      ? "success"
+      : recommendation.status === "blocked"
+        ? "blocked"
+        : "info";
+
+  return (
+    <Callout tone={tone} className="mt-4" title={recommendation.status.replace(/_/g, " ")}>
+      {recommendation.readiness != null ? (
+        <p className="text-sm">
+          Readiness <span className="font-semibold">{Math.round(recommendation.readiness)}</span>
+          /100
+        </p>
+      ) : (
+        <p className="text-sm">Readiness is not known for this window.</p>
+      )}
+      {recommendation.selected_window ? (
+        <p className="mt-1 text-sm">
+          Window {formatDateShort(recommendation.selected_window.start_at)} to{" "}
+          {formatDateShort(recommendation.selected_window.end_at)}
+        </p>
+      ) : null}
+      {reasons.length ? (
+        <ul className="mt-2 list-inside list-disc text-sm">
+          {reasons.slice(0, 3).map((reason) => (
+            <li key={reason.code}>{reason.code.replace(/_/g, " ")}</li>
+          ))}
+        </ul>
+      ) : null}
+    </Callout>
   );
 }
 
@@ -395,7 +490,7 @@ function DataRequests({ field, seasonCount }: { field: Field; seasonCount: numbe
   const requests: Array<{ label: string; href?: string; blocked?: string }> = [];
 
   if (seasonCount === 0) {
-    requests.push({ label: "Add the crop for this field", blocked: "Crop catalogue unavailable" });
+    requests.push({ label: "Add the crop for this field", href: "/onboarding" });
   }
   if (field.soil_summary == null) {
     requests.push({ label: "Add a soil test", blocked: "Upload not built yet" });

@@ -21,7 +21,11 @@ SERVICE="${WEB_SERVICE_NAME:-agrisense-web}"
 REPOSITORY="${ARTIFACT_REPOSITORY:-agrisense}"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD)"
 IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY}/${SERVICE}:${TAG}"
+# The client appends bare paths such as /fields, so the base must carry the /api/v1
+# prefix. Without it every call 404s and the app looks broken while the API is fine.
 API_BASE="${PUBLIC_API_BASE_URL:-https://agrisense-api-788265611154.asia-south1.run.app}"
+API_BASE="${API_BASE%/}"
+[[ "$API_BASE" == */api/v1 ]] || API_BASE="${API_BASE}/api/v1"
 
 gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
 
