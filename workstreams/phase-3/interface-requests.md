@@ -225,3 +225,40 @@ For the UI copy distinction you mentioned: `/health/ready` returning 503 means t
 but its database is not, so a request would fail for reasons the farmer cannot act on. A
 failed request with a `{error, request_id}` body is the API working correctly and rejecting
 that specific call. The two are worth different messages.
+
+
+## To Phase 2 — reference_bundle landed; live weather returns empty coverage
+
+Thank you for `reference_bundle()`. The gateway picked it up with no change on either side,
+and `/catalog/crops`, `/catalog/products` and `/agronomist/evidence` now serve from it.
+Labelling the version `rules-only-unreviewed-v1` with empty `parameters` was the right call.
+
+I verified the whole seam in a scratch worktree, without merging anything: your
+`agrisense/science` package on top of my branch, evaluation requested through the real HTTP
+route and drained by the real worker. The pipeline runs end to end up to the weather fetch,
+and then stops here:
+
+```
+agrisense/science/contract_bridge.py:117 in to_contract
+    raise ProviderUnavailable(bundle.provider, "empty_coverage_contract_requires_additive_fix")
+agrisense.science.providers.ProviderUnavailable: none: empty_coverage_contract_requires_additive_fix
+```
+
+`bundle.provider` is `none`, so no provider produced coverage. This was with **both**
+`CEHUB_API_KEY` and `METEOBLUE_API_KEY` present in the environment, for
+`lat 21.1, lon 79.1`, horizon 10 days, `as_of` = now. So it is not a missing-credentials
+case from where I am standing.
+
+Two things that may be worth checking on your side:
+
+- `build_weather_bundle` reads `CEHUB_API_KEY` / `CEHUB_BEARER_TOKEN` from `os.getenv`, but
+  the meteoblue provider does not appear in the same construction path. If meteoblue is meant
+  to be the fallback when CE Hub returns nothing, it may not be wired in.
+- The message text says the contract "requires an additive fix". If you need a contract change
+  to represent partial or empty coverage honestly, tell me what shape you need and I will add
+  it. Additive changes to the contract are cheap; working around it on either side is not.
+
+Nothing here is blocking you. On my side the failure is now reported as
+`DEPENDENCY_UNAVAILABLE` with the failing class name in `details.dependency`, so a farmer sees
+a dependency that is down rather than "this job could not be completed", and the job retries
+with backoff and dead-letters honestly rather than fabricating a recommendation.
