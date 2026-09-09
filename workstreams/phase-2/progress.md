@@ -21,6 +21,13 @@ Last verified commit: this milestone (see Git history). Full `agrisense-contract
 - Scoped tests: 109 passed; scoped Ruff and diff checks passed. Empirical model quality is still unmeasured.
 - Read-only finding: current Phase 3 `/planning/compare` unconditionally raises unavailable after ownership lookup. This is a separate platform integration gap, not repaired by a weather-provider change; interface request recorded.
 
+## Resumed milestone 3 — performance and remaining dependency audit
+
+- Historical milestone pushed as `2d29b01`. No merges or unrelated branch writes.
+- Added generated-facade and full five-crop comparison benchmark with 2,000 paired draws per crop, 20 synthetic source rows each and 365 climate days. 50 measured runs after 5 warmups, Python 3.12.14 arm64: evaluation p95 11.015 ms; five-crop comparison p95 2.483 ms. Both meet engineering targets under these CPU-only synthetic conditions. Product safety records remain absent in the facade benchmark; existing window benchmark measures full constraint ranking separately.
+- Initial benchmark emitted Pydantic warnings because the synthetic map was mutated with integer values into generated float unions. Normalized the fixture's numeric scalars and revalidated it; `python -W error` benchmark passed. No warning suppression or production schema edits.
+- `roadmap.md` records the current implemented/partial/missing state, file ownership, dependencies and next order. The early historical status table below is preserved as chronology, not a current completion claim.
+
 | Requirement | State | Evidence / remaining work |
 | --- | --- | --- |
 | P2-01 weather | in-progress | Live CE Hub metadata and batched hourly probe HTTP 200; normalization and contract bridge underway |

@@ -2,6 +2,8 @@
 
 Base `contract_v1` at `ff851c3`; branch `codex/phase-2-intelligence`.
 
+For current completion state and dependency order, see `roadmap.md`; later milestone entries supersede early historical notes below. Current scoped regression suite: 109 passed. CPU-only synthetic benchmarks: generated season facade p95 11.015 ms, five-crop planning/scenarios p95 2.483 ms, independent 336-candidate safety ranking p95 4.359 ms. None is an authenticated/API latency or scientific-accuracy measurement.
+
 Latest integration fix (2026-09-10): the 10-day Nagpur empty-coverage failure was caused by negative CE Hub radiation values invalidating all weather. Invalid solar values now remain null with `provider_value_invalid`; valid temperature/rain/wind/daily series survive. Live generated-facade evaluation passed with 238 hours and 30 stress points. No platform/schema changes are needed for this fix. No branches merged. `probe_science_live.py --env ../agrisense.env` now defaults to the reported 10-day/Nagpur case. A passed probe is a provider/science check with synthetic identity, not authenticated endpoint verification.
 
 Historical port: `agrisense.science.history.MeteoblueHistoryProvider(transport, api_key=...).history((lat, lon), start_date, end_date, as_of)` returns an internal `WeatherBundle` with daily reanalysis only, mode estimated, no forecast vintage, no ET0. Calls are bounded to 366 days inclusive and past dates. A queued response raises `history_job_requires_platform_worker`; durable historical imports need platform orchestration. Verified live for 2026-08-01 through 2026-08-03. The existing ERA5T/ERA5 query is retained, not a newly guessed product. No local calendar or yield/product evidence is supplied by this weather result.
