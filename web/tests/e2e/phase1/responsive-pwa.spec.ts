@@ -63,6 +63,18 @@ for (const bp of BREAKPOINTS) {
       });
     }
 
+    test("exactly one language switcher is reachable", async ({ page }) => {
+      // Regression guard. The switcher lives in the desktop sidebar and in the
+      // mobile header, and an inverted responsive class once produced two on
+      // desktop and none on mobile — leaving a farmer who cannot read English
+      // with no way to change language on a phone, which is the exact audience
+      // the feature exists for.
+      await page.goto("/sign-in");
+      const groups = page.getByRole("group", { name: /language|भाषा|ਭਾਸ਼ਾ|భాష/i });
+      await expect(groups).toHaveCount(1);
+      await expect(groups.first()).toBeVisible();
+    });
+
     test("primary action stays reachable without horizontal scrolling", async ({ page }) => {
       await page.goto("/sign-in");
       const submit = page.getByRole("button", { name: /sign in/i });

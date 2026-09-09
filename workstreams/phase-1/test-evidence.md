@@ -526,3 +526,59 @@ requires a `crop_id` and the catalogue is unavailable. Geolocation itself was
 seeded rather than granted through a real permission prompt, so the GPS
 permission flow is untested. No Playwright coverage for this flow yet — it needs
 an authenticated fixture.
+
+## Slice 12 — P1-04 field dashboard, against live data
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 (after a real fix, below) |
+| Lint | `npx next lint` | clean |
+| Unit tests | `npx vitest run` | 108/108 |
+| Playwright | `npx playwright test --project=desktop` | **24 passed** (was 20) |
+| Browser, live data | dev server against the deployed API | dashboard renders the persisted field with a **"Live data"** badge |
+
+### Two real defects found
+
+1. **Language switcher rendered twice on desktop and not at all on mobile.**
+   The header switcher carried `hidden lg:flex` while the sidebar already
+   provides one from `lg` up — so the classes were inverted. On a phone, where
+   the sidebar is hidden, there was **no way to change language at all**, which
+   fails the exact audience the feature exists for. Fixed to `lg:hidden`, and a
+   Playwright assertion now requires exactly one visible switcher at each of the
+   four breakpoints, so this cannot regress silently.
+2. **`Season.crop_name` does not exist.** Another provisional-type assumption,
+   caught by the compiler after the migration. The contract's `Season` carries
+   only `crop_id`; resolving it to "Cotton" needs `/catalog/crops`, which is
+   503. The card shows the raw id and says why, rather than mapping ids to names
+   from a hardcoded table — which would be a fabricated catalogue.
+
+### Verified against the real record
+
+The dashboard reads the field created in slice 11 and renders it from live data:
+`North field · 1.01 ha · GPS location · Drip`, with the `data_mode: live` badge
+taken from the response envelope rather than assumed.
+
+### Honest states, each deliberate
+
+- **No crop set**: explains that a spray window, water plan and return estimate
+  all depend on the crop, so nothing can be calculated — then states that the
+  crop catalogue is not being served, that it is a service problem rather than
+  the farmer's mistake, and that the field is saved.
+- **Data requests** are real: "Add the crop for this field" and "Add a soil
+  test" render as *blocked* with the reason ("Crop catalogue unavailable",
+  "Upload not built yet") instead of as buttons that would fail when tapped.
+  Requests that can be actioned link to the relevant form.
+- **No readiness score is shown.** With no recommendation available the card
+  says so explicitly, because an empty progress bar reads as "no risk" rather
+  than "not known", and Phase 1 must never compute agronomy in the browser.
+- Loading, error and empty-field states are all distinct, and the retry action
+  appears only when the error is actually retryable.
+
+### Field isolation
+
+Every query key carries the actor and, for season queries, the field id and
+version. `FieldPanel` is additionally keyed on the field id so switching fields
+remounts rather than briefly showing the previous field's data under the new
+heading. Only one field exists on the test account, so **the two-field race has
+not been exercised end to end** — it needs a second field and a throttled
+response, and is listed as pending rather than claimed.

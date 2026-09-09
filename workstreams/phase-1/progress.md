@@ -40,7 +40,7 @@ Status vocabulary: `pending` · `in-progress` · `verified` · `external-blocked
 | P1-01 | Authentication and account continuity | in-progress | Round trip **verified against real Firebase** (create, verify-mail, sign-out, wrong-password rejection, sign-in, refresh persistence). Remaining: authorized API call with the issued token, second-tenant denial, token-expiry recovery, WhatsApp identity linking |
 | P1-02 | Progressive onboarding and field setup | **integrated** | Six steps built; field creation verified end to end against the live API with a persisted record and proven idempotency. Remaining: soil-card upload, season creation (blocked on the crop catalogue), place search (blocked on the location catalogue), Playwright coverage |
 | P1-03 | Crop selection, warnings, top-five comparison | external-blocked | `GET /catalog/crops` and `POST /planning/compare` answer 503 `DEPENDENCY_UNAVAILABLE` — nothing builds a `ReferenceBundle` on the Phase 2 side. Onboarding already renders this honestly. |
-| P1-04 | Home dashboard, field switching, data requests | pending | |
+| P1-04 | Home dashboard, field switching, data requests | **in-progress** | Renders live field data with the data-mode badge, honest no-crop/no-recommendation states and blocked-with-reason data requests. Remaining: recommendation card (blocked on Phase 2), seven-day tasks, water and ROI strips, and the two-field race test |
 | P1-05 | Readiness, forecast and biological fit | pending | Needs Phase 2 evaluation output |
 | P1-06 | R1 live ROI and water views | pending | Needs `/economics`, `/water` |
 | P1-07 | Season Journal and action capture | pending | Needs media upload routes |
