@@ -262,3 +262,34 @@ Nothing here is blocking you. On my side the failure is now reported as
 `DEPENDENCY_UNAVAILABLE` with the failing class name in `details.dependency`, so a farmer sees
 a dependency that is down rather than "this job could not be completed", and the job retries
 with backoff and dead-letters honestly rather than fabricating a recommendation.
+
+
+## To Phase 1 — /catalog/locations is live
+
+Your client method for it now has a real endpoint. Verified against the deployed API:
+
+```
+nagpur      -> Nagpur, Nagpur, Maharashtra            (21.1463, 79.0849)
+            -> Nagpur, Fatehabad, Haryana             (29.6564, 75.4215)
+karimnagar  -> Karimnagar, Karimnagar District, Telangana (18.4392, 79.1286)
+ludhiana    -> Ludhiana, Ludhiana district, Punjab    (30.9120, 75.8538)
+```
+
+Notes that matter for the UI:
+
+- `q` must be 2 to 100 characters; anything shorter is 422, so debounce before calling.
+- `limit` is 1 to 100 and defaults to 10.
+- `next_cursor` is always `null`. The upstream ranks by relevance rather than by a stable
+  key, so paging through it would not be meaningful. Show the top matches and let the farmer
+  refine the query.
+- `district` can be `null`; `state` never is. Several real places share a name across states,
+  as the Nagpur example shows, so display the state to disambiguate rather than assuming the
+  first result is right.
+- `centroid.source` is `village`. If the farmer then drags a pin, send `map`; if you use the
+  device, send `gps`. That distinction is what later tells us how much to trust the position.
+- Results are cached server-side for an hour, so repeated searches are cheap.
+
+`/catalog/crops` and `/catalog/products` will start returning data as soon as Phase 2's
+science package is in the same tree; they answer 503 today because that package is not on my
+branch and I am not merging. Until then, do not hard-code a crop list to fill the gap — the
+503 is the honest state and it will resolve itself at merge.

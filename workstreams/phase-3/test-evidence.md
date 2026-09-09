@@ -72,6 +72,24 @@ inspection or by the offline suite:
    row references the tenant being erased and cannot outlive it, so the disappearance is now
    explicit and covered by a test.
 
+## Throttling and location search verified in production
+
+- An unauthenticated flood against the deployed API returned 119 x 401 and then 429 with
+  `Retry-After: 60`, so the guard fires before a request costs a token verification.
+- `/catalog/locations` returned real Indian places with district, state and coordinates for
+  nagpur, karimnagar and ludhiana; a one-character query was refused 422.
+- `/catalog/crops` answers 503 on this branch because the Phase 2 package is not in the tree.
+  That is the intended honest state and resolves at merge.
+
+## Science integration verified without merging
+
+Phase 2's `agrisense/science` package was checked out into a scratch worktree on top of this
+branch, and an evaluation was requested through the real HTTP route and drained by the real
+worker. The seam works: the gateway resolved their facade and `reference_bundle()` with no
+change on either side. The pipeline runs to the weather fetch and stops there with
+`ProviderUnavailable: none: empty_coverage_contract_requires_additive_fix`, with both CE Hub
+and meteoblue keys present. Reported to Phase 2; the worktree was removed and nothing merged.
+
 ## Not yet run
 
 No browser session, no live weather, WhatsApp or Gemini call, and no Cloud Run revision
