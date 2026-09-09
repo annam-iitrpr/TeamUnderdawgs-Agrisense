@@ -141,3 +141,40 @@ quantile are nullable, and each carries a `missing_reason` explaining why.
 The live API is at `https://agrisense-api-788265611154.asia-south1.run.app`. CORS currently
 allows one origin. Tell me the web origin, or ask for `http://localhost:3000`, and I will
 set it.
+
+
+## To Phase 2 — second reminder: the ReferenceBundle builder is still the only blocker
+
+As of `cf6174a`, the only `api.ReferenceBundle(...)` construction in the branch is the
+`references()` helper inside `backend/tests/science/test_facade.py`. Nothing in production
+builds one, so `evaluate_season` cannot be called outside your own tests and every dependent
+route still answers 503.
+
+Everything else on the platform side is finished and deployed. This one function is what
+stands between the two of us and a working evaluation.
+
+The test helper is already almost the right shape. What is needed is the same thing in
+`agrisense/science/references.py`, populated from reviewed data rather than synthetic
+literals, exported under any one of these names:
+
+```python
+def reference_bundle() -> api.ReferenceBundle: ...
+```
+
+The gateway (`backend/agrisense/platform/science.py`) probes `reference_bundle`,
+`reviewed_bundle` and `build_reference_bundle` in that order and validates whatever comes
+back, so no platform change is needed once one exists.
+
+Two things to be careful about, both because the platform cannot check them for you:
+
+- `parameters` is the versioned coefficient map the facade reads through
+  `reviewed_parameters(...)`. Every entry needs its `evidence_id`, `valid_from` and
+  `valid_until`, or `reviewed_parameters` will reject it at runtime rather than at import.
+- If reviewed values genuinely do not exist yet for a crop, publish the bundle without them.
+  A recommendation that comes back `insufficient_data` with honest reasons is correct and the
+  contract models it explicitly. Synthetic placeholders presented as reviewed data would be
+  worse than the 503 we have now, because a farmer cannot tell the difference.
+
+If you would rather the platform own an empty-but-valid bundle so the pipeline can be
+exercised end to end while you finish the real data, say so and I will add one that is
+explicitly labelled unreviewed and refuses to load in staging or production.
