@@ -232,16 +232,20 @@ class OutboxRow(Base):
     aggregate_id: Mapped[str]=mapped_column(String(128))
     payload: Mapped[dict[str,Any]]=mapped_column(JSONType)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow)
-    status: Mapped[str]=mapped_column(String(24),default='pending',index=True)
-    attempts: Mapped[int]=mapped_column(Integer,default=0)
+    # Delivery status, attempts and backoff live on each consumer's receipt, not on the event.
     available_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow,index=True)
-    lease_until: Mapped[datetime | None]=mapped_column(DateTime(timezone=True),nullable=True)
 
 class ConsumerReceipt(Base):
+    """Per-consumer delivery state. Attempts are tracked here, never on the shared event,
+    so one failing consumer cannot dead-letter an event for every other subscriber."""
     __tablename__='consumer_receipts'
     event_id: Mapped[str]=mapped_column(ForeignKey('outbox_events.id'),primary_key=True)
     consumer: Mapped[str]=mapped_column(String(128),primary_key=True)
-    processed_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow)
+    status: Mapped[str]=mapped_column(String(24),default='processed',index=True)
+    attempts: Mapped[int]=mapped_column(Integer,default=0)
+    available_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow,index=True)
+    processed_at: Mapped[datetime | None]=mapped_column(DateTime(timezone=True),nullable=True)
+    __table_args__=(CheckConstraint("status in ('pending','processed','dead_letter')",name='ck_receipt_status'),)
 
 class WebhookInbox(Base):
     __tablename__='webhook_inbox'
