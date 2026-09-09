@@ -27,6 +27,8 @@ def compare_crops(
 ) -> api.CropComparison:
     if snapshot.request.field_id != snapshot.field.id:
         raise ValueError("planning field identity mismatch")
+    if any(row.field_id != snapshot.field.id for row in snapshot.existing_seasons):
+        raise ValueError("foreign season in planning snapshot")
     now = snapshot.as_of.astimezone(ZoneInfo("Asia/Kolkata")).date()
     if snapshot.request.proposed_season.start_date < now:
         raise ValueError("proposed sowing date is in the past")
@@ -72,13 +74,34 @@ def compare_crops(
                 <= number(record, "longitude_max", low=-180, high=180)
             ):
                 reasons.append("outside_reference_region")
+            if not (
+                number(record, "latitude_min")
+                <= climate.location.latitude
+                <= number(record, "latitude_max")
+                and number(record, "longitude_min")
+                <= climate.location.longitude
+                <= number(record, "longitude_max")
+            ):
+                reasons.append("climate_outside_reference_region")
             sowing = sowing_overlap(record, snapshot.request.proposed_season)
             if sowing is None:
                 reasons.append("outside_local_sowing_calendar")
             minimum_days = int(number(record, "duration_min_days", low=1, high=730))
             maximum_days = int(number(record, "duration_max_days", low=minimum_days, high=730))
             minimum_climate_days = int(number(record, "minimum_climate_days", low=30))
-            climate_dates = {row.local_date for row in climate.daily}
+            climate_dates = {
+                row.local_date
+                for row in climate.daily
+                if all(
+                    value.value is not None
+                    for value in (
+                        row.minimum_temperature_c,
+                        row.maximum_temperature_c,
+                        row.rain_mm,
+                        row.et0_mm,
+                    )
+                )
+            }
             if len(climate_dates) < minimum_climate_days or any(
                 not climate.period.start_date <= day <= climate.period.end_date
                 for day in climate_dates
@@ -87,6 +110,8 @@ def compare_crops(
             ph = None if soil is None or soil.ph is None else soil.ph.value
             if ph is None:
                 reasons.append("soil_ph_missing")
+            elif soil.ph.unit != "pH":
+                reasons.append("soil_ph_unit_mismatch")
             elif (
                 not number(record, "ph_min", low=0, high=14)
                 <= ph

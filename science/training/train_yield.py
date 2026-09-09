@@ -29,6 +29,10 @@ def load_samples(path: Path) -> tuple[YieldSample, ...]:
         row["season_start"] = date.fromisoformat(row["season_start"])
         for key in ("prediction_at", "features_available_at", "harvest_at"):
             row[key] = datetime.fromisoformat(row[key])
+        if row.get("label_available_at") is not None:
+            row["label_available_at"] = datetime.fromisoformat(
+                row["label_available_at"]
+            )
         row["features"] = tuple(row["features"])
         rows.append(YieldSample(**row))
     if len({len(row.features) for row in rows}) != 1:

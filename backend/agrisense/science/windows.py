@@ -171,6 +171,8 @@ def rank_windows(
             reasons.append("insufficient_equipment_time")
         if candidate.need is None or candidate.timing_fit is None:
             reasons.append("readiness_component_missing")
+        elif candidate.timing_fit == 0 and candidate.need > 0:
+            reasons.append("outside_supported_timing")
         # Cover every intersecting hour through rainfast after the FINAL portion.
         origin = bundle.hours[0].start_at if bundle.hours else candidate.start_at
         cursor = origin + timedelta(

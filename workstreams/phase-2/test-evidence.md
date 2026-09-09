@@ -19,3 +19,5 @@ Milestone 4: 81 passed. Baseline training CLI ran on 24 explicit synthetic rows 
 `PYTHONPATH=backend .venv/bin/python science/evaluation/benchmark.py`: synthetic 336-hour/336-candidate window engine, 50 runs on arm64/Python 3.12.10, p95 2.283 ms; no network/DB/LLM. Optional XGBoost fit has not been run; no empirical model evaluation exists.
 
 Milestone 5: initial `test_legacy_guards.py` run produced six expected failures identifying actual inherited defects. After fixes, full scoped suite is 89 passed. Added explicit mock/no-network and missing-vs-zero Open-Meteo tests. Restored source /4 phosphorus and null zero-temperature behavior in inherited tests, with rationale tied to source discrepancies.
+
+Milestone 6: 96 passed, including water Hypothesis properties, CE daily normalization, zero timing rejection, late-label leakage and forecast bias constraints. Live generated-contract bridge plus pure facade succeeded with 46 hours, 3 daily records, 6 stress points; product recommendation remained insufficient_data. No private identity or raw API payload committed.

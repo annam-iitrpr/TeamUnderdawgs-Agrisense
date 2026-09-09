@@ -25,6 +25,7 @@ class YieldSample:
     observed_kg_ha: float
     features: tuple[float | None, ...]
     source_kind: str
+    label_available_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not all((self.sample_id, self.farmer_id, self.field_id, self.crop_id, self.district)):
@@ -38,6 +39,12 @@ class YieldSample:
                 finite(value, "feature")
         if self.source_kind not in ("confirmed_field_outcome", "synthetic_software_test"):
             raise ValueError("unrecognized label provenance")
+        if self.label_available_at is None and self.source_kind == "confirmed_field_outcome":
+            raise ValueError("empirical labels require their actual availability time")
+        if self.label_available_at is not None and utc(self.label_available_at) < utc(
+            self.harvest_at
+        ):
+            raise ValueError("yield label cannot precede harvest")
 
     @property
     def residual_kg_ha(self) -> float:
@@ -65,7 +72,12 @@ def split_forward_grouped(
         and row.field_id not in held_fields
         and row.district not in held_out_districts
     ]
-    calibration = tuple(row for row in before_test if row.season_start >= calibration_start)
+    calibration = tuple(
+        row
+        for row in before_test
+        if row.season_start >= calibration_start
+        and (row.label_available_at or row.harvest_at).date() < test_start
+    )
     cal_farmers, cal_fields = (
         {row.farmer_id for row in calibration},
         {row.field_id for row in calibration},
@@ -74,6 +86,7 @@ def split_forward_grouped(
         row
         for row in before_test
         if row.season_start < calibration_start
+        and (row.label_available_at or row.harvest_at).date() < calibration_start
         and row.farmer_id not in cal_farmers
         and row.field_id not in cal_fields
     )

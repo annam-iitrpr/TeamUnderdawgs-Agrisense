@@ -208,6 +208,6 @@ def test_closure_zero_yield_and_zero_cost():
     assert result.metrics[0].value == -50000
     assert result.metrics[1].value == -100
     closure.realized_costs_inr = 0
-    assert (
-        summarize_season(api.ClosureSnapshot(season=snap, closure=closure)).metrics[1].value is None
-    )
+    revised = summarize_season(api.ClosureSnapshot(season=snap, closure=closure))
+    assert revised.metrics[1].value is None
+    assert revised.closure.actual_margin_inr == 0

@@ -6,6 +6,7 @@ Read-only provider configuration is isolated in the async weather export below.
 
 import json
 from datetime import datetime, timedelta
+from decimal import Decimal
 from hashlib import sha256
 from zoneinfo import ZoneInfo
 
@@ -117,7 +118,7 @@ def _water(
             number(record, "depletion_fraction", low=0, high=1),
             number(record, "efficiency", low=0.001, high=1),
         )
-    except (KeyError, ValueError):
+    except (KeyError, ValueError, TypeError):
         result.missing_reason = "invalid_water_parameters"
         return result
     soil = select_soil(snapshot.soil_observations, snapshot.field.id, now)
@@ -400,7 +401,15 @@ def summarize_season(snapshot: api.ClosureSnapshot) -> api.SeasonEvaluation:
         raise ValueError("closure season mismatch")
     if closure.harvested_area_ha > snapshot.season.season.allocated_area_ha:
         raise ValueError("harvested area exceeds allocation")
-    margin = closure.realized_sales_inr - closure.realized_costs_inr
+    if closure.harvested_on > closure.confirmed_at.astimezone(IST).date():
+        raise ValueError("closure harvest is in the future")
+    if any(row.season_id != closure.season_id for row in snapshot.recommendations):
+        raise ValueError("foreign recommendation in closure snapshot")
+    margin = float(
+        Decimal(str(closure.realized_sales_inr)) - Decimal(str(closure.realized_costs_inr))
+    )
+    # Revisions may change realized costs; never preserve a stale supplied margin.
+    closure = closure.model_copy(update={"actual_margin_inr": margin})
     metrics = [
         api.ErrorMetric(name="actual_margin", value=margin, unit="INR", denominator_policy="none")
     ]

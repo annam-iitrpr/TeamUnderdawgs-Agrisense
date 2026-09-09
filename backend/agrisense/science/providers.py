@@ -203,9 +203,47 @@ def parse_cehub(
     )
 
 
+CE_DAILY_LABELS = {
+    "TempAir_DailyMin (C)": "tmin_c",
+    "TempAir_DailyMax (C)": "tmax_c",
+    "Precip_DailySum (mm)": "rain_mm",
+}
+
+
+def parse_cehub_daily(payload: Any) -> tuple[Daily, ...]:
+    from datetime import date
+
+    if not isinstance(payload, list) or not payload:
+        raise ValueError("CE Hub daily response has no records")
+    rows = {}
+    for record in payload:
+        label = record.get("measureLabel")
+        if label not in CE_DAILY_LABELS:
+            continue
+        day = date.fromisoformat(str(record["date"])[:10].replace("/", "-")).isoformat()
+        field = CE_DAILY_LABELS[label]
+        values = rows.setdefault(day, {})
+        if field in values:
+            raise ValueError("duplicate CE Hub daily date/variable")
+        value = record.get("dailyValue")
+        values[field] = None if value is None or value == "" else float(value)
+    # Evapotranspiration_DailySum is not verified reference ET0; keep ET0 unknown.
+    return tuple(
+        Daily(
+            day,
+            values.get("tmin_c"),
+            values.get("tmax_c"),
+            values.get("rain_mm"),
+            None,
+            "cehub:Meteoblue",
+        )
+        for day, values in sorted(rows.items())
+    )
+
+
 class CEHubProvider:
     name = "cehub"
-    capabilities = frozenset({"forecast_hourly"})
+    capabilities = frozenset({"forecast_hourly", "forecast_daily"})
 
     def __init__(
         self,
@@ -244,9 +282,37 @@ class CEHubProvider:
             },
         )
         try:
-            return parse_cehub(payload, retrieved_at=datetime.now(UTC), start_at=start, end_at=end)
+            bundle = parse_cehub(
+                payload, retrieved_at=datetime.now(UTC), start_at=start, end_at=end
+            )
         except (ValueError, TypeError, KeyError):
             raise ProviderUnavailable(self.name, "invalid_forecast_schema") from None
+        try:
+            daily_payload = await self.transport.request(
+                self.name,
+                "GET",
+                "https://services.cehub.syngenta-ais.com/api/Forecast/ShortRangeForecastDaily",
+                headers=self._headers,
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "startDate": start.date().isoformat(),
+                    "endDate": end.date().isoformat(),
+                    "supplier": "Meteoblue",
+                    "format": "json",
+                    "measureLabel": ";".join(CE_DAILY_LABELS),
+                },
+            )
+            days = parse_cehub_daily(daily_payload)
+            return replace(
+                bundle,
+                daily=days,
+                raw_payload_hash=payload_hash({"hourly": payload, "daily": daily_payload}),
+                warnings=bundle.warnings
+                + ("daily_dates_use_provider_calendar", "provider_et_not_verified_et0"),
+            )
+        except (ProviderUnavailable, ValueError, TypeError, KeyError):
+            return replace(bundle, warnings=bundle.warnings + ("daily_forecast_unavailable",))
 
 
 OPEN_HOURLY = {

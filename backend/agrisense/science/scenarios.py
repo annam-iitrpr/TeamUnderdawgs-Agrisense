@@ -63,7 +63,7 @@ def economic_estimates(
                 ]
             )
             evidence_ids.add(str(record["evidence_id"]))
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, TypeError):
             return missing
     if not samples:
         return missing

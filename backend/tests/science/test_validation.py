@@ -74,3 +74,16 @@ def test_future_features_rejected():
     row = sample(1, 2022)
     with pytest.raises(ValueError):
         replace(row, features_available_at=row.harvest_at)
+
+
+def test_late_confirmed_label_excluded_from_training():
+    from dataclasses import replace
+
+    late = replace(sample(4, 2022), label_available_at=datetime(2025, 1, 1, tzinfo=UTC))
+    rows = (sample(1, 2022), sample(2, 2023), sample(3, 2024), late)
+    splits = split_forward_grouped(
+        rows, calibration_start=date(2023, 1, 1), test_start=date(2024, 1, 1)
+    )
+    assert [row.sample_id for row in splits["train"]] == ["1"]
+    with pytest.raises(ValueError):
+        replace(sample(5, 2022), source_kind="confirmed_field_outcome")

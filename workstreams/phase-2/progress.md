@@ -68,3 +68,13 @@ Next: publish the core arithmetic milestone; complete verified provider normaliz
 - `PYTHONPATH=backend .venv/bin/python -m pytest backend/tests/science backend/tests/test_stress.py backend/tests/platform/test_contracts.py -q`: 89 passed. Baseline assertions for invalid previous semantics updated with the six independent reproductions, not suppressed.
 - Legacy meteoblue history defaults remain isolated from the new facade and are still a migration limitation; no live historical capability is claimed.
 - Next: facade validation refinements, provider daily/history coverage and independent property tests.
+
+## Verified milestone 6
+
+- Milestone 5 pushed as `8c28ed7`. No merge/cherry-pick of any other branch.
+- Added live CE Hub daily min/max/rain using the observed `dailyValue` schema. Daily Metadata (133 records) and three-variable daily response (9 records) both returned HTTP 200. Generic provider evapotranspiration is not treated as ET0.
+- Live `probe_science_live.py`: 46 hourly, 3 daily, 6 stress points; live forecast, synthetic identity, honest `insufficient_data` recommendation. This is not an authenticated API/browser test.
+- Hardened closure margin revisions, climate region/completeness, pH units, zero timing fit and delayed label availability. Added Hypothesis water scale/monotonicity properties.
+- Forecast bias candidates use archived issue/valid times, QC/representativeness, observation availability cutoffs and lead bands. Mean offsets bounded, quantile mapping rejects unsupported tails; no promotion performed.
+- Full scoped suite: 96 passed. Formatter/lint checks passed.
+- Next: complete historical adapter/evaluation delivery and final scoped audit; platform runtime and approved scientific records remain external.

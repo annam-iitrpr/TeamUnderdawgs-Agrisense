@@ -36,6 +36,20 @@ def main() -> int:
     now = datetime.now(UTC)
     requests = [
         ("metadata", "/api/Forecast/Metadata", {"measureType": "Hourly"}),
+        ("metadata_daily", "/api/Forecast/Metadata", {"measureType": "Daily"}),
+        (
+            "daily",
+            "/api/Forecast/ShortRangeForecastDaily",
+            {
+                "latitude": 30.97,
+                "longitude": 76.47,
+                "startDate": now.date().isoformat(),
+                "endDate": (now + timedelta(days=2)).date().isoformat(),
+                "supplier": "Meteoblue",
+                "format": "json",
+                "measureLabel": "TempAir_DailyMax (C);TempAir_DailyMin (C);Precip_DailySum (mm)",
+            },
+        ),
         (
             "hourly",
             "/api/Forecast/ShortRangeForecastHourly",
