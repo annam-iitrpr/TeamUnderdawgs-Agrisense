@@ -7,10 +7,29 @@ Device 1 ledger. Updated at the end of every committed slice.
 | Field | Value |
 |---|---|
 | Branch | `codex/phase-1-farmer-experience` |
-| Base | **No `agrisense-contract-v1` tag existed.** Branch started from an empty repository (zero refs on `origin` at clone time). See [decisions.md](decisions.md) D-001. |
+| Base | Started from an empty repository (zero refs on `origin` at clone time) because no bootstrap tag existed. See [decisions.md](decisions.md) D-001. |
 | Reference snapshot ported | `AkashaPrasad/AgriSense-AnnamAI` @ `b94a311e9daeeb6247dd2eb5c36647fda03cc9dd` (matches the SHA recorded in the build spec) |
+| Bootstrap | `contract_v1`, published by Phase 3 **after** this branch had five commits — and note the tag name differs from the spec's `agrisense-contract-v1`. Merged in per D-006, so the bootstrap is now an ancestor of this branch and three-way integration behaves normally instead of as an unrelated-history graft. |
 | Last verified commit | see git log; updated per slice |
-| Contract version consumed | none yet — `contracts/openapi.yaml` does not exist. Types are hand-written from the spec's route/model tables and marked provisional. |
+| Contract version consumed | `contract_v1`. Generated types exist at `web/lib/generated/api.ts` but are **not yet adopted** — the provisional hand-written types in `web/lib/api/` are still in use. Migration is the next slice. |
+
+## Migration debt created by the merge
+
+1. **Two i18n modules coexist.** `lib/locale/` (this branch: five languages,
+   completeness gate) and `lib/i18n.ts` (bootstrap: three languages, used by the
+   pre-existing screens). Rationale and exit condition in D-007.
+2. **Provisional API types vs generated types.** `web/lib/api/types.ts` was
+   hand-written before `contract_v1` existed. `web/lib/generated/api.ts` is now
+   authoritative and should replace it. The `{data, meta}` envelope and the
+   five-language enum match what was guessed, so this is a mechanical migration
+   rather than a redesign.
+3. **Legacy screens still call the pre-v1 API.** `app/field/**` and
+   `app/dashboard/**` use `lib/api.ts` against `/api/...`, not `/api/v1`. They
+   are replaced under P1-04 and P1-05.
+4. **Legacy error text is English-only.** The pre-existing screens surface
+   hardcoded English strings from `lib/api.ts`, so a Telugu session sees an
+   English failure message. Pre-existing rather than introduced here; fixed as
+   those screens migrate.
 
 ## Requirement status
 

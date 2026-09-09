@@ -9,7 +9,7 @@ import {
   translate,
   type Language,
   type TranslationKey,
-} from "@/lib/i18n";
+} from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import { Globe } from "lucide-react";
 import {

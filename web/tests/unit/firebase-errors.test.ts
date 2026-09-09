@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { authErrorKey } from "@/lib/firebase";
-import { en } from "@/lib/i18n/en";
+import { en } from "@/lib/locale/en";
 
 describe("authErrorKey", () => {
   it("does not reveal whether an email address is registered", () => {

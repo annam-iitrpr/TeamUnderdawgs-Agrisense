@@ -22,6 +22,16 @@ export function stressToken(value: number | null | undefined): string {
   return "var(--stress-severe)";
 }
 
+/** The word that goes with the colour, so colour is never the only carrier. */
+export function stressWord(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "Not applicable";
+  if (value < 2) return "None";
+  if (value < 4) return "Low";
+  if (value < 6) return "Moderate";
+  if (value < 7.5) return "High";
+  return "Severe";
+}
+
 /** Severity band key for a 0-to-9 stress value, or null when not applicable. */
 export type StressBand = "none" | "low" | "moderate" | "high" | "severe";
 
@@ -50,4 +60,53 @@ export function titleCase(value: string): string {
 export function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(Math.max(value, 0), 100);
+}
+
+/* ──────────────────────────── legacy formatters ───────────────────────────
+ * Retained from the bootstrap because the pre-existing screens under
+ * app/field/** and app/dashboard/** import them. New code must use
+ * lib/format.ts instead, which pins Asia/Kolkata explicitly — these helpers
+ * format in the *browser's* timezone, which silently shifts the calendar date
+ * for a device not set to IST. They are deleted as those screens migrate to
+ * /seasons/[id] under P1-04 and P1-05.
+ */
+
+function legacyLocaleFor(language = "en"): string {
+  return { en: "en-IN", hi: "hi-IN", mr: "mr-IN" }[language] ?? "en-IN";
+}
+
+/** @deprecated Use formatTime() from lib/format.ts (IST-pinned). */
+export function formatHour(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** @deprecated Use formatDate() from lib/format.ts (IST-pinned). */
+export function formatDay(iso: string, language = "en"): string {
+  return new Date(iso).toLocaleDateString(legacyLocaleFor(language), {
+    day: "numeric",
+    month: "long",
+  });
+}
+
+/** @deprecated Use formatDateShort() from lib/format.ts (IST-pinned). */
+export function formatShortDay(iso: string, language = "en"): string {
+  return new Date(iso).toLocaleDateString(legacyLocaleFor(language), {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** @deprecated Use formatMoney() from lib/format.ts, which renders unknown as
+ *  a marker instead of coercing null to ₹0. */
+export function formatRupees(value: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
 }

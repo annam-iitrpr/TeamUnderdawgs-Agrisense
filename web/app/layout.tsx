@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { LanguageProvider } from "@/components/language-provider";
+import { AppProvider } from "@/components/providers";
 import { AuthProvider } from "@/features/auth/auth-provider";
 import "./globals.css";
 
@@ -18,6 +19,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // lang starts at "en" and the LanguageProvider updates it once the stored
   // preference is read, so server and client markup agree on first paint.
+  //
+  // AppProvider is the contract_v1 bootstrap's context. It is nested here as a
+  // temporary adapter so the pre-existing screens under app/field/** and
+  // app/dashboard/** keep working while P1-04 and P1-05 replace them. It is
+  // removed with the last screen that calls useApp().
   return (
     <html lang="en">
       <body>
@@ -28,7 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <LanguageProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <AppProvider>{children}</AppProvider>
+          </AuthProvider>
         </LanguageProvider>
       </body>
     </html>

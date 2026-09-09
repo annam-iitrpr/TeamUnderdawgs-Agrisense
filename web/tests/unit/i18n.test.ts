@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { en } from "@/lib/i18n/en";
+import { en } from "@/lib/locale/en";
 import {
   DEFAULT_LANGUAGE,
   LANGUAGES,
@@ -12,7 +12,7 @@ import {
   missingKeys,
   translate,
   type Language,
-} from "@/lib/i18n";
+} from "@/lib/locale";
 
 const SHIPPED: Language[] = ["en", "hi", "mr", "pa", "te"];
 

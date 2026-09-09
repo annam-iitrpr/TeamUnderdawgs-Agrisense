@@ -1,12 +1,13 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn, stressToken } from "@/lib/utils";
 import {
   AlertTriangle,
   CheckCircle2,
   CircleHelp,
   Info,
   Loader2,
+  Lock,
   RefreshCw,
   ShieldAlert,
 } from "lucide-react";
@@ -209,6 +210,72 @@ export function PasswordField({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────── Build Sprint */
+
+/**
+ * A control that does not work yet. Visibly disabled and says why, because a
+ * button that silently does nothing is worse than no button.
+ *
+ * Retained from the contract_v1 bootstrap: the existing journal screen imports
+ * it. Removed once that screen is rewritten under P1-07.
+ */
+export function BuildSprint({
+  label,
+  note,
+  className,
+}: {
+  label: string;
+  note: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-control border border-dashed border-mist bg-[color-mix(in_srgb,var(--mist)_28%,var(--card))] p-3",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Lock aria-hidden className="size-4 shrink-0 text-slate" />
+        <span className="text-sm font-semibold text-slate">{label}</span>
+        <span className="ml-auto rounded-full bg-[color-mix(in_srgb,var(--navy)_12%,transparent)] px-2 py-0.5 text-xs font-semibold text-navy">
+          Build Sprint
+        </span>
+      </div>
+      <p className="mt-1.5 text-xs text-slate">{note}</p>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────── Stress chip */
+
+/** A 0-to-9 stress value with its severity word, so colour is never the only
+ *  carrier. `null` reads as "Not applicable", not as "no risk". */
+export function StressChip({
+  value,
+  label,
+  notApplicableLabel = "Not applicable",
+}: {
+  value: number | null;
+  label?: string;
+  notApplicableLabel?: string;
+}) {
+  const applicable = value !== null && value !== undefined && Number.isFinite(value);
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm">
+      <span
+        aria-hidden
+        className="size-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: stressToken(value) }}
+      />
+      <span className="tabular font-semibold">
+        {applicable ? value.toFixed(1) : notApplicableLabel}
+      </span>
+      {label ? <span className="text-slate">{label}</span> : null}
+    </span>
   );
 }
 

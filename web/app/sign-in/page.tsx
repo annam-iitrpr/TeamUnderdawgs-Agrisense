@@ -1,7 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/language-provider";
-import type { TranslationKey } from "@/lib/i18n";
+import type { TranslationKey } from "@/lib/locale";
 import { Button, Callout, PasswordField, TextField } from "@/components/ui";
 import { AuthError, useAuth } from "@/features/auth/auth-provider";
 import { AuthShell } from "@/features/auth/auth-shell";

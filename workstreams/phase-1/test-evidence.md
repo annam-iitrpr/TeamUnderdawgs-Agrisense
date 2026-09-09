@@ -167,3 +167,42 @@ integration works, so P1-01 stays `in-progress`, not `verified`.
 
 Unblocking needs either a JDK plus `firebase-tools` locally, or the team's real
 Firebase web config for a staging test account.
+
+## Slice 5 — merge of the `contract_v1` bootstrap
+
+| Check | Command | Result |
+|---|---|---|
+| Ancestry before merge | `git merge-base HEAD origin/codex/phase-3-platform` | **no common ancestor** — the problem this slice fixes |
+| Merge | `git merge contract_v1 --allow-unrelated-histories --no-ff` | 12 conflicts, all resolved by ownership (D-006) |
+| Typecheck | `npx tsc --noEmit` | exit 0 after fixing 2 real defects (below) |
+| Lint | `npx next lint` | exit 0 — "No ESLint warnings or errors" |
+| Production build | `npx next build` | exit 0 — 15 routes, mine and the bootstrap's together |
+| Unit tests | `npx vitest run` | exit 0 — 62 passed / 62 total |
+| Browser, my screens | `/sign-in` | renders; Telugu persisted across the merge; password toggle in its own cell |
+| Browser, bootstrap screens | `/field/1` | renders inside `PhoneFrame` with the honest "cannot reach the service" state; no context crash, no console errors |
+
+### Defects the merge surfaced and fixed
+
+Keeping this branch's stricter `tsconfig` (`noUncheckedIndexedAccess`) made the
+compiler reject two lines in the bootstrap's own chart screens
+(`app/field/[id]/why` and `app/dashboard/fields/[id]`). They were not cosmetic:
+
+```ts
+for (const s of SERIES) row[s] = d.scores[s];   // number | null | undefined
+```
+
+`d.scores` is a `Record<string, number | null>`, so a stress type absent from
+the record yields `undefined`. Feeding that into the chart row let a **missing**
+series render as a **zero** — precisely the "unknown must not read as no risk"
+error the spec calls out repeatedly. Both sites now coerce to `null`.
+
+Also cleared eight pre-existing unused-import lint warnings in the bootstrap's
+screens, so `next lint` is clean and a real warning will be visible in CI.
+
+### What the merge did NOT verify
+
+- The bootstrap's backend was not run. `/field/1` reaching its error state
+  proves the provider wiring and the error path, not integration.
+- The generated types at `web/lib/generated/api.ts` are present but unused;
+  nothing here proves this branch's request shapes match them.
+- The authentication blocker from slice 4 is unchanged.

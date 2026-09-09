@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "event_id": "synthetic-event-wheat",
+  "event_type": "season.updated",
+  "aggregate_id": "synthetic-season-wheat",
+  "aggregate_version": 1,
+  "tenant_id": "synthetic-tenant",
+  "occurred_at": "2026-09-09T00:00:00Z",
+  "payload_reference_id": "synthetic-snapshot-wheat"
+}

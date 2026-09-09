@@ -34,6 +34,68 @@ Each entry records a material choice, why it was made, and what would reverse it
 
 **Why no TanStack Query.** The spec permits it only "if pinned in bootstrap, otherwise preserve a comparably disciplined existing client." No bootstrap exists, so adding it would be an independent dependency upgrade. Phase 1 instead implements a small request layer with the discipline the spec demands: actor/field/season/input-version-scoped keys, abort of stale requests, and no global cache of authenticated responses.
 
+## D-006 — Merged `contract_v1` in rather than rebasing onto it
+
+**Context.** Phase 3 published the bootstrap **after** this branch had five
+commits on it, and named the tag `contract_v1` (the spec had said
+`agrisense-contract-v1`). Because this branch began from an empty repository
+(D-001), `git merge-base` reported **no common ancestor** with either
+`codex/phase-2-intelligence` or `codex/phase-3-platform`. Left alone, that
+makes the final three-way integration merge behave as an unrelated-history
+graft, which is the situation the spec's merge protocol explicitly warns
+against.
+
+**Decision.** `git merge contract_v1 --allow-unrelated-histories --no-ff`, and
+resolve the 12 conflicts by ownership rather than by picking a side wholesale.
+
+**Why merge and not rebase.** Rebasing would give a cleaner linear history and
+make the bootstrap a true ancestor, but it rewrites five already-pushed commits
+and needs a force push. The spec says not to force push, and a merge achieves
+the thing that actually matters — the bootstrap is now an ancestor of this
+branch, so the integrator's `git merge --no-ff` of all three branches behaves
+normally.
+
+**Conflict resolution policy applied.**
+
+| Path | Resolution | Reason |
+|---|---|---|
+| `contracts/**`, `backend/**`, `scripts/**`, `.agents/**`, `AGENTS.md`, `web/lib/generated/**` | Theirs, untouched | Phase 3-owned. Phase 1 does not edit them. |
+| `web/package.json` | Ours (= theirs plus `firebase` and `zod`) | Their manifest lacks the two dependencies P1-01 needs. Still Phase 3's to arbitrate: IR-002. |
+| `web/tsconfig.json`, `next.config.ts`, `tailwind.config.ts`, `vitest.config.ts`, `playwright.config.ts` | Ours | Ours keeps `noUncheckedIndexedAccess`, un-suppressed lint/type errors in the build, the keyframes the components need, and the two E2E profiles the spec requires. |
+| `.gitignore` | Union of both | Neither list was a superset. Kept the broader pattern wherever they differed, including their case-insensitive README rule. |
+| `web/app/globals.css`, `web/app/page.tsx` | Ours | Phase 1-owned; ours carries the missing utility classes and the auth-gated home. |
+| `web/app/layout.tsx` | Union | Ours, with their `AppProvider` nested inside so the pre-existing screens keep working. |
+| `web/components/ui.tsx` | Union | Ours, plus their `BuildSprint` and `StressChip`, which the existing journal screen imports. |
+| `web/lib/utils.ts` | Union | Ours, plus their four legacy formatters, marked `@deprecated`. |
+
+**Consequences.** Two real defects in the bootstrap's own screens surfaced under
+the stricter tsconfig and were fixed: `d.scores[s]` could be `undefined` for a
+stress type absent from the record, and assigning that into the chart row let a
+missing series read as a zero rather than as unknown. Both now coerce to `null`.
+
+## D-007 — Renamed this branch's i18n module to `lib/locale/`
+
+**Context.** The bootstrap ships `web/lib/i18n.ts` (three languages, consumed by
+the pre-existing screens and by its own `components/providers.tsx`). This branch
+had built `web/lib/i18n/` as a directory (five languages, completeness gate).
+TypeScript resolves `@/lib/i18n` to the `.ts` file before the directory's
+`index.ts`, so after the merge every one of this branch's imports would have
+silently bound to the three-language legacy module — compiling, but wrong.
+
+**Decision.** Rename this branch's module to `web/lib/locale/` and leave the
+bootstrap's `lib/i18n.ts` in place for the screens that still use it.
+
+**Why not delete the legacy module.** Its keys are a different set entirely
+(`sprayOn`, `hoursTitle`, `journalTitle`, and so on) and its `stressLabel`
+helper is used by two chart screens. Folding those into `lib/locale/` means
+porting roughly sixty keys into five languages, and the completeness gate would
+correctly fail until Punjabi and Telugu were done. That is P1-04/P1-05 work, not
+merge work. Deleting the module now would instead break working screens.
+
+**Reversal.** When the last screen importing `@/lib/i18n` is rewritten, delete
+`lib/i18n.ts` and `components/providers.tsx`, then optionally rename
+`lib/locale/` back. Tracked as migration debt in progress.md.
+
 ## D-005 — Fixed undefined CSS utility classes carried by the reference snapshot
 
 **Context.** The snapshot's components reference `.skeleton`, `.animate-rise`, `.score-value` and `.tabular`, but `app/globals.css` defines none of them and `tailwind.config.ts` declares no matching keyframes. Those elements render unstyled (and the "loading" skeleton is invisible).

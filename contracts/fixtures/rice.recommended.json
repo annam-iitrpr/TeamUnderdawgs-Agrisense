@@ -1,0 +1,49 @@
+{
+  "recommendation": {
+    "id": "synthetic-rice-recommended",
+    "field_id": "synthetic-field-rice",
+    "season_id": "synthetic-season-rice",
+    "input_version": 1,
+    "input_hash": "synthetic-not-a-live-hash",
+    "generated_at": "2026-09-09T00:00:00Z",
+    "expires_at": "2026-09-09T06:00:00Z",
+    "product_id": null,
+    "rule_version": "synthetic-contract-only",
+    "model_version": null,
+    "evidence_versions": [],
+    "status": "recommended",
+    "readiness": 72.0,
+    "need": 0.8,
+    "timing_fit": 0.9,
+    "viability": 1.0,
+    "stage": null,
+    "stress_curve": [],
+    "stress_onsets": [],
+    "selected_window": {
+      "start_at": "2026-09-09T01:00:00Z",
+      "end_at": "2026-09-09T03:00:00Z"
+    },
+    "alternative_windows": [],
+    "reasons": [
+      {
+        "code": "SYNTHETIC_CONTRACT_FIXTURE",
+        "facts": {
+          "live_advice": false
+        },
+        "evidence_ids": []
+      }
+    ],
+    "product_fit": null,
+    "safety_checks": [],
+    "forecast_provenance": [],
+    "incremental_value": null,
+    "superseded": false
+  },
+  "water": null,
+  "economics": null,
+  "proposed_tasks": [],
+  "data_mode": "demo",
+  "warnings": [
+    "Synthetic schema fixture; not agronomic advice or a provider result."
+  ]
+}

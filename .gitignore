@@ -1,10 +1,14 @@
+# Merged from the contract_v1 bootstrap and the Phase 1 branch. Union of both:
+# where the two lists differed, the broader pattern was kept.
+
 # ── Secrets and environment ────────────────────────────────────────────────
 # Never commit credentials. Real values live in the operator's local env only;
 # deployment secrets come from Secret Manager.
 .env
 .env.*
-!.env.example
 *.env
+*.env.*
+!.env.example
 agrisense.env
 **/.env
 **/.env.local
@@ -13,6 +17,9 @@ agrisense.env
 *.key
 *.p12
 *.pfx
+**/*service-account*.json
+**/*service_account*.json
+**/credentials*.json
 service-account*.json
 *-service-account.json
 gcp-credentials*.json
@@ -21,9 +28,8 @@ secrets/
 .secrets/
 
 # ── Documentation held back until explicitly approved for commit ───────────
-# Tracked separately by the team; do not commit until instructed.
-README.md
-/README*
+# README publication requires explicit operator authorization.
+[Rr][Ee][Aa][Dd][Mm][Ee]*
 
 # ── Node / Next.js ─────────────────────────────────────────────────────────
 node_modules/
@@ -47,7 +53,7 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-.coverage
+.coverage*
 htmlcov/
 
 # ── Test output, traces and browser state ──────────────────────────────────
@@ -67,9 +73,15 @@ local-media/
 media/
 uploads/
 *.sqlite
-*.sqlite3
+*.sqlite*
 *.db
 pgdata/
+
+# ── Infrastructure state ───────────────────────────────────────────────────
+.firebase/
+*.tfstate*
+.terraform/
+*.tfvars
 
 # ── Logs ───────────────────────────────────────────────────────────────────
 *.log

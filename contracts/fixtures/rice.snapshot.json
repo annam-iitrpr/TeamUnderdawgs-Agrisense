@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "snapshot_id": "synthetic-snapshot-rice",
+  "input_hash": "synthetic-not-a-live-hash",
+  "as_of": "2026-09-09T00:00:00Z",
+  "farmer": {
+    "id": "synthetic-farmer",
+    "tenant_id": "synthetic-tenant",
+    "display_name": "Synthetic farmer",
+    "preferred_language": "en",
+    "timezone": "Asia/Kolkata",
+    "consents": [],
+    "linked_channel_ids": [],
+    "version": 1
+  },
+  "field": {
+    "name": "Synthetic rice plot",
+    "area_ha": 2.0,
+    "entered_area": 2.0,
+    "entered_area_unit": "ha",
+    "centroid": {
+      "latitude": 21.0,
+      "longitude": 79.0,
+      "precision_m": null,
+      "source": "manual"
+    },
+    "polygon": null,
+    "irrigation_method": null,
+    "available_water_m3": null,
+    "water_budget_inr": null,
+    "id": "synthetic-field-rice",
+    "farmer_id": "synthetic-farmer",
+    "soil_summary": null,
+    "archived": false,
+    "version": 1
+  },
+  "season": {
+    "id": "synthetic-season-rice",
+    "field_id": "synthetic-field-rice",
+    "crop_id": "rice",
+    "variety": null,
+    "sowing_date": null,
+    "transplanting_date": null,
+    "date_confidence": "unknown",
+    "allocated_area_ha": 1.0,
+    "stage": null,
+    "stage_source": "unknown",
+    "status": "planned",
+    "intercropping_group_id": null,
+    "version": 1
+  },
+  "soil_observations": [],
+  "journal": [],
+  "cost_ledger": []
+}
