@@ -31,6 +31,9 @@ class DomainService:
     def __init__(self, session: Session, actor: Actor, request_id: str, settings: Settings | None=None):
         self.s=session;self.actor=actor;self.request_id=request_id
         self.settings=settings or get_settings()
+        # Set when this request queued work, so the caller can start it immediately rather
+        # than leaving a farmer waiting for the next scheduled worker pass.
+        self.enqueued=False
 
     def own(self, model, id: str, lock: bool=False):
         query=select(model).where(model.id==id,model.tenant_id==self.actor.tenant_id)
@@ -173,6 +176,7 @@ class DomainService:
         row=d.JobRow(**self.owned_values({'id':value.id,'request':payload}),kind=kind,status='pending',attempts=0,created_at=now,updated_at=now)
         self.s.add(row);self.s.flush()
         self.s.add(d.OutboxRow(tenant_id=self.actor.tenant_id,kind='job.requested',aggregate_id=row.id,payload={'job_id':row.id}))
+        self.enqueued=True
         return value
 
     def job_view(self,row):

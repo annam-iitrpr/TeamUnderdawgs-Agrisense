@@ -184,3 +184,20 @@ async def test_a_science_side_failure_reports_the_dependency_rather_than_a_gener
         assert job.payload['error']['code'] == 'DEPENDENCY_UNAVAILABLE'
         assert job.payload['error']['details']['dependency'] == 'ProviderUnavailable'
         assert job.payload['error']['retryable'] is True
+
+
+async def test_queued_work_starts_without_waiting_for_the_scheduled_worker(harness, asha, season):
+    """A farmer asking a question must not wait for the next scheduled pass."""
+    from agrisense.platform import app as app_module
+
+    started: list[str] = []
+    harness.app.state.settings = harness.app.state.settings.model_copy(
+        update={'start_jobs_inline': True})
+    original = app_module.start_queued_work
+    app_module.start_queued_work = lambda app: started.append('drain')
+    try:
+        convo = asha.post('/conversations', {'season_id': season['id']}).json()['data']
+        asha.post(f'/conversations/{convo["id"]}/messages', {'text': 'hello'})
+    finally:
+        app_module.start_queued_work = original
+    assert started, 'queueing work did not start it'

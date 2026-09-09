@@ -1,6 +1,7 @@
 """Contract-driven ASGI surface. Routes come from the frozen registry, never hand-written per endpoint."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable
@@ -82,6 +83,7 @@ def build_dispatcher(app: FastAPI, method: str, path: str, request_model, respon
             else:
                 result = run()
             session.commit()
+            queued = service.enqueued
         except PlatformError as error:
             session.rollback()
             return failure(error, request_id)
@@ -105,10 +107,33 @@ def build_dispatcher(app: FastAPI, method: str, path: str, request_model, respon
             # A stored record that no longer satisfies the contract must not leak as a success.
             log.exception('response failed contract validation on %s request_id=%s', operation, request_id)
             return failure(PlatformError('RESPONSE_CONTRACT_ERROR', 'This result could not be produced. Please retry.', 500, True), request_id)
+        if queued and settings.start_jobs_inline:
+            start_queued_work(request.app)
         return JSONResponse(envelope(validated, request_id), status_code=code)
 
     dispatch.__name__ = f'{method.lower()}_{path}'
     return dispatch
+
+
+def start_queued_work(app: FastAPI) -> None:
+    """Begin work this request queued, without making the caller wait for it.
+
+    A farmer asking a question should not wait for the next scheduled worker pass, which can
+    be a minute away. The scheduled worker still owns retries, backoff and dead lettering;
+    this only shortens the happy path, and a failure here changes nothing because the job
+    stays queued for it.
+    """
+    async def drain() -> None:
+        from agrisense.platform import worker
+        try:
+            await worker.drain_jobs(app.state.sessions, app.state.settings, limit=2)
+        except Exception:
+            log.exception('opportunistic drain failed; the scheduled worker still owns this job')
+
+    try:
+        asyncio.get_running_loop().create_task(drain())
+    except RuntimeError:
+        pass
 
 
 def authorize(request: Request, session) -> Actor:

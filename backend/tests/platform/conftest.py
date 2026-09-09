@@ -33,7 +33,8 @@ def harness(tmp_path):
     # Media is written to a per-test directory so no run can observe another run's objects.
     settings = Settings(app_env='test', database_url='sqlite://', firebase_project_id='demo-agrisense',
                         local_media_dir=str(tmp_path / 'media'), media_signing_secret='test-signing-secret',
-                        meta_app_secret='test-meta-app-secret', whatsapp_webhook_verify_token='test-verify-token')
+                        meta_app_secret='test-meta-app-secret', whatsapp_webhook_verify_token='test-verify-token',
+                        start_jobs_inline=False)
     app = create_app(settings)
     d.Base.metadata.create_all(app.state.engine)
     identities = {

@@ -25,6 +25,7 @@ import type {
   Message,
   MessageCreate,
   MutationReceipt,
+  ProposedMutation,
   Notification,
   Page,
   PlanningRequest,
@@ -375,11 +376,14 @@ export const conversations = {
  * until the farmer confirms that exact proposal. Confirmation is idempotent and
  * returns a receipt; cancelling has no side effect.
  *
- * Note the contract has no `GET /proposals/{id}` — a client receives
- * `proposal_ids` on a message but cannot fetch the proposal's old/new values.
- * See interface-requests.md IR-009.
+ * `GET /proposals/{id}` returns the operation, target, expected_version and the
+ * values it would write, so the farmer sees exactly what they are approving.
  */
 export const proposals = {
+  /** Read what a proposal would change, so Confirm is never a blind approval. */
+  get: (id: string, o: Opts = {}): Promise<Result<ProposedMutation>> =>
+    apiRequest(`/proposals/${encodeURIComponent(id)}`, { signal: o.signal }),
+
   confirm: (
     id: string,
     expectedVersion: number,

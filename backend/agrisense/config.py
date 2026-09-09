@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     max_request_bytes: int = 1048576
     local_media_dir: str = '.local/media'
     job_backend: Literal['local','cloud_tasks'] = 'local'
+    # Start queued work as soon as a request creates it. Tests turn this off so they can
+    # drive the worker explicitly; the scheduled worker still owns retries either way.
+    start_jobs_inline: bool = True
     meta_app_secret: str = ''
     whatsapp_webhook_verify_token: str = ''
     whatsapp_access_token: str = ''
