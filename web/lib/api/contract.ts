@@ -84,8 +84,11 @@ export type Reminder = Schema<"Reminder">;
 /* ── conversations ───────────────────────────────────────────────────────── */
 
 export type Conversation = Schema<"Conversation">;
+export type ConversationCreate = Schema<"ConversationCreate">;
 export type Message = Schema<"Message">;
+export type MessageCreate = Schema<"MessageCreate">;
 export type MutationReceipt = Schema<"MutationReceipt">;
+export type ProposedMutation = Schema<"ProposedMutation">;
 
 /* ── catalog and jobs ────────────────────────────────────────────────────── */
 

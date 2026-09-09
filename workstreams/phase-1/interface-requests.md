@@ -249,3 +249,39 @@ If the backend also converts, we risk double-converting or disagreeing.
 
 **Affected tests.** The area normalisation unit tests, and any comparison
 between `entered_area` and `area_ha` on a stored field.
+
+
+---
+
+## IR-009 — no way to read a proposal, so the confirm card cannot show old vs new
+
+**Current state.** A `Message` carries `proposal_ids: string[]`, and the route
+registry has `POST /proposals/{id}/confirm` and `POST /proposals/{id}/cancel`.
+There is **no `GET /proposals/{id}`** and no proposal collection route.
+
+`ProposedMutation` is a rich object — `operation`, `target_id`,
+`expected_version`, `old_values`, `new_values`, `expires_at`, `status` — but a
+client has no way to fetch it.
+
+**Why this blocks the requirement.** The Phase 1 spec requires the assistant's
+proposal to be shown as "a proposed change card containing old value, new value
+and affected field", and that only Confirm applies it. With ids alone, the UI
+can offer Confirm and Cancel but cannot tell the farmer **what they are
+confirming** — which makes the confirmation meaningless and, worse, invites a
+blind Confirm on a data change. It also cannot show `expires_at`, or detect that
+a proposal already went `expired`.
+
+`confirm` additionally needs an `expected_version` (`VersionedPatch`), and there
+is no way to learn that value without reading the proposal.
+
+**Request.** Either add `GET /proposals/{id}` (and ideally
+`GET /conversations/{id}/proposals`), or embed the full `ProposedMutation`
+objects in the assistant `Message` instead of just their ids.
+
+**Reason.** As it stands, Phase 1 can only render a Confirm button for an opaque
+id. Rather than ship that, the Ask screen currently states that a message
+proposes N changes and does not offer a confirm control at all — a missing
+control is safer than one that applies an unseen change to a farmer's records.
+
+**Affected tests.** The P1-08 propose/cancel/confirm journey, and the
+"Cancel leaves the database unchanged, Confirm changes it once" acceptance case.

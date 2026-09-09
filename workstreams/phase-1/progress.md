@@ -44,7 +44,7 @@ Status vocabulary: `pending` · `in-progress` · `verified` · `external-blocked
 | P1-05 | Readiness, forecast and biological fit | pending | Needs Phase 2 evaluation output |
 | P1-06 | R1 live ROI and water views | pending | Needs `/economics`, `/water` |
 | P1-07 | Season Journal and action capture | in-progress | Timeline, filters, entry form built and rendering live. Blocked from real use: no season exists (crop catalogue 503). Photo/voice upload deliberately not built |
-| P1-08 | Ask assistant with authorized context | pending | Needs `/conversations`, proposals |
+| P1-08 | Ask assistant with authorized context | in-progress | Conversation, send and thread work against the live API. **The assistant returns no replies** (Gemini unconfigured), and the screen says so rather than spinning. Confirm control withheld pending IR-009 |
 | P1-09 | Notifications, reminders, seven-day to-do | in-progress | Seven-day plan, notifications history and reminders panel built against live (empty) endpoints. Mutations unproven — no tasks exist. Supersede handling blocked by IR-007 |
 | P1-10 | End season and prediction review | pending | Needs `/seasons/{id}/close` |
 | P1-11 | Agronomist dashboard | in-progress | Panels built; the realistic path (403 for a farmer account) is verified and handled with no client-side role switch. Authorised views unreachable without a role grant |

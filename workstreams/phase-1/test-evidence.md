@@ -698,3 +698,52 @@ No task, notification or reminder mutation has been exercised against real data
 and 409-conflict paths are code-complete but unproven. No journal entry has been
 created, for the same reason. The agronomist panels beyond the gate are
 unreachable without a role grant.
+
+## Slice 15 — P1-08 Ask, and the honest dead end
+
+| Check | Result |
+|---|---|
+| Typecheck / lint / unit | exit 0 · clean · 108/108 |
+| Production build | exit 0 — `/ask` 3.13 kB |
+| Live probe | `POST /conversations` 201, `POST .../messages` 201, `GET .../messages` returns **only the farmer's turn** |
+| Browser | question sent, then "No answer available" after a bounded wait |
+
+### What the API actually does without Gemini
+
+Probed against the deployed service with a real ID token: a conversation is
+created (201), the farmer's message is stored (201), and fetching the thread
+returns that message and nothing else. No assistant turn is ever produced,
+because Gemini is not configured in the deployed environment.
+
+### Why the screen is built around that
+
+A chat UI that accepts a question and then spins forever is the worst possible
+rendering of this state: the farmer waits, assumes it is slow, and asks again.
+So the screen posts the message, looks for an assistant turn a bounded number of
+times, and then stops and says so.
+
+Verified in the browser: after sending "When should I spray my cotton?" the
+thread shows the question, then **"No answer available — your question was
+saved, but the assistant is not answering: the language model is not configured
+in this environment, so there is nothing to generate a reply. Trying again will
+get the same result."** Two working destinations are offered instead. No
+spinner is left running.
+
+The context strip states what the assistant can see — this farmer's own field
+records only, and explicitly not other farmers.
+
+### Deliberately not offered
+
+- **The confirm control for a proposed change.** The contract has no way to read
+  a proposal (IR-009), so a Confirm button would ask the farmer to approve an
+  unseen change to their own data, and `confirm` needs an `expected_version`
+  that cannot be learned. The screen says a message proposes N changes and stops
+  there. A missing control is safer than a blind one.
+- Voice input and photo attachment, which need the unverified media path.
+
+### Not verified
+
+No assistant reply has ever been rendered, so bubble layout for an assistant
+turn, citation rendering from `source_record_ids`, and the proposal path are all
+unexercised. They will need retesting once a Gemini key reaches the deployed
+service.

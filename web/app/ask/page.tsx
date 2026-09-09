@@ -1,18 +1,28 @@
 "use client";
 
-import { NotBuiltYet } from "@/features/pwa/not-built-yet";
+import { Skeleton } from "@/components/ui";
+import { AskScreen } from "@/features/ask/ask-screen";
+import { useAuth } from "@/features/auth/auth-provider";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function AskPage() {
-  return (
-    <NotBuiltYet
-      title="Ask"
-      requirement="P1-08 · assistant with authorized context"
-      summary="Ask about your own field in your own language, by text or voice. Answers cite the records they came from, and any change to your data is shown as a proposal you confirm — never applied silently."
-      dependsOn={[
-        "POST /api/v1/conversations",
-        "POST /api/v1/conversations/{id}/messages",
-        "Gemini configuration (absent from the supplied environment)",
-      ]}
-    />
-  );
+  const { status } = useAuth();
+  const router = useRouter();
+
+  // The assistant answers from the farmer's own records, so it needs a session.
+  useEffect(() => {
+    if (status === "signed-out") router.replace("/sign-in");
+  }, [status, router]);
+
+  if (status === "signed-out" || status === "initialising") {
+    return (
+      <main id="main" className="mx-auto w-full max-w-[48rem] space-y-4 px-4 py-6" aria-busy="true">
+        <Skeleton className="h-20 w-full rounded-card" />
+        <Skeleton className="h-40 w-full rounded-card" />
+      </main>
+    );
+  }
+
+  return <AskScreen />;
 }

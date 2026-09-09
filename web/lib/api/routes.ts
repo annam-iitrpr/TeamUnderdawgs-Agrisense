@@ -23,6 +23,8 @@ import type {
   JournalEntry,
   LocationResult,
   Message,
+  MessageCreate,
+  MutationReceipt,
   Notification,
   Page,
   PlanningRequest,
@@ -82,6 +84,8 @@ export const CONSUMED_PATHS = [
   "/api/v1/reminders",
   "/api/v1/conversations",
   "/api/v1/conversations/{id}/messages",
+  "/api/v1/proposals/{id}/confirm",
+  "/api/v1/proposals/{id}/cancel",
   "/api/v1/soil/extractions",
   "/api/v1/soil/extractions/{id}/confirm",
   "/api/v1/jobs/{id}",
@@ -345,6 +349,60 @@ export const conversations = {
   messages: (id: string, o: ListOpts = {}): Promise<Result<Page<Message>>> =>
     apiRequest(`/conversations/${encodeURIComponent(id)}/messages`, {
       query: pageQuery(o),
+      signal: o.signal,
+    }),
+
+  /** 201. Stores the farmer's turn; the assistant's reply, if any, arrives as a
+   *  separate message in the thread rather than in this response. */
+  postMessage: (
+    id: string,
+    body: MessageCreate,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<Message>> =>
+    apiRequest(`/conversations/${encodeURIComponent(id)}/messages`, {
+      method: "POST",
+      body,
+      idempotencyKey,
+      signal: o.signal,
+    }),
+};
+
+/**
+ * Proposed mutations.
+ *
+ * The assistant may propose a change to the farmer's data; nothing is applied
+ * until the farmer confirms that exact proposal. Confirmation is idempotent and
+ * returns a receipt; cancelling has no side effect.
+ *
+ * Note the contract has no `GET /proposals/{id}` — a client receives
+ * `proposal_ids` on a message but cannot fetch the proposal's old/new values.
+ * See interface-requests.md IR-009.
+ */
+export const proposals = {
+  confirm: (
+    id: string,
+    expectedVersion: number,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<MutationReceipt>> =>
+    apiRequest(`/proposals/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      body: { expected_version: expectedVersion },
+      idempotencyKey,
+      signal: o.signal,
+    }),
+
+  cancel: (
+    id: string,
+    expectedVersion: number,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<MutationReceipt>> =>
+    apiRequest(`/proposals/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+      body: { expected_version: expectedVersion },
+      idempotencyKey,
       signal: o.signal,
     }),
 };
