@@ -103,3 +103,49 @@ merge work. Deleting the module now would instead break working screens.
 **Decision.** Define them properly — keyframes in the Tailwind config, component classes in `globals.css` — rather than deleting the usages.
 
 **Why it matters.** This is a real defect inherited from the snapshot, not a cosmetic preference: an invisible skeleton means the loading state the spec requires does not actually exist.
+
+
+## D-008 — `kanal` is treated as the Punjab kanal, and flagged
+
+**Context.** The contract's `entered_area_unit` accepts `ha | acre | sqm |
+kanal`. A kanal is **not** a single nationally-defined unit: in Punjab and
+Haryana it is 5,445 sq ft (505.857 m², 0.0505857 ha), and elsewhere in India a
+4,500 sq ft kanal is used, which is about 17% smaller.
+
+**Decision.** Use the Punjab value, since the pilot geography is Punjab and
+Vidarbha, and additionally mark `kanal` as ambiguous in `lib/area.ts` so the UI
+can warn and always echo the converted hectare figure back for confirmation.
+
+**Why it matters.** Area scales every irrigation volume and every rupee figure
+for the whole season. A 17% area error is not cosmetic, and it would be
+invisible to the farmer if the entry were accepted silently.
+
+**Open — needs mentor confirmation.** Recorded in interface-requests.md as a
+question for whoever owns the reference data, because the correct behaviour may
+be to require a region before accepting the unit at all.
+
+## D-009 — in-memory Storage in the test setup rather than a Node flag
+
+**Context.** Node 24 ships an experimental global `localStorage` that is
+disabled unless the process is started with `--localstorage-file`. When vitest
+populates globals from jsdom's window, that disabled global wins and
+`window.localStorage` is `undefined`, even though the jsdom document has a valid
+non-opaque origin (`http://localhost:3000/`, confirmed by probe).
+
+**Decision.** Install a minimal in-memory `Storage` in `tests/setup.ts`.
+
+**Why not the Node flag.** Every contributor and every CI job would have to
+remember to pass it. A setup file travels with the repository.
+
+**Fidelity.** The polyfill implements the whole surface the application uses —
+`getItem`, `setItem`, `removeItem`, `key`, `length`, `clear` — with the same
+string coercion as the real API, so tests exercise real code paths. It
+deliberately does not emulate quota exhaustion or blocked site data; the
+application wraps every access in try/catch and those branches are covered by
+writing invalid values directly.
+
+One test had to change as a result: it enumerated keys with `Object.keys()`,
+which real `Storage` supports through property proxying but a plain class does
+not. It now uses `key()`/`length` — which is what the auth provider's
+`clearPerUserState()` actually uses, so the test is closer to the real code path
+than it was before.

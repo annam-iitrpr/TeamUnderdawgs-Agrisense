@@ -390,3 +390,54 @@ Browser requests from `http://localhost:3000` remain blocked by CORS, so the
 `live-local` Playwright profile cannot run yet — IR-005 asks for the origin to
 be allowed. Until then, screen-level evidence stays `contract-fixture` profile
 and is labelled as such.
+
+## Slice 10 — P1-02 foundation: area normalisation and draft persistence
+
+The two places where an onboarding bug would be silent and expensive, built and
+tested before any of the six screens.
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 |
+| Unit tests | `npx vitest run` | exit 0 — **108 passed / 108**, 7 files (was 74) |
+
+### Area normalisation — 17 tests
+
+- Every unit in the contract converts correctly: acre to 0.4046856422 ha,
+  10,000 sqm to 1 ha, and the **Punjab kanal** to 0.0505857 ha (8 kanal ≈ 1
+  acre). `kanal` is explicitly flagged as regionally ambiguous — see D-008.
+- Every unit round-trips through hectares and back.
+- A comma decimal separator is accepted, since several Indian keyboards emit it.
+- `"two acres"`, `"2 acres"`, `"1.2.3"`, `"1e5"` and `"-3"` are all rejected,
+  and an empty entry is reported distinctly from a malformed one so the UI can
+  show the right message.
+- Zero and negative areas are rejected rather than accepted as a field.
+- The plausibility guard is applied **after** conversion, not before:
+  50,000,000 sqm is 5,000 ha and is accepted, so a large typed number in a small
+  unit is not rejected for looking big.
+- Rounding to six decimals removes float artefacts (2.5 acres → exactly
+  1.011714 ha) without collapsing a 100 m² plot to zero.
+
+### Draft persistence — 17 tests
+
+- A draft round-trips, so a refresh restores unfinished work.
+- The typed area survives verbatim (`"2,50"` stays `"2,50"`), because the
+  echo-back has to show the farmer their own number rather than a reformatted one.
+- Drafts are scoped per account: farmer B cannot load farmer A's draft, and
+  clearing one leaves the other intact.
+- Everything is stored under the `agrisense.draft.` prefix that the auth
+  provider purges on sign-out and on identity change — asserted by enumerating
+  storage with the same `key()`/`length` API that purge uses.
+- **The idempotency key is generated once, with the draft, and survives a
+  reload.** This is the actual mechanism behind "submitting twice creates one
+  field": a retry after a timeout reuses the same key so the server collapses
+  the writes. Generating it at submit time would defeat it.
+- A draft written by an older shape, corrupt JSON, or JSON that is not a draft
+  all return `null` rather than throwing or resuming a half-understood structure.
+- Step gating requires only service consent, a location and a valid area.
+  Crop and soil can both be deferred and the field still submits — the spec is
+  explicit that missing *optional* information must raise a visible data request
+  later rather than block onboarding.
+
+**Not built yet:** the six onboarding screens themselves. This slice is the
+logic beneath them.
