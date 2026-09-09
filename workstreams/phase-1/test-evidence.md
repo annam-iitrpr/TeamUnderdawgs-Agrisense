@@ -279,3 +279,66 @@ defaults to `data_mode: unavailable` rather than `live`.
 **Not verified:** no call has been made against the running API. Route paths and
 payload types are checked against the generated contract, which is a compile-time
 guarantee, not an integration one.
+
+## Slice 8 — responsive shell and installable PWA
+
+Implements the user directive relayed through Phase 3's interface requests:
+*"Build a full-width desktop experience with responsive tablet/mobile layouts
+and installable PWA support. The inherited phone-frame layout is not acceptable
+as the desktop website."*
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npx tsc --noEmit` | exit 0 |
+| Lint | `npx next lint` | exit 0, clean |
+| Unit tests | `npx vitest run` | exit 0 — 74/74 |
+| Production build | `npx next build` | exit 0 — 19 routes incl. `/manifest.webmanifest` |
+| **Playwright (first E2E suite)** | `npx playwright test --project=desktop` | **20 passed** |
+| Negative test, overflow | injected a 3000px element into `/reset-password` | **failed at all four breakpoints as intended**, then green again on revert |
+| Icon dimensions | `magick identify` | 192, 512, maskable 192, maskable 512, apple 180 — all sRGB PNG |
+| Assets over HTTP | `curl` against `next start` | `/manifest.webmanifest`, `/sw.js`, `/offline.html` and every icon return 200 with correct content types |
+
+### Acceptance criteria, each actually asserted
+
+- **No horizontal overflow at 360 / 768 / 1280 / 1920px** on `/sign-in`,
+  `/sign-up` and `/reset-password`. The assertion measures
+  `scrollWidth - clientWidth` and, on failure, names the widest offending
+  element and where it ends — so a regression is actionable rather than just
+  "something overflows".
+- **Primary action reachable** at every breakpoint, fully inside the viewport,
+  with height ≥ 44px (the spec's touch-target floor).
+- **Installable manifest**: linked in the head, `display: standalone`, both 192
+  and 512 icons present, at least one `maskable`, and every declared icon
+  resolves as `image/png`.
+- **Authenticated content is never cached offline.** Asserted against the
+  shipped worker: `/api/` and `/_next/data/` are excluded, non-GET is passed
+  through untouched, and there is no `cache.put(request…)` for a navigation.
+  The precached offline page is checked to contain no token, email or record id.
+
+### Why the service worker is written this way
+
+It precaches only the offline page and the icons. Navigation responses are
+fetched from the network and **never** written to the cache, because an
+authenticated HTML document would land there. There is no runtime caching of API
+data at all — beyond the privacy rule, a cached spray recommendation is
+actively harmful, since the window it names may already have passed. Sign-out
+also posts a purge message to the worker as a second line of defence.
+
+### Layout
+
+`components/app-shell.tsx` replaces `PhoneFrame` for new screens: bottom
+navigation below 1024px, a persistent sidebar at and above it, content capped at
+100rem and centred so wide monitors gain columns rather than 1900px-long text
+lines. `min-w-0` on the flex child is what actually stops a wide chart or table
+pushing the page sideways.
+
+`/plan`, `/journal` and `/ask` are routed to an honest "not built yet" screen
+naming the requirement and the endpoints each is waiting on, because the shell's
+navigation must not lead to a 404 and must not show invented figures.
+
+**Not verified:** installation was not performed on a real device, iOS Safari
+and Firefox were not exercised (both lack `beforeinstallprompt`, which is why
+the install button renders only when the browser actually offers it), and the
+offline fallback was not tested by pulling the network in a browser. The suite
+runs unauthenticated against public routes, so it is `contract-fixture`-profile
+evidence about layout and PWA wiring — not integration evidence.

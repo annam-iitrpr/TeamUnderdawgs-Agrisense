@@ -88,6 +88,15 @@ function clearPerUserState(): void {
   } catch {
     // Nothing to clear if storage is unavailable.
   }
+
+  // Belt and braces. The service worker is written never to cache an
+  // authenticated response, but if that ever regresses, sign-out still purges
+  // whatever it holds rather than leaving it for the next person on the device.
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: "AGRISENSE_PURGE_CACHES" });
+  } catch {
+    // No worker, or messaging unavailable.
+  }
 }
 
 function wrap(error: unknown): AuthError {
