@@ -9,6 +9,7 @@ import pytest
 from agrisense.contracts_generated import models as api
 from agrisense.science.contract_bridge import measurement, to_contract
 from agrisense.science.facade import compare_crops, evaluate_season, summarize_season
+from agrisense.science.references import reference_bundle
 from agrisense.science.scenarios import economic_estimates
 from agrisense.science.weather import Daily, Hour, WeatherBundle
 
@@ -81,6 +82,32 @@ def test_facade_generated_contract_replay_and_nulls():
     assert result.recommendation.stress_curve[0].value == 0.5
     assert result.data_mode == "demo"
     assert result.proposed_tasks == []
+
+
+def test_production_reference_loader_is_fresh_and_unreviewed():
+    refs = reference_bundle()
+    assert {crop.id for crop in refs.crops} == {"rice", "wheat", "maize", "soybean", "cotton"}
+    assert refs.products == []
+    assert refs.parameters == {}
+    assert refs.evidence == []
+    snap = snapshot()
+    result = evaluate_season(snap, forecast(snap), refs)
+    assert result.recommendation.status == "insufficient_data"
+    assert result.recommendation.selected_window is None
+    assert result.economics.profit.p50 is None
+    refs.crops.clear()
+    assert len(reference_bundle().crops) == 5
+
+
+def test_weather_fetched_after_snapshot_preserves_facts_and_replays():
+    snap = snapshot()
+    before = snap.model_dump_json()
+    weather = forecast(snap)
+    weather.retrieved_at = snap.as_of + timedelta(seconds=30)
+    result = evaluate_season(snap, weather, reference_bundle())
+    assert result.recommendation.generated_at == weather.retrieved_at
+    assert snap.model_dump_json() == before
+    assert result == evaluate_season(snap, weather, reference_bundle())
 
 
 def test_foreign_future_and_bad_units_rejected():

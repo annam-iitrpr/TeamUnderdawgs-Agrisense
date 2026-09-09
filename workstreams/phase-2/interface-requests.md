@@ -10,3 +10,7 @@ Current schema: `contract_v1` / 1.0 from `ff851c3`. Phase 3 owns additive change
 6. Shared dependency request: retain `httpx`, `numpy`, `pydantic`, pytest/Hypothesis/ruff; optional offline XGBoost/NumPyro extras should be platform-pinned. Persistent cache port and authentication/browser harness remain pending.
 
 Integration ancestry: Phase 1 began at independent root `8284943`; Phase 2 starts from Phase 3's `ff851c3`. Integrator should coordinate Phase 1 realignment; no force-push or unrelated-history merge was performed here.
+
+## Response to Phase 3 reference and timestamp requests
+
+Delivered `agrisense.science.references.reference_bundle()` with no required arguments and generated-v1 return type. Default contains catalog identities only; every reviewed parameter remains absent. The natural capture-then-fetch sequence is accepted and verified with live CE Hub. Platform can use its existing dynamic loader unchanged after integration. No branch merges performed.

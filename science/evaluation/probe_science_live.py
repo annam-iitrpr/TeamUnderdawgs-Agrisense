@@ -10,6 +10,7 @@ from pathlib import Path
 from agrisense.contracts_generated import models as api
 from agrisense.science.facade import build_weather_bundle, evaluate_season
 from agrisense.science.providers import ProviderUnavailable
+from agrisense.science.references import reference_bundle
 
 
 async def run(env_path: Path) -> int:
@@ -28,13 +29,11 @@ async def run(env_path: Path) -> int:
         latitude=30.97, longitude=76.47, source="manual"
     )
     try:
-        forecast = await build_weather_bundle(
-            snapshot.field.centroid, 2, datetime.now(UTC)
-        )
         snapshot.as_of = datetime.now(UTC)
-        references = api.ReferenceBundle(
-            version="no-approved-production-references", crops=[], products=[]
+        forecast = await build_weather_bundle(
+            snapshot.field.centroid, 2, snapshot.as_of
         )
+        references = reference_bundle()
         result = evaluate_season(snapshot, forecast, references)
     except (ProviderUnavailable, ValueError, TypeError, KeyError) as exc:
         # This CLI deliberately suppresses all exception messages and tracebacks.

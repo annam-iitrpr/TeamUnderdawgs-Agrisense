@@ -7,6 +7,34 @@ from agrisense.contracts_generated import models as api
 from .units import finite
 
 
+def reference_bundle() -> api.ReferenceBundle:
+    """Return the catalog available without approved regional/product evidence.
+
+    Catalog inclusion is not scientific approval. Each call returns fresh models;
+    deployments can inject separately reviewed bundles into the pure facade.
+    """
+    return api.ReferenceBundle(
+        version="rules-only-unreviewed-v1",
+        crops=[
+            api.Crop(
+                id=crop_id,
+                name=name,
+                supported_for_biological_advice=crop_id in {"rice", "wheat", "cotton"},
+            )
+            for crop_id, name in (
+                ("rice", "Rice"),
+                ("wheat", "Wheat"),
+                ("maize", "Maize"),
+                ("soybean", "Soybean"),
+                ("cotton", "Cotton"),
+            )
+        ],
+        products=[],
+        evidence=[],
+        parameters={},
+    )
+
+
 def reviewed_parameters(references: api.ReferenceBundle, key: str, as_of: date) -> dict | None:
     record = references.parameters.get(key)
     if not record or record.get("reviewed") is not True:

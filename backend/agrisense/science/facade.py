@@ -185,8 +185,13 @@ def evaluate_season(
 ) -> api.EvaluationBundle:
     _check_snapshot(snapshot)
     weather = from_contract(forecast)
-    if forecast.retrieved_at > snapshot.as_of:
-        raise ValueError("forecast retrieval exceeds immutable snapshot as_of")
+    original_snapshot = snapshot
+    # The platform captures farm facts before fetching weather. Use the later
+    # supplied timestamp for evaluation without changing those immutable facts.
+    # Archived forecast eligibility is checked by the offline evaluation pipeline.
+    snapshot = snapshot.model_copy(
+        update={"as_of": max(utc(snapshot.as_of), utc(forecast.retrieved_at))}
+    )
     now = snapshot.as_of.astimezone(IST).date()
     curve = _stress(snapshot, forecast)
     config = references.parameters.get("onset", {})
@@ -328,7 +333,7 @@ def evaluate_season(
     identity = sha256(
         json.dumps(
             [
-                snapshot.model_dump(mode="json"),
+                original_snapshot.model_dump(mode="json"),
                 forecast.model_dump(mode="json"),
                 references.model_dump(mode="json"),
                 RULE_VERSION,

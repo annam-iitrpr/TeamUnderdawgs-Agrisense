@@ -78,3 +78,11 @@ Next: publish the core arithmetic milestone; complete verified provider normaliz
 - Forecast bias candidates use archived issue/valid times, QC/representativeness, observation availability cutoffs and lead bands. Mean offsets bounded, quantile mapping rejects unsupported tails; no promotion performed.
 - Full scoped suite: 96 passed. Formatter/lint checks passed.
 - Next: complete historical adapter/evaluation delivery and final scoped audit; platform runtime and approved scientific records remain external.
+
+## Verified milestone 7
+
+- Published the gateway-compatible `agrisense.science.references.reference_bundle()` factory: five crop identities, versioned unreviewed status, no fabricated parameters/products/evidence.
+- Evaluation accepts weather retrieved after snapshot capture, uses the later supplied timestamp, preserves caller facts and deterministic replay.
+- Current worktree suite: 103 passed, including the pending history/calibration slice. Scoped lint passed.
+- Live CE Hub probe passed with natural snapshot-before-fetch ordering: 46 hours, 3 daily records, 6 stress points; recommendation remains insufficient_data. Initial sandbox attempt was unavailable; approved network rerun passed.
+- Read-only coordination: Phase 3 at 956fa1c and Phase 1 at 6ba0eab; generated models differ only in import formatting. No branch merge performed.
