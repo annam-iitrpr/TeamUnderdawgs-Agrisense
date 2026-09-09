@@ -12,6 +12,9 @@ metadata:
 spec:
   template:
     metadata:
+      # Naming the revision after the commit forces a new one, so a previously failed
+      # revision with an identical spec is never silently reused.
+      name: agrisense-api-${REVISION_SUFFIX}
       annotations:
         autoscaling.knative.dev/minScale: "0"
         autoscaling.knative.dev/maxScale: "4"

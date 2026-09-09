@@ -49,8 +49,22 @@ echo "Run migrations against the target database before continuing (scripts/dev/
 read -r -p "Migrations applied? [y/N] " confirmed
 [[ "$confirmed" == "y" ]] || { echo "Aborted."; exit 1; }
 
+export REVISION_SUFFIX="${TAG}-$(date +%H%M%S)"
 RENDERED="$(mktemp)"
 trap 'rm -f "$RENDERED"' EXIT
 envsubst < "$ROOT/infra/cloudrun-api.yaml" > "$RENDERED"
 gcloud run services replace "$RENDERED" --region "$GCP_REGION" --project "$GCP_PROJECT_ID"
-echo "Deployed ${API_IMAGE}"
+
+# `replace` succeeds even when the new revision never becomes ready, in which case traffic
+# silently stays on the old one. Verify what is actually serving rather than trusting exit 0.
+SERVING="$(gcloud run services describe agrisense-api --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+  --format='value(status.traffic[0].revisionName)')"
+READY="$(gcloud run revisions describe "$SERVING" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+  --format='value(spec.containers[0].image)')"
+if [[ "$READY" != "$API_IMAGE" ]]; then
+  echo "Deploy did not take: ${SERVING} is serving ${READY}, not ${API_IMAGE}." >&2
+  gcloud run revisions list --service agrisense-api --region "$GCP_REGION" --project "$GCP_PROJECT_ID" \
+    --format='value(metadata.name,status.conditions[0].status,status.conditions[0].message)' | head -3 >&2
+  exit 1
+fi
+echo "Deployed and serving ${API_IMAGE}"
