@@ -14,13 +14,13 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 | P3-02 API workflows | in-progress | 57 routes dispatch from the frozen registry. Implemented: profile, fields, seasons, journal, ledger, tasks, notifications, reminders, conversations, proposals, media, soil queueing, channels, closure. Still dependency-gated: planning, catalog, evaluation results, agronomist evidence/backtests |
 | P3-03 jobs/outbox | done | Leased jobs with exponential backoff and dead lettering; per-consumer outbox receipts so one failing subscriber cannot dead-letter an event for the others; stale tasks expire |
 | P3-04 WhatsApp | in-progress | Signature-verified ingestion, once-per-message-id inbox, hashed phone identities, one-time link codes, consent-gated queued outbound. No message has been sent. Blocked on `META_APP_SECRET`, which is absent from the supplied env |
-| P3-05 media/Gemini | in-progress | Media custody complete and tested: tickets, digest/size/magic verification, tenant-prefixed keys, short-lived owner-only reads. Gemini absent from the env, so extraction stays queued and unimplemented |
-| P3-06 assistant | pending | proposal contract defined |
-| P3-07 reminders/analytics | pending | task/notification/reminder distinctions defined |
+| P3-05 media/Gemini | in-progress | Media custody complete and tested. Privacy export writes through the same store. Gemini absent from the env, so soil extraction stays queued and unimplemented |
+| P3-06 assistant | in-progress | Full loop built: grounded context from the caller's own records, contract-validated drafts, single-use expiring proposals confirmed through the normal versioned route. The model never writes. Gemini is not configured, so live replies report their dependency |
+| P3-07 reminders/analytics | in-progress | Reminder delivery with timezone-aware quiet hours, settled-work cancellation, late-drop and once-only delivery. Analytics export not started |
 | P3-08 deployment | done | Live at https://agrisense-api-788265611154.asia-south1.run.app. Least-privilege runtime service account, private media bucket, Secret Manager, Cloud SQL socket; verified end to end with a real Firebase token |
 | P3-09 env | in-progress | Supplied `agrisense.env` stays outside the repo. Confirmed present: Firebase, Cloud SQL, WhatsApp, meteoblue, CEHub. Confirmed absent: `META_APP_SECRET`, any Gemini key/model |
 | P3-10 live setup | in-progress | Cloud SQL, Firebase Auth and Cloud Run all working. Weather, WhatsApp and Gemini still unexercised; `META_APP_SECRET` and Gemini configuration are absent |
-| P3-11 acceptance | in-progress | 40 automated tests green in CI. No browser, live-provider or end-to-end demo run yet |
+| P3-11 acceptance | in-progress | 58 automated tests green, plus a verified production round trip. No browser run and no live provider call yet |
 | P3-12 integration | in-progress | Phase 2 branched from `ff851c3` and shares ancestry. Phase 1 started from an unrelated root, so `.gitignore` and `web/` will need a reconciled merge |
 
 ## Executed checks
@@ -37,7 +37,10 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 - `docker build` succeeded and the container was smoke tested: `/healthz` 200, anonymous
   `/api/v1/fields` 401 with an `UNAUTHENTICATED` envelope, `/readyz` 503 without a database,
   process running as uid 10001.
-- GitHub Actions run 34399517969 (`dc167ec`): both jobs green.
+- GitHub Actions green on every completed run since `dc167ec`.
+- 58 offline tests plus 2 live-only Firebase tests.
+- A pre-commit hook now runs the secret scan, lint and the contract check, after lint slipped
+  past a manual check twice; piping a command hides its exit code.
 - Reviewed community Karpathy skill at pinned commit; MIT license fetch returned 404 and attribution/license completion remains pending.
 
 ## Decisions and new requirements
@@ -76,17 +79,18 @@ intended behaviour until the dependency exists:
   plus a `ReferenceBundle` builder, which nobody publishes yet (see interface-requests.md).
 - `/catalog/*` — needs the reviewed catalog from the same source.
 - `/agronomist/evidence`, `/agronomist/backtests` — need reviewed evidence records.
-- Assistant replies, soil extraction and privacy export/delete jobs — queued and dead-lettered
-  honestly; Gemini is not configured in the supplied environment.
+- Assistant replies and soil extraction — queued and dead-lettered honestly; Gemini is not
+  configured in the supplied environment. Account export and erasure are implemented and
+  tested, and need no external dependency.
 
 ## Next concrete steps
 
-1. Firebase email/password browser harness, to prove real token verification end to end.
-2. Assistant proposal loop behind a guarded Gemini client, mirroring the science gateway.
-3. Reminder scheduling with quiet hours, and the notification delivery path.
-4. Deploy a Cloud Run revision and record the URL.
-5. Integration: reconcile `.gitignore` and `web/` with Phase 1, whose branch has an unrelated
-   root, then merge all three streams.
+1. Analytics export, the last unstarted requirement.
+2. Soil extraction and live assistant replies, once Gemini configuration exists.
+3. Evaluation end to end, once Phase 2 publishes a `ReferenceBundle` builder.
+4. Set the real CORS origin once Phase 1 deploys the web app.
+5. Integration, when the user calls for it. Phase 1 has merged `contract_v1`, so all three
+   branches now share ancestry and no unrelated-root reconciliation is needed.
 
 ## Contract publication validation
 
