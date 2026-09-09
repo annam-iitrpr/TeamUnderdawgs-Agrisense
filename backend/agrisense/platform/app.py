@@ -16,7 +16,7 @@ from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.contracts_generated.routes import ROUTES
 from agrisense.platform import db as d
-from agrisense.platform import media
+from agrisense.platform import media, whatsapp
 from agrisense.platform.auth import Actor, FirebaseVerifier, enroll
 from agrisense.platform.errors import PlatformError
 from agrisense.platform.service import DomainService
@@ -166,6 +166,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 error = PlatformError('UPLOAD_LINK_INVALID', 'This link is not valid.', 403)
             return failure(error, request.state.request_id)
         return Response(status_code=204)
+
+    @app.get('/webhooks/whatsapp', include_in_schema=False)
+    async def whatsapp_verify(request: Request) -> Response:
+        params = request.query_params
+        try:
+            challenge = whatsapp.verify_subscription(
+                settings, params.get('hub.mode', ''), params.get('hub.verify_token', ''),
+                params.get('hub.challenge', ''))
+        except PlatformError as error:
+            return failure(error, request.state.request_id)
+        return Response(challenge, media_type='text/plain')
+
+    @app.post('/webhooks/whatsapp', include_in_schema=False)
+    async def whatsapp_deliver(request: Request) -> Response:
+        """Meta retries anything that is not answered quickly, so this only records and queues."""
+        raw = await request.body()
+        request_id = request.state.request_id
+        if len(raw) > settings.max_request_bytes:
+            return failure(PlatformError('REQUEST_TOO_LARGE', 'This request is too large.', 413), request_id)
+        try:
+            whatsapp.verify_signature(settings, raw, request.headers.get('X-Hub-Signature-256', ''))
+            payload = json.loads(raw or b'{}')
+        except PlatformError as error:
+            return failure(error, request_id)
+        except json.JSONDecodeError:
+            return failure(PlatformError('INVALID_JSON', 'The request body is not valid JSON.'), request_id)
+        session = app.state.sessions()
+        try:
+            for event in whatsapp.extract(payload):
+                if whatsapp.record(session, event):
+                    whatsapp.ingest(session, event)
+            session.commit()
+        except SQLAlchemyError:
+            session.rollback()
+            log.exception('whatsapp ingestion failed request_id=%s', request_id)
+            return failure(PlatformError('STORAGE_UNAVAILABLE', 'Storage is temporarily unavailable.', 503, True), request_id)
+        finally:
+            session.close()
+        # Meta only needs an acknowledgement; nothing about the account is disclosed here.
+        return Response(status_code=200)
 
     @app.get('/healthz', include_in_schema=False)
     async def healthz() -> dict[str, str]:

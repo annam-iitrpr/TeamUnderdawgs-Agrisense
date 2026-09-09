@@ -33,6 +33,10 @@ def utcnow() -> datetime:
 def new_id() -> str:
     return uuid4().hex
 
+def aware(value: datetime) -> datetime:
+    # SQLite returns naive datetimes; every stored instant is UTC by construction.
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
 JSONType=JSON().with_variant(JSONB(),'postgresql')
 
 class Base(DeclarativeBase):

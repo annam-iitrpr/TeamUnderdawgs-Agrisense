@@ -32,7 +32,8 @@ def harness(tmp_path):
 
     # Media is written to a per-test directory so no run can observe another run's objects.
     settings = Settings(app_env='test', database_url='sqlite://', firebase_project_id='demo-agrisense',
-                        local_media_dir=str(tmp_path / 'media'), media_signing_secret='test-signing-secret')
+                        local_media_dir=str(tmp_path / 'media'), media_signing_secret='test-signing-secret',
+                        meta_app_secret='test-meta-app-secret', whatsapp_webhook_verify_token='test-verify-token')
     app = create_app(settings)
     d.Base.metadata.create_all(app.state.engine)
     identities = {
@@ -99,3 +100,21 @@ def season(asha, field):
     response = asha.post(f'/fields/{field["id"]}/seasons', SEASON)
     assert response.status_code == 201, response.text
     return response.json()['data']
+
+
+@pytest.fixture
+def harness_without_messaging_secret(tmp_path):
+    """A deployment that has not configured inbound messaging must refuse every delivery."""
+    from agrisense.config import Settings
+    from agrisense.platform import db as d
+    from agrisense.platform.app import create_app
+    from agrisense.platform.auth import Identity
+
+    settings = Settings(app_env='test', database_url='sqlite://', firebase_project_id='demo-agrisense',
+                        local_media_dir=str(tmp_path / 'media'), media_signing_secret='test-signing-secret')
+    app = create_app(settings)
+    d.Base.metadata.create_all(app.state.engine)
+    app.state.verifier = StubVerifier({'token-asha': Identity('uid-asha', True, 'Asha')})
+    with TestClient(app) as client:
+        yield client
+    app.state.engine.dispose()
