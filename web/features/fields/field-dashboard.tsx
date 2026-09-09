@@ -28,7 +28,7 @@ import type { DataMode, Field, Recommendation, Season } from "@/lib/api/contract
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveField } from "./active-field";
-import { ChevronDown, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
+import { ChevronDown, Droplets, IndianRupee, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -450,6 +450,25 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
         loading={recommendationQuery.isLoading}
         recommendation={recommendation}
       />
+
+      {/* The two views that explain the season's numbers, reachable from the
+          season they belong to rather than from a global menu. */}
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-mist pt-4">
+        <Link
+          href={`/money?season=${encodeURIComponent(season.id)}`}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-mist px-3 text-sm font-semibold text-ink"
+        >
+          <IndianRupee aria-hidden className="size-4 text-forest" />
+          Money
+        </Link>
+        <Link
+          href={`/water?season=${encodeURIComponent(season.id)}`}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-mist px-3 text-sm font-semibold text-ink"
+        >
+          <Droplets aria-hidden className="size-4 text-forest" />
+          Water
+        </Link>
+      </div>
     </Card>
   );
 }
