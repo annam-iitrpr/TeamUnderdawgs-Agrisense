@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import genai_client
+from agrisense.platform import genai_client, vision
 from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.assistant')
@@ -53,7 +53,12 @@ If the farmer attached a photo or a voice note it is provided with this message.
 note may be in any Indian language: answer in the language they spoke, and treat what they
 said as the question.
 
-For a photo, you can see it.
+For a photo, you can see it. If `photo_observations` is present, a separate crop-vision
+model looked at the same photo and these are its labels with confidences. Treat them as one
+more observation, not as fact and not as a diagnosis: you may mention what the model noticed
+and its confidence, and you must not name a disease, declare a deficiency, or recommend a
+treatment on that basis. A low confidence should be described as uncertain rather than
+repeated as though it were settled.
 Describe only what is visible. You may say a leaf looks discoloured; you may not name a
 disease, diagnose a deficiency, or recommend a treatment from a photograph. A photograph is
 an observation to record, never a diagnosis.
@@ -155,8 +160,14 @@ AUDIBLE = ('audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/wav')
 
 
 def attachments(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
-                message_id: str) -> list[tuple[bytes, str]]:
-    """Images the farmer attached to this turn, read from their own media only."""
+                message_id: str, labels: list[dict[str, object]] | None = None
+                ) -> list[tuple[bytes, str]]:
+    """Media the farmer attached to this turn, read from their own records only.
+
+    Photographs are preprocessed and, where a reviewed model is deployed, labelled.
+    `labels` collects those observations for the caller to pass as context.
+    """
+    labels = labels if labels is not None else []
     row = session.scalar(select(d.MessageRow).where(
         d.MessageRow.id == message_id, d.MessageRow.tenant_id == tenant_id,
         d.MessageRow.farmer_id == farmer_id))
@@ -174,10 +185,15 @@ def attachments(session: Session, settings: Settings, tenant_id: str, farmer_id:
             continue
         try:
             from agrisense.platform import media
-            images.append((media.store(settings).read(asset.object_key), kind))
+            raw = media.store(settings).read(asset.object_key)
         except Exception:
             # A photo that cannot be read is simply not shown to the model.
             log.warning('attached media could not be read for the assistant')
+            continue
+        if kind in VIEWABLE:
+            raw, kind = vision.preprocess(raw, kind)
+            labels.extend(vision.classify(settings, raw, kind))
+        images.append((raw, kind))
     return images
 
 
@@ -221,9 +237,14 @@ def reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
     if conversation is None:
         raise PlatformError('CONVERSATION_MISSING', 'This conversation no longer exists.', 404)
     records = grounding(session, tenant_id, farmer_id, conversation)
-    media_parts = attachments(session, settings, tenant_id, farmer_id, message_id)
+    labels: list[dict[str, object]] = []
+    media_parts = attachments(session, settings, tenant_id, farmer_id, message_id, labels)
     if media_parts:
         records['attachments'] = len(media_parts)
+    if labels:
+        # Model output, carried as an observation with its confidence. The
+        # instructions forbid treating it as a diagnosis.
+        records['photo_observations'] = labels
     turns = history(session, conversation_id, tenant_id)
     try:
         drafted = ask(settings, records, turns, media_parts)

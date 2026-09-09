@@ -32,6 +32,8 @@ SECRETS="$SECRETS,WHATSAPP_ACCESS_TOKEN=agrisense-whatsapp-access-token:latest"
 SECRETS="$SECRETS,CEHUB_API_KEY=agrisense-cehub-api-key:latest"
 SECRETS="$SECRETS,METEOBLUE_API_KEY=agrisense-meteoblue-api-key:latest"
 ENV_VARS="$ENV_VARS,CEHUB_API_KEY_HEADER=${CEHUB_API_KEY_HEADER:-ApiKey}"
+ENV_VARS="$ENV_VARS,VERTEX_VISION_ENDPOINT=${VERTEX_VISION_ENDPOINT:-}"
+ENV_VARS="$ENV_VARS,VISION_LOCATION=${VISION_LOCATION:-}"
 
 ACTION=create
 gcloud run jobs describe "$JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 && ACTION=update

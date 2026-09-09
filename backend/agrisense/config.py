@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     gemini_model: str = 'gemini-3.8-flash'
     google_cloud_project: str = ''
     google_cloud_location: str = ''
+    # A reviewed crop-vision model, when one is deployed. Absent by default: no
+    # fallback classifier is used, because an untrained guess about a farmer's crop
+    # would be worse than no label at all.
+    vertex_vision_endpoint: str = ''
+    vision_location: str = ''
     gcs_media_bucket: str = ''
     firebase_storage_bucket: str = ''
     media_signing_secret: str = ''
@@ -96,6 +101,10 @@ class Settings(BaseSettings):
     @property
     def analytics_available(self) -> bool:
         return bool(self.analytics_dataset and (self.google_cloud_project or self.firebase_project_id))
+
+    @property
+    def vision_project(self) -> str:
+        return self.google_cloud_project or self.firebase_project_id
 
     @property
     def media_bucket(self) -> str:

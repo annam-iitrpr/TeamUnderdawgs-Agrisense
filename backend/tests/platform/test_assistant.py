@@ -401,3 +401,40 @@ async def test_a_typed_question_is_never_overwritten_by_a_transcription(
     items = asha.get(f'/conversations/{convo["id"]}/messages').json()['data']['items']
     asked = next(m for m in items if m['role'] == 'user')
     assert asked['text'] == 'What did I spend?'
+
+
+async def test_photo_labels_reach_the_model_as_observations(harness, asha, season, monkeypatch):
+    """A deployed model's labels are context with confidences, never a diagnosis."""
+    import hashlib
+    import io
+    from urllib.parse import urlsplit
+
+    from agrisense.platform import vision
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new('RGB', (900, 700), (40, 110, 60)).save(buffer, format='PNG')
+    png = buffer.getvalue()
+
+    ticket = asha.post('/media/uploads', {'filename': 'leaf.png', 'content_type': 'image/png',
+                                          'size_bytes': len(png)}).json()['data']
+    parts = urlsplit(ticket['upload_url'])
+    harness.put(f'{parts.path}?{parts.query}', content=png)
+    asha.post(f'/media/{ticket["asset"]["id"]}/complete',
+              {'sha256': hashlib.sha256(png).hexdigest()})
+
+    monkeypatch.setattr(vision, 'configured', lambda settings: True)
+    monkeypatch.setattr(vision, 'classify',
+                        lambda settings, data, kind: [{'label': 'leaf_spot', 'confidence': 0.88}])
+
+    stub = StubModel('{"kind":"answer","text":"The model noticed spotting, with 88% confidence."}')
+    stub.install(monkeypatch)
+    convo = conversation_for(asha, season)
+    asha.post(f'/conversations/{convo["id"]}/messages',
+              {'text': 'What is on this leaf?', 'media_ids': [ticket['asset']['id']]})
+    await worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings)
+
+    assert 'photo_observations' in stub.prompts[0]
+    assert 'leaf_spot' in stub.prompts[0]
+    # The image handed to the model is the preprocessed JPEG, not the original PNG.
+    assert stub.images and stub.images[0][1] == 'image/jpeg'

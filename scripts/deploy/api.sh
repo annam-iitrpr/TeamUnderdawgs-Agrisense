@@ -26,6 +26,9 @@ export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-$CLOUD_RUN_WEB_URL}"
 export WHATSAPP_SEND_MODE="${WHATSAPP_SEND_MODE:-outbox}"
 export GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 export CEHUB_API_KEY_HEADER="${CEHUB_API_KEY_HEADER:-ApiKey}"
+# Set these only once a reviewed crop-vision model is actually deployed.
+export VERTEX_VISION_ENDPOINT="${VERTEX_VISION_ENDPOINT:-}"
+export VISION_LOCATION="${VISION_LOCATION:-$GCP_REGION}"
 
 REPOSITORY="${ARTIFACT_REPOSITORY:-agrisense}"
 TAG="$(git -C "$ROOT" rev-parse --short HEAD)"

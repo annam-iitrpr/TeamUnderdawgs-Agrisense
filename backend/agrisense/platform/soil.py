@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import genai_client, media
+from agrisense.platform import genai_client, media, vision
 from agrisense.platform.errors import PlatformError, unavailable
 
 log = logging.getLogger('agrisense.platform.soil')
@@ -116,7 +116,8 @@ def extract(session: Session, settings: Settings, tenant_id: str, farmer_id: str
     if asset.status != 'ready':
         raise PlatformError('MEDIA_NOT_READY', 'Complete the upload before extraction.', 409)
     content_type = (asset.payload or {}).get('content_type', 'image/jpeg')
-    parsed = read_card(settings, media.store(settings).read(asset.object_key), content_type)
+    raw, content_type = vision.preprocess(media.store(settings).read(asset.object_key), content_type)
+    parsed = read_card(settings, raw, content_type)
     observation = to_observation(parsed, field_id, media_id)
     session.add(d.SoilRow(id=observation.id, tenant_id=tenant_id, farmer_id=farmer_id,
                           field_id=field_id, version=1, payload=observation.model_dump(mode='json')))

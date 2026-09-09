@@ -100,6 +100,12 @@ spec:
                   key: latest
             - name: GEMINI_MODEL
               value: "${GEMINI_MODEL}"
+            # Empty until a reviewed crop-vision model is deployed. Absent means no
+            # labels, never a fallback guess.
+            - name: VERTEX_VISION_ENDPOINT
+              value: "${VERTEX_VISION_ENDPOINT}"
+            - name: VISION_LOCATION
+              value: "${VISION_LOCATION}"
             # Weather providers. Without these the forecast is genuinely unavailable and
             # every dependent capability says so, which is why they belong in the revision.
             - name: CEHUB_API_KEY
