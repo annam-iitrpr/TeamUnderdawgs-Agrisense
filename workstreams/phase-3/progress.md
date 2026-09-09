@@ -2,25 +2,25 @@
 
 Branch: `codex/phase-3-platform`.
 Base: destination origin had no refs at initial inspection; imported source snapshot `b94a311e9daeeb6247dd2eb5c36647fda03cc9dd` from the specification's existing app.
-Last verified commit: `28f92b0` (baseline migration). `contract_v1` published at `ff851c3` and tagged.
+Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged. CI is green on the branch.
 
 ## Requirement status
 
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
 | P3-00 shared contract | done | Published and tagged `contract_v1` at `ff851c3`; 57 operations, generated TS/Pydantic bindings, 6 contract checks passing |
-| P3-00 tested bootstrap | in-progress | Dependencies pinned (`uv.lock`), migrations applied, repo-wide ruff pinned. Still needed: Firebase browser harness, CI workflow, one-command local runtime |
+| P3-00 tested bootstrap | in-progress | CI green: contracts, lint, 40 tests on PostgreSQL 16, migration round trip with drift check, tracked-file secret scan, dependency audit. Still needed: Firebase browser harness, one-command local runtime |
 | P3-01 database/auth | done | 30 tables live on local PostgreSQL 14 and Cloud SQL PostgreSQL 16; Firebase verification and first-request enrollment; legacy unauthenticated router and public `/uploads` mount no longer served |
-| P3-02 API workflows | in-progress | All 57 routes dispatch from the frozen registry with auth, idempotency, versioning and pagination. Fields, seasons, journal, tasks, reminders, notifications, conversations and closure are implemented; media, soil and catalog still return dependency state |
-| P3-03 jobs/outbox | in-progress | Outbox rows and job records are written transactionally; no worker drains them yet |
-| P3-04 WhatsApp | pending | local secret inventory remains private; no external messages sent |
-| P3-05 media/Gemini | pending | no live smoke test yet |
+| P3-02 API workflows | in-progress | 57 routes dispatch from the frozen registry. Implemented: profile, fields, seasons, journal, ledger, tasks, notifications, reminders, conversations, proposals, media, soil queueing, channels, closure. Still dependency-gated: planning, catalog, evaluation results, agronomist evidence/backtests |
+| P3-03 jobs/outbox | done | Leased jobs with exponential backoff and dead lettering; per-consumer outbox receipts so one failing subscriber cannot dead-letter an event for the others; stale tasks expire |
+| P3-04 WhatsApp | in-progress | Signature-verified ingestion, once-per-message-id inbox, hashed phone identities, one-time link codes, consent-gated queued outbound. No message has been sent. Blocked on `META_APP_SECRET`, which is absent from the supplied env |
+| P3-05 media/Gemini | in-progress | Media custody complete and tested: tickets, digest/size/magic verification, tenant-prefixed keys, short-lived owner-only reads. Gemini absent from the env, so extraction stays queued and unimplemented |
 | P3-06 assistant | pending | proposal contract defined |
 | P3-07 reminders/analytics | pending | task/notification/reminder distinctions defined |
-| P3-08 deployment | pending | Cloud Run is specified host; no cloud resources created |
+| P3-08 deployment | in-progress | Image builds and was smoke tested locally; Cloud Run service definition and deploy script committed. No cloud revision deployed yet |
 | P3-09 env | in-progress | Supplied `agrisense.env` stays outside the repo. Confirmed present: Firebase, Cloud SQL, WhatsApp, meteoblue, CEHub. Confirmed absent: `META_APP_SECRET`, any Gemini key/model |
 | P3-10 live setup | in-progress | Cloud SQL reachable via Auth Proxy and migrated. Weather, WhatsApp and Gemini not yet exercised live |
-| P3-11 acceptance | pending | full test matrix not yet run |
+| P3-11 acceptance | in-progress | 40 automated tests green in CI. No browser, live-provider or end-to-end demo run yet |
 | P3-12 integration | in-progress | Phase 2 branched from `ff851c3` and shares ancestry. Phase 1 started from an unrelated root, so `.gitignore` and `web/` will need a reconciled merge |
 
 ## Executed checks
@@ -33,7 +33,11 @@ Last verified commit: `28f92b0` (baseline migration). `contract_v1` published at
 - `ruff check .`: clean across backend, contracts and scripts under the pinned rule set.
 - `alembic upgrade head` -> `downgrade base` -> `upgrade head` -> `alembic check`: applies, reverses and reports no drift on local PostgreSQL 14.
 - Same migration applied to Cloud SQL `iitm02:asia-south1:agrisense-db`: 30 tables, revision `ba1423b0e662`, no drift.
-- Staged-file secret scan passed before each of the three commits.
+- Staged-file secret scan passed before every commit; the tracked-file scan runs in CI.
+- `docker build` succeeded and the container was smoke tested: `/healthz` 200, anonymous
+  `/api/v1/fields` 401 with an `UNAUTHENTICATED` envelope, `/readyz` 503 without a database,
+  process running as uid 10001.
+- GitHub Actions run 34399517969 (`dc167ec`): both jobs green.
 - Reviewed community Karpathy skill at pinned commit; MIT license fetch returned 404 and attribution/license completion remains pending.
 
 ## Decisions and new requirements
@@ -62,8 +66,27 @@ shared-infrastructure change and has not been made unilaterally.
 Only Phase 3 needs database access. Phase 1 (frontend over HTTP) and Phase 2 (pure science
 functions over contract snapshots) require no change.
 
-Next concrete step: durable job worker and outbox drain, then media upload tickets and the
-Firebase browser authentication harness.
+## Capabilities deliberately reporting dependency state
+
+These answer 503 `DEPENDENCY_UNAVAILABLE` rather than inventing a result, which is the
+intended behaviour until the dependency exists:
+
+- `/planning/compare`, `/seasons/{id}/water`, `/seasons/{id}/economics`,
+  `/seasons/{id}/recommendations/latest`, `/seasons/{id}/forecast` — need the Phase 2 facade
+  plus a `ReferenceBundle` builder, which nobody publishes yet (see interface-requests.md).
+- `/catalog/*` — needs the reviewed catalog from the same source.
+- `/agronomist/evidence`, `/agronomist/backtests` — need reviewed evidence records.
+- Assistant replies, soil extraction and privacy export/delete jobs — queued and dead-lettered
+  honestly; Gemini is not configured in the supplied environment.
+
+## Next concrete steps
+
+1. Firebase email/password browser harness, to prove real token verification end to end.
+2. Assistant proposal loop behind a guarded Gemini client, mirroring the science gateway.
+3. Reminder scheduling with quiet hours, and the notification delivery path.
+4. Deploy a Cloud Run revision and record the URL.
+5. Integration: reconcile `.gitignore` and `web/` with Phase 1, whose branch has an unrelated
+   root, then merge all three streams.
 
 ## Contract publication validation
 
