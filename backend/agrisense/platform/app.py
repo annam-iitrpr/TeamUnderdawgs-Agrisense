@@ -16,6 +16,7 @@ from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.contracts_generated.routes import ROUTES
 from agrisense.platform import db as d
+from agrisense.platform import media
 from agrisense.platform.auth import Actor, FirebaseVerifier, enroll
 from agrisense.platform.errors import PlatformError
 from agrisense.platform.service import DomainService
@@ -61,7 +62,7 @@ def build_dispatcher(app: FastAPI, method: str, path: str, request_model, respon
         try:
             actor: Actor = authorize(request, session)
             body = request_adapter.validate_python(payload if payload is not None else {}) if request_adapter else None
-            service = DomainService(session, actor, request_id)
+            service = DomainService(session, actor, request_id, settings)
             identifier = request.path_params.get('id', '')
             query = {key: value for key, value in request.query_params.items()}
 
@@ -141,6 +142,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     for method, path, request_model, response_model, status in ROUTES:
         app.add_api_route(API_PREFIX + path, build_dispatcher(app, method, path, request_model, response_model, status),
                           methods=[method], include_in_schema=False)
+
+    @app.api_route('/media/local/{key:path}', methods=['PUT', 'GET'], include_in_schema=False)
+    async def local_media(key: str, request: Request) -> Response:
+        """Development object store. A deployed service always uses the bucket instead."""
+        if settings.media_bucket or settings.app_env in ('staging', 'production'):
+            return failure(PlatformError('NOT_FOUND', 'This route is not available.', 404), request.state.request_id)
+        purpose = 'put' if request.method == 'PUT' else 'get'
+        try:
+            expires = int(request.query_params.get('expires', '0'))
+            media.verify_signature(settings, purpose, key, expires, request.query_params.get('signature', ''),
+                                   int(d.utcnow().timestamp()))
+            store = media.store(settings)
+            if request.method == 'GET':
+                return Response(store.read(key), media_type='application/octet-stream',
+                                headers={'Cache-Control': 'private, no-store'})
+            body = await request.body()
+            if len(body) > media.MAX_BYTES:
+                raise PlatformError('MEDIA_TOO_LARGE', 'Choose a file of 20 MB or less.', 413)
+            store.write(key, body)
+        except (PlatformError, ValueError) as error:
+            if isinstance(error, ValueError) and not isinstance(error, PlatformError):
+                error = PlatformError('UPLOAD_LINK_INVALID', 'This link is not valid.', 403)
+            return failure(error, request.state.request_id)
+        return Response(status_code=204)
 
     @app.get('/healthz', include_in_schema=False)
     async def healthz() -> dict[str, str]:

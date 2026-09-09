@@ -1,6 +1,7 @@
 """Explicit local env loading; deployed services use injected configuration/ADC."""
 from __future__ import annotations
 
+import hashlib
 import os
 from enum import StrEnum
 from functools import lru_cache
@@ -50,6 +51,8 @@ class Settings(BaseSettings):
     google_cloud_project: str = ''
     google_cloud_location: str = ''
     gcs_media_bucket: str = ''
+    firebase_storage_bucket: str = ''
+    media_signing_secret: str = ''
     cloud_tasks_location: str = ''
     cloud_tasks_queue: str = 'agrisense-jobs'
     cloud_tasks_service_account_email: str = ''
@@ -76,9 +79,26 @@ class Settings(BaseSettings):
                 raise ValueError('Deployed services require PostgreSQL')
             if self.firebase_project_id.startswith('demo-'):
                 raise ValueError('Deployed services require a real Firebase project')
+            if not self.media_bucket:
+                raise ValueError('Deployed services require an object storage bucket for media')
         if emulator and self.app_env not in ('development','test'):
             raise ValueError('Firebase emulator is local only')
         return self
+
+    @property
+    def media_bucket(self) -> str:
+        """Media lands in the dedicated bucket when set, else the project's Firebase bucket."""
+        return self.gcs_media_bucket or self.firebase_storage_bucket
+
+    @property
+    def media_signing_key(self) -> str:
+        """Local upload links are signed. A development default is derived rather than blank,
+        so a link cannot be forged, but it is never used by a deployed service."""
+        if self.media_signing_secret:
+            return self.media_signing_secret
+        if self.app_env in ('staging', 'production'):
+            return ''
+        return hashlib.sha256(f'agrisense-local-{self.firebase_project_id}-{REPO_ROOT}'.encode()).hexdigest()
 
     @property
     def cehub_available(self) -> bool:
@@ -96,7 +116,10 @@ class Settings(BaseSettings):
         path=REPO_ROOT/'.local/cache';path.mkdir(parents=True,exist_ok=True);return path
     @property
     def uploads_dir(self) -> Path:
-        path=REPO_ROOT/self.local_media_dir;path.mkdir(parents=True,exist_ok=True);return path
+        # An absolute setting is honoured as given, so tests can isolate their own directory.
+        path=Path(self.local_media_dir)
+        if not path.is_absolute():path=REPO_ROOT/path
+        path.mkdir(parents=True,exist_ok=True);return path
 
 @lru_cache
 def get_settings() -> Settings:

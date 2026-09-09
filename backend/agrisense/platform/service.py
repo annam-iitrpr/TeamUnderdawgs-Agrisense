@@ -11,8 +11,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
+from agrisense.platform import media
 from agrisense.platform.auth import Actor
 from agrisense.platform.errors import PlatformError, missing, unavailable
 
@@ -26,8 +28,9 @@ def aware(value: datetime) -> datetime:
 
 
 class DomainService:
-    def __init__(self, session: Session, actor: Actor, request_id: str):
+    def __init__(self, session: Session, actor: Actor, request_id: str, settings: Settings | None=None):
         self.s=session;self.actor=actor;self.request_id=request_id
+        self.settings=settings or get_settings()
 
     def own(self, model, id: str, lock: bool=False):
         query=select(model).where(model.id==id,model.tenant_id==self.actor.tenant_id)
@@ -267,6 +270,25 @@ class DomainService:
             row.payload=dump(value);row.status=value.status;row.scheduled_at=value.scheduled_at
             return value if method=='PATCH' else c.MutationReceipt(id=id,status='cancelled',resource_id=id,version=row.version)
         if path=='/jobs/{id}':return self.job_view(self.own(d.JobRow,id))
+        if path=='/media/uploads':
+            ticket,key=media.ticket(self.settings,self.actor.tenant_id,body)
+            self.s.add(d.MediaRow(**self.owned_values(dump(ticket.asset)),object_key=key,status='pending'))
+            return ticket
+        if path=='/media/{id}/complete':
+            row=self.own(d.MediaRow,id,True)
+            asset=media.confirm(self.settings,row,body)
+            row.status=asset.status;row.sha256=body.sha256;row.version=asset.version;row.payload=dump(asset)
+            return asset
+        if path=='/media/{id}/access':
+            row=self.own(d.MediaRow,id)
+            if row.status!='ready':raise PlatformError('MEDIA_NOT_READY','This file is still being processed.',409)
+            url,expires=media.store(self.settings).access_url(row.object_key)
+            return c.MediaAccess(url=url,expires_at=datetime.fromtimestamp(expires,UTC))
+        if path=='/soil/extractions':
+            self.own(d.FieldRow,body.field_id)
+            asset=self.own(d.MediaRow,body.media_id)
+            if asset.status!='ready':raise PlatformError('MEDIA_NOT_READY','Complete the upload before extraction.',409)
+            return self.job('soil.extract',{'field_id':body.field_id,'media_id':body.media_id})
         if path=='/conversations':
             if body.field_id:self.own(d.FieldRow,body.field_id)
             if body.season_id:

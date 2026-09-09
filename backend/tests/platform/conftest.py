@@ -24,13 +24,15 @@ class StubVerifier:
 
 
 @pytest.fixture
-def harness():
+def harness(tmp_path):
     from agrisense.config import Settings
     from agrisense.platform import db as d
     from agrisense.platform.app import create_app
     from agrisense.platform.auth import Identity
 
-    settings = Settings(app_env='test', database_url='sqlite://', firebase_project_id='demo-agrisense')
+    # Media is written to a per-test directory so no run can observe another run's objects.
+    settings = Settings(app_env='test', database_url='sqlite://', firebase_project_id='demo-agrisense',
+                        local_media_dir=str(tmp_path / 'media'), media_signing_secret='test-signing-secret')
     app = create_app(settings)
     d.Base.metadata.create_all(app.state.engine)
     identities = {
