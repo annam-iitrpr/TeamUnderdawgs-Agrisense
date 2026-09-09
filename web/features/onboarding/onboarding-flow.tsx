@@ -652,22 +652,17 @@ function CropStep({ draft, update }: StepProps) {
       </div>
 
       {/*
-        Both branches need the crop catalogue, and /catalog/crops currently
-        answers 503 DEPENDENCY_UNAVAILABLE because nothing builds a
-        ReferenceBundle on the science side. Saying so plainly is the correct
-        behaviour: an empty crop list would read as "no crops exist", and a
-        hardcoded list would be an invented catalogue.
+        The crop itself is added on the field's own screen once the field exists,
+        because a season needs a field id to belong to. Saying so beats a picker
+        here that cannot save what it collects.
       */}
       {draft.crop.mode !== "undecided" ? (
-        <Callout tone="caution" title="Crop details are not available yet">
+        <Callout tone="info" title="Choose the crop once the field is saved">
           <p>
-            The crop catalogue is not being served right now, so AgriSense cannot offer a crop
-            list or compare crops for this field.
+            Save this field first, then pick the crop from the field&rsquo;s own screen. A crop
+            has to belong to a saved field before AgriSense can plan anything for it.
           </p>
-          <p className="mt-2">
-            Save the field and add the crop when this is working — nothing you have entered is
-            lost, and the field is what the rest of the app needs first.
-          </p>
+          <p className="mt-2">Nothing you have entered here is lost.</p>
         </Callout>
       ) : null}
     </div>

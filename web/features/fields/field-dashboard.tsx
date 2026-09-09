@@ -18,6 +18,7 @@ import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
 import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
+import { AddSeasonForm } from "@/features/crops/add-season-form";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
 import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
@@ -272,7 +273,7 @@ function FieldPanel({ field, uid }: { field: Field; uid: string | null }) {
             onRetry={seasonsQuery.error.retryable ? seasonsQuery.refetch : undefined}
           />
         ) : activeSeasons.length === 0 ? (
-          <NoSeasonCard field={field} />
+          <NoSeasonCard field={field} onAdded={() => seasonsQuery.refetch()} />
         ) : (
           activeSeasons.map((season) => (
             <SeasonCard key={season.id} field={field} season={season} />
@@ -288,7 +289,7 @@ function FieldPanel({ field, uid }: { field: Field; uid: string | null }) {
   );
 }
 
-function NoSeasonCard({ field }: { field: Field }) {
+function NoSeasonCard({ field, onAdded }: { field: Field; onAdded: (season: Season) => void }) {
   return (
     <Card className="p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate">{field.name}</p>
@@ -298,19 +299,9 @@ function NoSeasonCard({ field }: { field: Field }) {
         it was sown. Nothing can be calculated for this field until then.
       </p>
 
-      {/*
-        Adding a crop needs a crop_id from the catalogue, which currently answers
-        503 DEPENDENCY_UNAVAILABLE because the reference bundle is not being
-        built yet. Saying so is the honest state; the alternative would be a
-        button that fails when tapped.
-      */}
-      <Callout tone="caution" className="mt-4" title="Cannot add a crop yet">
-        <p>
-          The crop catalogue is not being served, so there is no list to choose from. This is a
-          service AgriSense depends on, not something you have done wrong.
-        </p>
-        <p className="mt-2">Your field is saved. Come back once this is available.</p>
-      </Callout>
+      <div className="mt-4">
+        <AddSeasonForm field={field} existingSeasons={[]} onAdded={onAdded} />
+      </div>
     </Card>
   );
 }
