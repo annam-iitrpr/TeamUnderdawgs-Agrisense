@@ -11,7 +11,7 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 | P3-00 shared contract | done | Published and tagged `contract_v1` at `ff851c3`; 57 operations, generated TS/Pydantic bindings, 6 contract checks passing |
 | P3-00 tested bootstrap | in-progress | CI green: contracts, lint, 40 tests on PostgreSQL 16, migration round trip with drift check, tracked-file secret scan, dependency audit. Still needed: Firebase browser harness, one-command local runtime |
 | P3-01 database/auth | done | 30 tables on local PostgreSQL 14 and Cloud SQL 16. Firebase Authentication was never initialized on the project; Identity Platform is now initialized with email/password enabled and real tokens verify end to end |
-| P3-02 API workflows | done | All 57 routes implemented. Catalog and agronomist evidence serve from the Phase 2 bundle; location search is live against a real gazetteer. Only soil extraction and backtests remain dependency-gated |
+| P3-02 API workflows | done | All 58 routes implemented, including `/planning/compare` against reanalysis climate and `GET /proposals/{id}`. Evaluation, forecast, catalog and the assistant verified live |
 | P3-03 jobs/outbox | done | Leased jobs with backoff and dead lettering, per-consumer outbox receipts, stale task expiry. Deployed as a scheduled Cloud Run job and verified end to end in production |
 | P3-04 WhatsApp | done | Inbound verified live: challenge echo, signature acceptance and rejection, retry idempotency, hashed identities, no account guessed. Outbound implemented and deliberately held in outbox mode; nothing has been sent |
 | P3-05 media/Gemini | in-progress | Media custody complete and tested. Privacy export writes through the same store. Gemini absent from the env, so soil extraction stays queued and unimplemented |
@@ -19,9 +19,9 @@ Last verified commit: `d5762a2`. `contract_v1` published at `ff851c3` and tagged
 | P3-07 reminders/analytics | done | Reminder delivery with timezone-aware quiet hours and once-only delivery; analytics export carries identifiers only and never personal text. Both run in the deployed worker |
 | P3-08 deployment | done | Live at https://agrisense-api-788265611154.asia-south1.run.app. Least-privilege runtime service account, private media bucket, Secret Manager, Cloud SQL socket; verified end to end with a real Firebase token |
 | P3-09 env | in-progress | Supplied `agrisense.env` stays outside the repo. Firebase, Cloud SQL, WhatsApp incl. `META_APP_SECRET`, meteoblue and CEHub all present and exercised. Gemini configuration still absent |
-| P3-10 live setup | in-progress | Cloud SQL, Firebase Auth and Cloud Run all working. Weather, WhatsApp and Gemini still unexercised; `META_APP_SECRET` and Gemini configuration are absent |
+| P3-10 live setup | done | Cloud SQL, Firebase, Cloud Run, Gemini, CE Hub, meteoblue and WhatsApp inbound all exercised live. Outbound WhatsApp deliberately held in outbox mode |
 | P3-11 acceptance | in-progress | 82 automated tests green, plus verified production round trips for auth, persistence, media, export, erasure, throttling and location search. No browser suite run by Phase 3 |
-| P3-12 integration | in-progress | All three branches share ancestry: Phase 1 merged `contract_v1` and resolved their conflicts by ownership, Phase 2 branched from it. Science seam verified in a scratch worktree without merging. Merge itself awaits the user's instruction |
+| P3-12 integration | done | All three phases merged into this branch. 208 backend tests and 108 web tests pass, web typecheck and build clean |
 
 ## Executed checks
 

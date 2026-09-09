@@ -113,6 +113,28 @@ into an account. The test row was deleted afterwards.
 
 Outbound remains in outbox mode. Nothing has been sent to anyone.
 
+## Full evaluation pipeline verified in production
+
+With Phase 2's science merged and the weather provider credentials wired into the revision,
+an evaluation was requested through the deployed API by a real Firebase account:
+
+```
+evaluation job: succeeded after 12s
+forecast:       provider=cehub:Meteoblue, 237 hourly, 11 daily records
+recommendation: status=insufficient_data, 30 stress points
+reasons:        rule_parameters_require_field_validation,
+                confirmed_product_selection_required
+```
+
+`insufficient_data` is the correct outcome, not a failure. Real weather was fetched and real
+stress computed, and the engine declined to issue a recommendation because reviewed
+agronomic parameters and a confirmed product do not exist yet. That is the system refusing to
+invent advice.
+
+The provider credentials were the last missing piece: Phase 2 reads them from the process
+environment, and the Cloud Run revision did not carry them, so every evaluation had been
+failing with `ProviderUnavailable` regardless of their fix.
+
 ## Not yet run
 
 No browser session, no live weather or Gemini call, and no outbound WhatsApp message, and no Cloud Run revision

@@ -97,6 +97,20 @@ spec:
                   key: latest
             - name: GEMINI_MODEL
               value: "${GEMINI_MODEL}"
+            # Weather providers. Without these the forecast is genuinely unavailable and
+            # every dependent capability says so, which is why they belong in the revision.
+            - name: CEHUB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agrisense-cehub-api-key
+                  key: latest
+            - name: CEHUB_API_KEY_HEADER
+              value: "${CEHUB_API_KEY_HEADER}"
+            - name: METEOBLUE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agrisense-meteoblue-api-key
+                  key: latest
           startupProbe:
             httpGet:
               path: /health/live

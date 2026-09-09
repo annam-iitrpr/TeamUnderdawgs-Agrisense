@@ -28,6 +28,10 @@ ENV_VARS="$ENV_VARS,WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}"
 SECRETS="DATABASE_URL=agrisense-database-url:latest,MEDIA_SIGNING_SECRET=agrisense-media-signing-secret:latest"
 SECRETS="$SECRETS,GEMINI_API_KEY=agrisense-gemini-api-key:latest"
 SECRETS="$SECRETS,WHATSAPP_ACCESS_TOKEN=agrisense-whatsapp-access-token:latest"
+# The worker runs evaluations, so it needs the same weather providers as the API.
+SECRETS="$SECRETS,CEHUB_API_KEY=agrisense-cehub-api-key:latest"
+SECRETS="$SECRETS,METEOBLUE_API_KEY=agrisense-meteoblue-api-key:latest"
+ENV_VARS="$ENV_VARS,CEHUB_API_KEY_HEADER=${CEHUB_API_KEY_HEADER:-ApiKey}"
 
 ACTION=create
 gcloud run jobs describe "$JOB" --region "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 && ACTION=update
