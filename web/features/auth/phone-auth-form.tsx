@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/language-provider";
+import { toE164 } from "@/lib/phone";
 import type { TranslationKey } from "@/lib/locale";
 import { Button, TextField } from "@/components/ui";
 import { AuthError, useAuth } from "./auth-provider";
@@ -8,7 +9,15 @@ import { AuthShell } from "./auth-shell";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-export function PhoneAuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
+export function PhoneAuthForm({
+  mode,
+  chooser,
+}: {
+  mode: "sign-in" | "sign-up";
+  /** The phone/email switch, rendered inside this form's own shell so both
+   *  methods present one frame rather than two nested ones. */
+  chooser?: React.ReactNode;
+}) {
   const { t } = useLanguage();
   const { requestPhoneOtp, verifyPhoneOtp, status } = useAuth();
   const [phone, setPhone] = useState("");
@@ -26,14 +35,21 @@ export function PhoneAuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   async function submitPhone(event: React.FormEvent) {
     event.preventDefault();
     setErrorKey(null);
-    if (!/^\+[1-9]\d{7,14}$/.test(phone.trim())) {
+    // Normalised rather than pattern-matched. Requiring a farmer to type the
+    // "+91" themselves rejected their own number written the way they say it
+    // aloud, which is a dead end rather than a correction.
+    const target = toE164(phone);
+    if (!target) {
       setErrorKey("authInvalidPhone");
       phoneRef.current?.focus();
       return;
     }
     setBusy(true);
     try {
-      await requestPhoneOtp(phone);
+      // The normalised form is sent and shown, so the number the code went to
+      // is the number on screen.
+      setPhone(target);
+      await requestPhoneOtp(target);
       setStep("code");
       window.setTimeout(() => codeRef.current?.focus(), 0);
     } catch (error) {
@@ -76,6 +92,7 @@ export function PhoneAuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         </p>
       }
     >
+      {chooser}
       {step === "phone" ? (
         <form onSubmit={submitPhone} noValidate className="space-y-4">
           <TextField
