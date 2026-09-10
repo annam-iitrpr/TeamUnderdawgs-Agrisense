@@ -75,7 +75,8 @@ async def test_ten_day_provider_flow_preserves_weather_with_invalid_solar():
     assert result.recommendation.stress_curve
     assert result.recommendation.status == "insufficient_data"
     assert result.recommendation.selected_window is None
-    assert result.economics.profit.p50 is None
+    # Economics are indicative now rather than blank, and still declare their basis.
+    assert result.economics.profit.basis == "scenario"
     api.EvaluationBundle.model_validate_json(result.model_dump_json())
 
 

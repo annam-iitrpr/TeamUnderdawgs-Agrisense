@@ -208,20 +208,50 @@ def test_region_bounds_exclude_crops_that_do_not_belong_to_the_demo_district():
     assert not covers("cotton"), "cotton must not be offered outside the cotton belt"
 
 
-def test_product_advice_and_economics_remain_unavailable():
+def test_product_advice_remains_unavailable():
     """Crop calendars landing must not be mistaken for product-label approval.
 
-    Product rules are regulatory and none is supplied, and economics needs real
-    paired yield/price/cost records. Both still report their own gap.
+    Product rules are regulatory and none is supplied. That gap is unchanged by
+    anything else the reference bundle gains.
     """
     refs = reference_bundle()
-    assert not [key for key in refs.parameters if key.startswith("economics:")]
     assert refs.products == []
     snap = snapshot()
     result = evaluate_season(snap, forecast(snap), refs)
     assert result.recommendation.status == "insufficient_data"
     assert result.recommendation.selected_window is None
-    assert result.economics.profit.p50 is None
+
+
+def test_indicative_economics_are_a_band_and_declare_what_they_are():
+    """Economics are answerable now, and answer as a scenario rather than a fact.
+
+    A blank where a return should be is not neutral: a farmer choosing between
+    crops cannot choose against nothing. So the bundle carries indicative yield,
+    price and cost rows -- and they are resampled as paired rows, so the answer
+    comes back as a p10-p90 band whose basis says "scenario" and whose evidence
+    records that no agronomist has reviewed it.
+    """
+    refs = reference_bundle()
+    keys = [key for key in refs.parameters if key.startswith("economics:")]
+    assert len(keys) == 15
+    result = economic_estimates("wheat", 1.0, refs, date(2026, 9, 10))
+    assert result.profit.p50 is not None
+    assert result.roi.p50 is not None
+    assert result.profit.basis == "scenario"
+    # A band, not a point: potato's price swing is real and must survive.
+    potato = economic_estimates("potato", 1.0, refs, date(2026, 9, 10))
+    assert potato.roi.p10 < potato.roi.p50 < potato.roi.p90
+    evidence = {row.id: row for row in refs.evidence}
+    limits = evidence["agrisense:indicative-economics-2025-26"].limitations
+    assert any("not reviewed by an agronomist" in line for line in limits)
+
+
+def test_a_farmers_own_ledger_still_outranks_the_indicative_figures():
+    """Recorded reality replaces the scenario; it does not average with it."""
+    refs = reference_bundle()
+    with_ledger = economic_estimates("wheat", 1.0, refs, date(2026, 9, 10), has_actual_ledger=True)
+    assert with_ledger.roi.p50 is None
+    assert with_ledger.roi.missing_reason == "planned_actual_line_reconciliation_contract_required"
 
 
 def test_weather_fetched_after_snapshot_preserves_facts_and_replays():
