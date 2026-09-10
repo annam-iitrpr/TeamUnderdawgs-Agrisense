@@ -31,15 +31,17 @@ def economic_estimates(
         roi=estimate(None, "%", "whole_season_roi", reason),
         price=measurement(None, "INR/kg", "dated_product_form_price_required"),
     )
-    # A farmer who has started recording is the farmer with the most to lose from
-    # a blank screen, and that is exactly who used to get one: any ledger line at
-    # all suppressed cost, revenue, profit and return together. Their own spend is
-    # better than a scenario cost, so it replaces it, and the rest of the estimate
-    # continues on the reviewed scenarios. What is observed and what is modelled
-    # stay distinguishable in `basis`, which is the part that must not blur.
-    if has_actual_ledger and actual_cost_inr is None:
-        missing.roi.missing_reason = "planned_actual_line_reconciliation_contract_required"
-        return missing
+    # A farmer who has started recording is the one with most to lose from a blank
+    # screen, and was exactly who got one: a single ledger line suppressed cost,
+    # revenue, profit and return together. Having a ledger no longer hides the
+    # season estimate.
+    #
+    # The estimate stays whole-season on both sides, though. Spend recorded so far
+    # is not the season's cost -- a maize grower nine weeks in has paid for seed
+    # and two urea splits and nothing else -- and dividing a whole season's
+    # revenue by a part season's spend produced a return of 957 percent. What has
+    # been spent to date is a real and useful figure, but it belongs beside this
+    # one and not inside it.
     config = reviewed_parameters(references, f"economics:{crop_id}", as_of)
     if (
         not config
@@ -78,14 +80,8 @@ def economic_estimates(
     rng = np.random.default_rng(seed)
     paired = data[rng.integers(0, len(data), draws)]
     revenue = paired[:, 0] * paired[:, 1] * area_ha
-    # What the farmer actually spent, where they have recorded it. It carries no
-    # spread because it is not an estimate: it is the sum of what they entered.
-    observed_cost = actual_cost_inr is not None
-    cost = (
-        np.full(draws, float(actual_cost_inr))
-        if observed_cost
-        else paired[:, 2] * area_ha
-    )
+    observed_cost = False
+    cost = paired[:, 2] * area_ha
     profit = revenue - cost
     if (
         not np.isfinite(revenue).all()

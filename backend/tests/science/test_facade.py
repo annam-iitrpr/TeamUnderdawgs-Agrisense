@@ -268,12 +268,32 @@ def test_indicative_economics_are_a_band_and_declare_what_they_are():
     assert any("not reviewed by an agronomist" in line for line in limits)
 
 
-def test_a_farmers_own_ledger_still_outranks_the_indicative_figures():
-    """Recorded reality replaces the scenario; it does not average with it."""
+def test_a_started_ledger_no_longer_blanks_the_season_estimate():
+    """The farmer who has begun recording had the most to lose from a blank.
+
+    One ledger line used to suppress cost, revenue, profit and return together,
+    so the screen emptied for exactly the farmer using the app properly. The
+    estimate now survives a ledger.
+    """
     refs = reference_bundle()
     with_ledger = economic_estimates("wheat", 1.0, refs, date(2026, 9, 10), has_actual_ledger=True)
-    assert with_ledger.roi.p50 is None
-    assert with_ledger.roi.missing_reason == "planned_actual_line_reconciliation_contract_required"
+    assert with_ledger.roi.p50 is not None
+    assert with_ledger.profit.p50 is not None
+
+
+def test_the_season_estimate_stays_whole_season_on_both_sides():
+    """Spend so far is not the season's cost, and must not be divided into it.
+
+    A maize grower nine weeks in has paid for seed and two urea splits. Dividing
+    a whole season's revenue by that produced a return of 957 percent. Both
+    sides of the ratio stay whole-season, and the estimate says so.
+    """
+    refs = reference_bundle()
+    plain = economic_estimates("wheat", 1.0, refs, date(2026, 9, 10))
+    started = economic_estimates("wheat", 1.0, refs, date(2026, 9, 10), has_actual_ledger=True)
+    assert started.cost.p50 == plain.cost.p50
+    assert started.cost.basis == "scenario"
+    assert started.roi.p50 < 200
 
 
 def test_weather_fetched_after_snapshot_preserves_facts_and_replays():
@@ -321,10 +341,10 @@ def test_paired_scenario_golden_and_actual_ledger_gate():
     assert result.profit.p50 == 30000
     assert result.roi.p50 == 60
     assert result.profit.basis == "scenario"
-    assert (
-        economic_estimates("cotton", 1, refs, date(2026, 9, 9), has_actual_ledger=True).roi.p50
-        is None
-    )
+    # A ledger no longer empties the estimate, and does not move it either: both
+    # sides of the ratio remain whole-season figures.
+    started = economic_estimates("cotton", 1, refs, date(2026, 9, 9), has_actual_ledger=True)
+    assert started.roi.p50 == 60
     refs.parameters["scenario:cotton:synthetic-1"]["yield_kg_ha"] = 0
     assert economic_estimates("cotton", 1, refs, date(2026, 9, 9)).roi.p50 == -100
 

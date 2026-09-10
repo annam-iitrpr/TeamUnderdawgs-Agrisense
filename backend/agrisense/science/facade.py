@@ -401,10 +401,6 @@ def evaluate_season(
             references,
             now,
             has_actual_ledger=bool(snapshot.cost_ledger),
-            actual_cost_inr=sum(
-                float(line.amount) for line in snapshot.cost_ledger if line.kind == "cost"
-            )
-            or None,
         ),
         proposed_tasks=tasks,
         data_mode="demo" if forecast.data_mode == "demo" else "mixed" if curve else "unavailable",
