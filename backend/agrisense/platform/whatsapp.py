@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -17,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from agrisense.config import Settings
+from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
 from agrisense.platform import media
 from agrisense.platform.errors import PlatformError
@@ -170,6 +172,8 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         command = 'fields'
     elif lowered in {'readiness', 'status', 'water', 'money', 'economics', 'history', 'log'}:
         command = {'status': 'readiness', 'economics': 'money', 'log': 'history'}.get(lowered, lowered)
+    elif lowered.startswith('log '):
+        command = 'journal'
     elif lowered.startswith('use '):
         requested = text[4:].strip().lower()
         fields = list(session.scalars(select(d.FieldRow).where(
@@ -263,6 +267,54 @@ def command_reply(session: Session, request: dict[str, Any], tenant_id: str,
             return f'{command.title()} figures are not available yet: {missing.replace("_", " ")}'
         return f'*{command.title()}*\n{value}'
     return None
+
+
+def journal_values(text: str) -> tuple[str, str, list[dict[str, object]]]:
+    """Parse only explicit logging vocabulary; the assistant remains the free-text path."""
+    body = text.strip()[4:].strip() if text.lower().startswith('log ') else text.strip()
+    first, _, remainder = body.partition(' ')
+    action = {
+        'water': 'watered', 'watered': 'watered', 'irrigated': 'watered',
+        'sprayed': 'pesticide_applied', 'spray': 'pesticide_applied',
+        'fertilized': 'fertilizer_applied', 'fertilizer': 'fertilizer_applied',
+        'biostimulant': 'biostimulant_applied', 'weeded': 'weed_removed',
+        'harvested': 'harvest', 'harvest': 'harvest',
+        'observed': 'observation', 'observation': 'observation',
+    }.get(first.lower(), 'observation')
+    quantities: list[dict[str, object]] = []
+    for value, unit in re.findall(r'(?<![\d.])(\d+(?:\.\d+)?)\s*(mm|m3|litres?|l)\b', body.lower()):
+        normalized = {'litre': 'litre', 'litres': 'litre', 'l': 'litre'}.get(unit, unit)
+        quantities.append({'value': float(value), 'unit': normalized})
+    return action, (remainder or body).strip()[:8000], quantities
+
+
+def create_journal(session: Session, settings: Settings, request: dict[str, Any],
+                   tenant_id: str, farmer_id: str, media_ids: list[str]) -> str:
+    """Create an explicit WhatsApp journal entry through the normal domain service."""
+    from agrisense.platform.auth import Actor
+    from agrisense.platform.service import DomainService
+    conversation = session.scalar(select(d.ConversationRow).where(
+        d.ConversationRow.id == request.get('conversation_id'),
+        d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
+    field_id = (conversation.payload or {}).get('field_id') if conversation else None
+    season = session.scalar(select(d.SeasonRow).where(
+        d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
+        d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+    if season is None:
+        return 'No open season is available for the active field. Set up a season in the web app first.'
+    source = session.get(d.MessageRow, request.get('message_id'))
+    text = (source.payload or {}).get('text', '') if source else ''
+    action, journal_text, quantities = journal_values(text)
+    value = c.JournalCreate(
+        action=action, occurred_at=d.utcnow(), text=journal_text, media_ids=media_ids,
+        quantities=[c.Measurement(**item) for item in quantities])
+    farmer = session.get(d.FarmerRow, farmer_id)
+    if farmer is None:
+        return 'Your farmer account could not be found.'
+    actor = Actor(farmer.user_id, tenant_id, farmer_id, 'farmer', True)
+    entry = DomainService(session, actor, 'whatsapp', settings).create_journal(
+        season.id, value, source='whatsapp')
+    return f'Saved to your field log: {entry.action.replace("_", " ")}. '
 
 
 def whatsapp_text(text: str) -> str:

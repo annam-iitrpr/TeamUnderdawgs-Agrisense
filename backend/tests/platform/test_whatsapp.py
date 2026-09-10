@@ -136,6 +136,13 @@ def test_whatsapp_text_converts_common_markdown():
     assert whatsapp.whatsapp_text('## Ready\n- *now*\n**safe** [details](https://example.com)') == '*Ready\n* *now*\n*safe* details: https://example.com'
 
 
+def test_explicit_journal_commands_have_contract_actions_and_units():
+    action, text, quantities = whatsapp.journal_values('log watered 20 mm')
+    assert action == 'watered' and text == '20 mm'
+    assert quantities == [{'value': 20.0, 'unit': 'mm'}]
+    assert whatsapp.journal_values('log sprayed')[0] == 'pesticide_applied'
+
+
 def test_commands_list_and_select_a_farmer_field(harness, asha, field):
     code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
     signed(harness, message(f'LINK {code}', 'wamid.link'))
