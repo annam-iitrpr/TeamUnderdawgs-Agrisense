@@ -53,10 +53,14 @@ export function PredictionReview({
         </p>
 
         {metrics.length === 0 ? (
+          // No speculation about the cause. The server states it in `warnings`,
+          // which are rendered below; guessing here risked telling a farmer the
+          // season was never evaluated when a forecast was in fact on record.
           <p className="mt-3 text-sm text-slate">
-            No comparison is available for this season. Scoring a forecast needs both the
-            forecast that was issued at the time and your closing figures; if the season was
-            never evaluated while it ran, there is nothing to compare against.
+            No comparison is available for this season.
+            {evaluation.warnings && evaluation.warnings.length > 0
+              ? " The reason is given below."
+              : ""}
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-mist">

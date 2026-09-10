@@ -213,13 +213,26 @@ async def compare(session: Session, tenant_id: str, farmer_id: str, request: c.P
 
 
 async def evaluate(session: Session, tenant_id: str, season_id: str) -> tuple[c.EvaluationBundle, c.ForecastBundle, c.SeasonSnapshot]:
-    """Run one evaluation. Reuses a stored result whenever the inputs are unchanged."""
+    """Run one evaluation over the farm facts and the weather that drove it."""
     as_of = d.utcnow()
     snapshot = build_season_snapshot(session, tenant_id, season_id, as_of)
     try:
         forecast = await weather_for(snapshot.field.model_dump(mode='json'), as_of)
     except Exception as exc:
         raise translate(exc, 'Weather forecast') from exc
+    # The farm-fact hash alone does not identify an evaluation: the weather is an
+    # input too, and it is the input that changes when advice expires. Leaving it
+    # out meant a refresh of an unchanged season produced the same hash and
+    # collided with `uq_recommendation_snapshot`, so re-evaluating failed
+    # permanently — exactly what a farmer does when their advice ages out.
+    #
+    # Folding the forecast identity in also makes `Recommendation.input_hash`
+    # honest: it now covers everything that determined the answer.
+    snapshot = snapshot.model_copy(update={'input_hash': snapshot_hash({
+        'facts': snapshot.input_hash,
+        'forecast_payload': forecast.raw_payload_hash,
+        'forecast_retrieved_at': forecast.retrieved_at.isoformat(),
+    })})
     try:
         bundle = facade('evaluate_season')(snapshot, forecast, references())
         if not isinstance(bundle, c.EvaluationBundle):

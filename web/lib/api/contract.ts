@@ -67,6 +67,9 @@ export type WaterEstimate = Schema<"WaterEstimate">;
 export type Economics = Schema<"Economics">;
 export type ForecastBundle = Schema<"ForecastBundle">;
 
+/** What one evaluation produced: advice plus the water and money that go with it. */
+export type EvaluationBundle = Schema<"EvaluationBundle">;
+
 /* ── closure and prediction review ───────────────────────────────────────── */
 
 export type SeasonCloseRequest = Schema<"SeasonCloseRequest">;

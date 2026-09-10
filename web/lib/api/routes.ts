@@ -32,6 +32,7 @@ import type {
   Product,
   Recommendation,
   Reminder,
+  EvaluationBundle,
   Season,
   SeasonCloseRequest,
   SeasonCreate,
@@ -225,12 +226,16 @@ export const seasons = {
    */
   evaluate: (
     id: string,
+    expectedVersion: number,
     idempotencyKey: string,
     o: Opts = {},
-  ): Promise<Result<unknown>> =>
+  ): Promise<Result<EvaluationBundle | Job>> =>
     apiRequest(`/seasons/${encodeURIComponent(id)}/evaluate`, {
       method: "POST",
-      body: {},
+      // `expected_version` is required by the contract. Sending `{}` here made
+      // this route unusable — it answered 422 for every caller — which is part
+      // of why nothing in the app ever asked for an evaluation.
+      body: { expected_version: expectedVersion },
       idempotencyKey,
       signal: o.signal,
     }),

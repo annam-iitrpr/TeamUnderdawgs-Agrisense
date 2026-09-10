@@ -22,6 +22,8 @@ import { AddSeasonForm } from "@/features/crops/add-season-form";
 import { SoilCardUpload } from "@/features/soil/soil-card-upload";
 import { FieldInputsForm } from "./field-inputs-form";
 import { RemoveField } from "./remove-field";
+import { RequestAdvice } from "./request-advice";
+import { SeasonSummaryStrip } from "./season-summary-strip";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
 import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
@@ -381,6 +383,10 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
     { enabled: Boolean(uid) },
   );
   const recommendation = recommendationQuery.data ?? null;
+  // A 409 here is RECOMMENDATION_EXPIRED: the season *was* evaluated and the
+  // advice has aged out. Reporting that as "no evaluation yet" tells a farmer
+  // the opposite of what happened, and hides the fact that a refresh will fix it.
+  const expired = recommendationQuery.error?.status === 409;
 
   return (
     <Card className="p-5">
@@ -427,7 +433,32 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
       <RecommendationBlock
         loading={recommendationQuery.isLoading}
         recommendation={recommendation}
+        expired={expired}
       />
+
+      {/* Nothing else in the app asked for an evaluation, so a farmer who had
+          entered everything correctly saw empty figures everywhere. Offered
+          when there is no advice, or when what there is has aged out. */}
+      {season.status !== "closed" && (recommendation == null || expired) ? (
+        <RequestAdvice
+          seasonId={season.id}
+          expectedVersion={season.version}
+          expired={expired}
+          onEvaluated={() => void recommendationQuery.refetch()}
+        />
+      ) : null}
+
+      {/* Water, money and risk at a glance. Each has its own screen; what was
+          missing was seeing where the season stands without navigating three
+          times. Only for open seasons — a closed one is reviewed, not managed. */}
+      {season.status !== "closed" ? (
+        <SeasonSummaryStrip
+          seasonId={season.id}
+          areaHa={season.allocated_area_ha}
+          recommendation={recommendation}
+          adviceExpired={expired}
+        />
+      ) : null}
 
       {/* The views that explain the season, reachable from the season they
           belong to rather than from a global menu. Readiness leads because it
@@ -480,17 +511,25 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
 function RecommendationBlock({
   loading,
   recommendation,
+  expired,
 }: {
+  expired?: boolean;
   loading: boolean;
   recommendation: Recommendation | null;
 }) {
   if (loading) return <Skeleton className="mt-4 h-20 w-full rounded-card" />;
 
   if (!recommendation) {
-    return (
-      <Callout tone="info" className="mt-4" title="No evaluation yet">
-        This season has not been evaluated, so there is no readiness score. An empty score would
-        read as &ldquo;no risk&rdquo;, which is a different claim from &ldquo;not known&rdquo;.
+    return expired ? (
+      <Callout tone="caution" className="mt-4" title="The advice has expired">
+        This season was evaluated, but the weather it was based on has moved on, so the advice
+        no longer stands. Nothing is wrong — it just needs working out again.
+      </Callout>
+    ) : (
+      <Callout tone="info" className="mt-4" title="No advice worked out yet">
+        Nobody has asked AgriSense to evaluate this season, so there is no readiness score. An
+        empty score would read as &ldquo;no risk&rdquo;, which is a different claim from
+        &ldquo;not known&rdquo;.
       </Callout>
     );
   }

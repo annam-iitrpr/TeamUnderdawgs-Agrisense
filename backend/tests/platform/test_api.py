@@ -230,6 +230,64 @@ def test_a_future_harvest_date_is_refused_not_quietly_unscoreable(asha, season):
     assert asha.get(f'/seasons/{season["id"]}').json()['data']['status'] != 'closed'
 
 
+def test_re_evaluating_an_unchanged_season_does_not_collide(asha, season, harness):
+    """A refresh of a season whose facts have not changed must still store.
+
+    `uq_recommendation_snapshot` is UNIQUE(season_id, input_hash), and the hash
+    covered farm facts only — not the weather. So re-evaluating an unchanged
+    season produced the same hash and the insert failed, permanently, with the
+    job retrying against a constraint that could never be satisfied. That is
+    exactly what a farmer does when their advice expires: nothing about the
+    field changed, only the clock and the forecast.
+
+    This drives `store_evaluation` directly, since a real evaluation needs live
+    weather. Two evaluations of identical facts with different weather must both
+    persist and the older must be marked superseded.
+    """
+    from datetime import timedelta
+
+    from agrisense.contracts_generated import models as c
+    from agrisense.platform import db as d
+    from agrisense.platform import science
+    from sqlalchemy import select as sa_select
+
+    sessions = harness.app.state.sessions
+    with sessions() as session:
+        row = session.scalar(sa_select(d.SeasonRow).where(d.SeasonRow.id == season['id']))
+        field = session.scalar(sa_select(d.FieldRow).where(d.FieldRow.id == row.field_id))
+        snapshot = science.build_season_snapshot(session, row.tenant_id, season['id'], d.utcnow())
+
+        stored = []
+        for index in (0, 1):
+            now = d.utcnow() + timedelta(minutes=index)
+            recommendation = c.Recommendation(
+                id=f'rec_refresh_{index}', field_id=row.field_id, season_id=season['id'],
+                input_version=row.version, input_hash='ignored', generated_at=now,
+                expires_at=now + timedelta(hours=1), rule_version='advisory_v1.0.0',
+                status='insufficient_data', readiness=None, need=None, timing_fit=None,
+                viability=None, selected_window=None, reasons=[])
+            bundle = c.EvaluationBundle(recommendation=recommendation, data_mode='live')
+            # Identical facts, a genuinely different weather read.
+            per_run = snapshot.model_copy(update={'input_hash': science.snapshot_hash({
+                'facts': snapshot.input_hash,
+                'forecast_payload': f'payload-{index}',
+                'forecast_retrieved_at': now.isoformat(),
+            })})
+            stored.append(science.store_evaluation(
+                session, row.tenant_id, field.farmer_id, row, bundle, per_run))
+        session.commit()
+
+        assert stored[0].input_hash != stored[1].input_hash, (
+            'identical facts with different weather produced the same identity, '
+            'so a refresh would collide'
+        )
+        rows = list(session.scalars(sa_select(d.RecommendationRow).where(
+            d.RecommendationRow.season_id == season['id'])))
+        assert len(rows) == 2
+        live = [r for r in rows if not r.superseded]
+        assert [r.id for r in live] == ['rec_refresh_1'], 'the older advice was not retired'
+
+
 def test_summary_before_closing_says_so_rather_than_scoring_nothing(asha, season):
     response = asha.get(f'/seasons/{season["id"]}/summary')
     assert response.status_code == 200
