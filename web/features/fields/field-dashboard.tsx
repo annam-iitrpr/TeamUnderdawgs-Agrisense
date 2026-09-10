@@ -27,6 +27,7 @@ import { RequestAdvice } from "./request-advice";
 import { SeasonSummaryStrip } from "./season-summary-strip";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
+import { BiostimulantPanel } from "@/features/readiness/biostimulant-panel";
 import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
 import type { Field, Recommendation, Season } from "@/lib/api/contract";
 import { formatArea, formatDateShort } from "@/lib/format";
@@ -485,6 +486,20 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
           recommendation={recommendation}
           adviceExpired={expired}
         />
+      ) : null}
+
+      {/* One biostimulant panel per crop, inside the season it belongs to. A
+          farmer with rice on one plot and maize on another is being told about
+          two different products for two different reasons, and a single merged
+          card at the top of the dashboard would leave them guessing which
+          applied where. */}
+      {season.status !== "closed" && recommendation && !expired ? (
+        <div className="mt-4">
+          <BiostimulantPanel
+            cropName={crop?.name ?? season.crop_id}
+            recommendation={recommendation}
+          />
+        </div>
       ) : null}
 
       {/* The views that explain the season, reachable from the season they

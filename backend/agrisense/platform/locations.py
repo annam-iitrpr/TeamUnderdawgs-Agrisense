@@ -103,6 +103,30 @@ def place_for_pincode(code: str) -> str | None:
     return str(chosen.get('Name')).strip() or None
 
 
+def state_for_pincode(code: str) -> str | None:
+    """The state a postal code sits in, which the gazetteer cannot infer.
+
+    A place name repeats across India -- 140001 is Ropar in Punjab, and the
+    gazetteer also holds a Ropār in Bihar. Offering a farmer the wrong one is
+    worse than offering none, and the postal directory already knows which is
+    which, so the answer is ranked by it.
+    """
+    import httpx
+
+    try:
+        response = httpx.get(f'{PINCODE_ENDPOINT}/{code}', timeout=TIMEOUT_SECONDS,
+                             headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        entries = (response.json() or [{}])[0]
+    except (httpx.HTTPError, ValueError, IndexError):
+        return None
+    for row in entries.get('PostOffice') or []:
+        state = row.get('State')
+        if state:
+            return str(state).strip()
+    return None
+
+
 def district_for_pincode(code: str) -> str | None:
     import httpx
 
@@ -149,11 +173,18 @@ def search(query: str, limit: int, settings: Settings) -> dict[str, Any]:
     # trying the post office and then its district, because either may be the
     # name the gazetteer actually holds.
     if PINCODE.match(cleaned):
+        state = state_for_pincode(cleaned)
         for candidate in (place_for_pincode(cleaned), district_for_pincode(cleaned)):
             if not candidate:
                 continue
             found = [row for row in (to_result(record) for record in fetch(candidate, limit, settings))
                      if row is not None]
+            if state:
+                # A place name repeats across India, and the postal directory
+                # knows which state this code is in. Anything elsewhere is not
+                # this pincode, so it is dropped rather than merely ranked lower.
+                in_state = [row for row in found if row.state.casefold() == state.casefold()]
+                found = in_state or found
             if found:
                 return {'items': [row.model_dump(mode='json') for row in found[:limit]],
                         'next_cursor': None}
