@@ -51,6 +51,29 @@ WhatsApp relay `.env` now points back to the consolidated file.
 - Final crop calendar, regional costs, economics rows, product labels, and agronomist sign-off.
 - Real privacy policy and production security review.
 
+## Work I can do immediately
+
+- Add and test deterministic WhatsApp journal logging, proposal confirmation,
+  reminder, and close-season command flows.
+- Add a WhatsApp test harness that exercises signed webhook delivery, worker
+  processing, media custody, duplicate delivery, and outbox behavior without
+  using real farmer data.
+- Add authenticated browser E2E coverage using Firebase fictional numbers once
+  the local Firebase test configuration is supplied.
+- Prepare the crop-calendar file from citable regional sources, with every
+  record marked pending agronomist review until the team approves it.
+- Finish the WhatsApp guide migration so it points to the current backend and
+  consolidated environment file.
+- Prepare deployment configuration, health checks, and release verification.
+
+## Work blocked by external access or human input
+
+- Firebase Console activation and fictional test-number creation.
+- Cloud Build service-account permissions and Cloudflare deployment access.
+- Meta live webhook/send verification and approved message templates.
+- Agronomist approval of crop, cost, product-label, and spray-safety records.
+- Final public privacy-policy approval.
+
 ## Current contracts and routes
 
 The authority is `contracts/openapi.yaml`, generated Python models under
