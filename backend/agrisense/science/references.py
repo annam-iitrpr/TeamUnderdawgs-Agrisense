@@ -46,7 +46,7 @@ def reference_dir() -> Path | None:
 # overwrite an earlier one. `_load` refuses a duplicate key outright, because a
 # reference value quietly replaced by another file is exactly the kind of change
 # nobody notices until the advice is wrong.
-REFERENCE_FILES = ("parameters.json", "crop-calendar.json")
+REFERENCE_FILES = ("parameters.json", "crop-calendar.json", "biostimulants.json")
 
 
 def _read(path: Path) -> dict:
@@ -64,15 +64,30 @@ def _read(path: Path) -> dict:
 
 
 @lru_cache(maxsize=1)
-def _load() -> tuple[dict, tuple[api.EvidenceRecord, ...]]:
+def _load() -> tuple[dict, tuple[api.EvidenceRecord, ...], tuple[api.Product, ...]]:
     """Read every reference file once, refusing duplicate parameter keys."""
     parameters: dict[str, dict] = {}
     evidence: dict[str, api.EvidenceRecord] = {}
+    products: dict[str, api.Product] = {}
     directory = reference_dir()
     if directory is None:
         return {}, ()
     for name in REFERENCE_FILES:
         loaded = _read(directory / name)
+        # Products are data like everything else here, so a new biostimulant is a
+        # reference change and never a code change -- which is the whole point of
+        # the engine reading a catalogue instead of branching on a product name.
+        for row in loaded.get("products") or []:
+            product = api.Product(
+                id=str(row["id"]),
+                name=str(row["name"]),
+                crop_ids=[str(item) for item in row.get("crop_ids") or []],
+                label_version=str(row["label_version"]),
+                evidence_ids=[str(item) for item in row.get("evidence_ids") or []],
+            )
+            if product.id in products:
+                raise ValueError(f"duplicate product id {product.id} in {name}")
+            products[product.id] = product
         for row in loaded.get("evidence") or []:
             record = api.EvidenceRecord(
                 id=str(row["id"]),
@@ -100,7 +115,7 @@ def _load() -> tuple[dict, tuple[api.EvidenceRecord, ...]]:
             if not isinstance(record_body, dict):
                 raise ValueError(f"parameter {key} in {name} is not an object")
             parameters[str(key)] = dict(record_body)
-    return parameters, tuple(evidence.values())
+    return parameters, tuple(evidence.values()), tuple(products.values())
 
 
 def reference_bundle() -> api.ReferenceBundle:
@@ -112,7 +127,7 @@ def reference_bundle() -> api.ReferenceBundle:
     fresh models; deployments can inject separately reviewed bundles into the
     pure facade.
     """
-    parameters, evidence = _load()
+    parameters, evidence, products = _load()
     return api.ReferenceBundle(
         # The version names what is actually loaded. Reporting
         # "rules-only-unreviewed-v1" while serving FAO-sourced water parameters
@@ -155,7 +170,7 @@ def reference_bundle() -> api.ReferenceBundle:
                 ("cotton", "Cotton"),
             )
         ],
-        products=[],
+        products=list(products),
         evidence=list(evidence),
         # Copied per call: the facade and its callers must not be able to mutate
         # the cached reference data for every later request in the process.

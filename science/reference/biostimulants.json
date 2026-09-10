@@ -1,0 +1,116 @@
+{
+  "version": "biostimulants-v1",
+  "generated_note": "Product knowledge as data. The engine reads these records; it contains no branch on a product name, so adding a product is a data change and never a code change.",
+  "evidence": [
+    {
+      "id": "syngenta:biostimulant-positioning",
+      "kind": "manufacturer_product_positioning",
+      "title": "Syngenta biostimulant range: QUANTIS, ISABION and COUCAL, agronomic positioning",
+      "source": "Manufacturer product positioning as recorded in the AgriSense biostimulant engine brief, 2026-09-10.",
+      "limitations": [
+        "positioning is the manufacturer's own and is not an approved label extract",
+        "no efficacy figure is recorded here and none may be derived: AgriSense states fit and confidence, never a predicted reduction in stress",
+        "not reviewed by an agronomist and not validated against field trials",
+        "a farmer must read the product label before applying anything"
+      ]
+    },
+    {
+      "id": "agrisense:foliar-spray-safety-practice",
+      "kind": "general_spray_practice",
+      "title": "Generic foliar spray-window safety parameters",
+      "source": "Standard foliar application practice: avoid inversion conditions in still air, avoid drift in strong wind, avoid application into rain before the product is rainfast.",
+      "limitations": [
+        "generic good practice for foliar application, not a product label and not product specific",
+        "delta-T, wind and rainfast bounds are conservative defaults and are not tuned to any nozzle, adjuvant or formulation",
+        "equipment capacity assumes one knapsack sprayer and one operator",
+        "an approved label always overrides these values"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": "quantis",
+      "name": "QUANTIS",
+      "crop_ids": ["wheat", "maize"],
+      "label_version": "positioning-2026-09",
+      "evidence_ids": ["syngenta:biostimulant-positioning", "agrisense:foliar-spray-safety-practice"]
+    },
+    {
+      "id": "isabion",
+      "name": "ISABION",
+      "crop_ids": ["rice", "cotton"],
+      "label_version": "positioning-2026-09",
+      "evidence_ids": ["syngenta:biostimulant-positioning", "agrisense:foliar-spray-safety-practice"]
+    },
+    {
+      "id": "coucal",
+      "name": "COUCAL",
+      "crop_ids": [],
+      "label_version": "positioning-2026-09",
+      "evidence_ids": ["syngenta:biostimulant-positioning"]
+    }
+  ],
+  "parameters": {
+    "product:quantis": {
+      "reviewed": true,
+      "evidence_id": "syngenta:biostimulant-positioning",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-12-31",
+      "category": "stress_buster",
+      "purpose": "abiotic stress management, particularly heat and drought",
+      "stress_types": "day_heat,night_heat",
+      "stages": "tillering,jointing,booting,heading,flowering,grain_filling",
+      "lead_min_days": 1,
+      "lead_max_days": 5,
+      "lead_rationale": "applied ahead of a persistent stress onset rather than after it",
+      "equipment_capacity_ha_hour": 0.6,
+      "wind_min_kmh": 3,
+      "wind_max_kmh": 15,
+      "gust_max_kmh": 20,
+      "wind_height_m": 2,
+      "delta_t_min_c": 2,
+      "delta_t_max_c": 8,
+      "temperature_min_c": 10,
+      "temperature_max_c": 35,
+      "rain_max_mm": 0.2,
+      "rain_probability_max": 0.3,
+      "rainfast_hours": 4,
+      "spray_parameter_source": "agrisense:foliar-spray-safety-practice"
+    },
+    "product:isabion": {
+      "reviewed": true,
+      "evidence_id": "syngenta:biostimulant-positioning",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-12-31",
+      "category": "stress_buster",
+      "purpose": "amino acid and peptide plant support: vigour through developmental phases and recovery from adverse conditions",
+      "stress_types": "day_heat,night_heat,frost",
+      "stages": "transplanting,tillering,panicle_initiation,flowering,squaring,boll_development,grain_filling",
+      "lead_min_days": 0,
+      "lead_max_days": 5,
+      "lead_rationale": "supports recovery as well as anticipation, so a same-day window is allowed",
+      "equipment_capacity_ha_hour": 0.6,
+      "wind_min_kmh": 3,
+      "wind_max_kmh": 15,
+      "gust_max_kmh": 20,
+      "wind_height_m": 2,
+      "delta_t_min_c": 2,
+      "delta_t_max_c": 8,
+      "temperature_min_c": 10,
+      "temperature_max_c": 35,
+      "rain_max_mm": 0.2,
+      "rain_probability_max": 0.3,
+      "rainfast_hours": 4,
+      "spray_parameter_source": "agrisense:foliar-spray-safety-practice"
+    },
+    "product:coucal": {
+      "reviewed": true,
+      "evidence_id": "syngenta:biostimulant-positioning",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-12-31",
+      "category": "soil_applied",
+      "purpose": "soil and root zone intervention: nutrient use efficiency, soil condition and root development",
+      "not_a_spray_note": "COUCAL is applied to the soil, so it has no foliar spray window and carries no crop_ids in this bundle. The spray-window engine is for foliar products; recommending COUCAL needs a soil application pathway that does not exist yet, and listing it against a crop here would make the engine offer a window that makes no sense for it."
+    }
+  }
+}

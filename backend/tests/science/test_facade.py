@@ -208,18 +208,40 @@ def test_region_bounds_exclude_crops_that_do_not_belong_to_the_demo_district():
     assert not covers("cotton"), "cotton must not be offered outside the cotton belt"
 
 
-def test_product_advice_remains_unavailable():
-    """Crop calendars landing must not be mistaken for product-label approval.
+def test_products_are_data_and_carry_no_efficacy_claim():
+    """The engine reads a product catalogue; it never branches on a product name.
 
-    Product rules are regulatory and none is supplied. That gap is unchanged by
-    anything else the reference bundle gains.
+    Adding a biostimulant must be a reference change, so the catalogue is
+    checked here rather than any list in code. What these records may say is
+    bounded: positioning and application conditions, and never a figure for how
+    much stress a product removes -- no such figure exists to record.
     """
     refs = reference_bundle()
-    assert refs.products == []
-    snap = snapshot()
-    result = evaluate_season(snap, forecast(snap), refs)
-    assert result.recommendation.status == "insufficient_data"
-    assert result.recommendation.selected_window is None
+    by_id = {row.id: row for row in refs.products}
+    assert {"quantis", "isabion", "coucal"} <= set(by_id)
+
+    # Exactly one product per crop, which is what the engine can act on. Two
+    # eligible products is an ambiguity it reports rather than resolves.
+    for crop in ("wheat", "maize", "rice", "cotton"):
+        eligible = [row for row in refs.products if crop in row.crop_ids]
+        assert len(eligible) == 1, f"{crop} has {len(eligible)} eligible products"
+
+    # COUCAL is soil applied, so it has no spray window and claims no crop here.
+    assert by_id["coucal"].crop_ids == []
+
+    banned = ("efficacy", "percent_reduction", "stress_reduction", "yield_gain", "uplift")
+    for key, record in refs.parameters.items():
+        if not key.startswith("product:"):
+            continue
+        assert not [field for field in record if any(word in field for word in banned)], key
+
+
+def test_a_product_record_states_that_it_is_not_an_approved_label():
+    refs = reference_bundle()
+    evidence = {row.id: row for row in refs.evidence}
+    limits = evidence["syngenta:biostimulant-positioning"].limitations
+    assert any("not an approved label" in line for line in limits)
+    assert any("never a predicted reduction in stress" in line for line in limits)
 
 
 def test_indicative_economics_are_a_band_and_declare_what_they_are():
