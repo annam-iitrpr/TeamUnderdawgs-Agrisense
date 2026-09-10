@@ -17,15 +17,13 @@ Two operational constraints shape the design:
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import date
 from typing import Any
+
+import httpx
 
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
@@ -73,36 +71,46 @@ def configured() -> bool:
 
 
 def _fetch(commodity: str) -> list[dict[str, Any]]:
-    query = urllib.parse.urlencode({
+    """One page of quotes for a commodity, or a stated dependency failure.
+
+    Uses httpx rather than urllib for the same reason the location search does:
+    urllib against this host raised `RemoteDisconnected` from Cloud Run, which
+    is a ConnectionResetError and therefore not an `URLError` — so it escaped
+    the handler entirely and surfaced as a 500 instead of an honest 503.
+    Everything this can raise is caught below and converted.
+    """
+    params = {
         'api-key': os.environ['DATA_GOV_IN_API_KEY'],
         'format': 'json',
         'limit': MAX_RECORDS,
         'filters[commodity]': commodity,
-    })
+    }
     # The User-Agent is not cosmetic. data.gov.in silently blackholes requests
     # identifying as `Python-urllib/3.x` — the connection hangs until the read
     # times out rather than returning a status, so it presents as a slow network
     # and not as a rejection. The same request with any ordinary agent answers
     # in under half a second. Verified 2026-09-10 and covered by a test.
-    request = urllib.request.Request(f'{ENDPOINT}?{query}', headers={
-        'Accept': 'application/json',
-        'User-Agent': USER_AGENT,
-    })
+    headers = {'Accept': 'application/json', 'User-Agent': USER_AGENT}
     last: Exception | None = None
     for attempt in range(RETRIES):
         try:
-            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-                payload = json.load(response)
+            response = httpx.get(ENDPOINT, params=params, headers=headers,
+                                 timeout=TIMEOUT_SECONDS, follow_redirects=True)
+            response.raise_for_status()
+            payload = response.json()
             break
-        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        # httpx.HTTPError covers transport, timeout and status failures; OSError
+        # and ValueError cover a dropped connection and malformed JSON. None of
+        # these may reach the caller as anything but a dependency problem.
+        except (httpx.HTTPError, OSError, ValueError) as exc:
             last = exc
             if attempt + 1 < RETRIES:
                 time.sleep(RETRY_BACKOFF_SECONDS)
     else:
-        log.warning('mandi price fetch failed for %s', commodity, exc_info=last)
+        log.warning('mandi price fetch failed for %s: %s', commodity, type(last).__name__)
         raise PlatformError('DEPENDENCY_UNAVAILABLE',
                             'Market prices are unavailable right now.', 503, True) from last
-    if payload.get('status') != 'ok':
+    if not isinstance(payload, dict) or payload.get('status') != 'ok':
         raise PlatformError('DEPENDENCY_UNAVAILABLE',
                             'The market price service rejected the request.', 503, True)
     return [row for row in (payload.get('records') or []) if isinstance(row, dict)]

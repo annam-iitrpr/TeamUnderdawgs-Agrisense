@@ -1,7 +1,6 @@
 """Live mandi prices: parsing, ranging and the traps in this upstream."""
 from __future__ import annotations
 
-import json
 from datetime import date
 
 import pytest
@@ -157,28 +156,57 @@ def test_an_unconfigured_key_is_reported_not_silently_empty(monkeypatch):
     assert raised.value.status == 503
 
 
-def test_the_request_carries_the_key_and_commodity_filter(monkeypatch):
-    """Guards the query shape, which is easy to break silently."""
+def test_the_request_carries_the_key_the_filter_and_a_safe_agent(monkeypatch):
+    """Guards the query shape and the header, both easy to break silently."""
     seen = {}
 
     class FakeResponse:
-        def __enter__(self):
-            return self
+        def raise_for_status(self):
+            return None
 
-        def __exit__(self, *_):
-            return False
+        def json(self):
+            return {'status': 'ok', 'records': [record()]}
 
-        def read(self):
-            return json.dumps({'status': 'ok', 'records': [record()]}).encode()
-
-    def fake_urlopen(request, timeout=None):
-        seen['url'] = request.full_url
-        seen['agent'] = request.get_header('User-agent')
+    def fake_get(url, params=None, headers=None, timeout=None, follow_redirects=None):
+        seen['url'] = url
+        seen['params'] = params or {}
+        seen['headers'] = headers or {}
         return FakeResponse()
 
-    monkeypatch.setattr(market.urllib.request, 'urlopen', fake_urlopen)
-    monkeypatch.setattr(market.json, 'load', lambda fp: json.loads(fp.read()))
+    monkeypatch.setattr(market.httpx, 'get', fake_get)
     market.prices('rice')
-    assert 'api-key=test-key' in seen['url']
-    assert 'Paddy' in seen['url']
-    assert not seen['agent'].lower().startswith('python-urllib')
+    assert seen['params']['api-key'] == 'test-key'
+    assert seen['params']['filters[commodity]'] == 'Paddy'
+    assert not seen['headers']['User-Agent'].lower().startswith('python-urllib')
+
+
+def test_a_dropped_connection_is_a_503_not_a_crash(monkeypatch):
+    """`RemoteDisconnected` is a ConnectionResetError, not an URLError.
+
+    Under urllib it escaped the handler entirely and surfaced as a 500 from
+    Cloud Run. Every transport failure must reach the farmer as an honest
+    dependency message.
+    """
+    def fake_get(*_args, **_kwargs):
+        raise ConnectionResetError('Remote end closed connection without response')
+
+    monkeypatch.setattr(market.httpx, 'get', fake_get)
+    monkeypatch.setattr(market.time, 'sleep', lambda _s: None)
+    with pytest.raises(PlatformError) as raised:
+        market.prices('cotton')
+    assert raised.value.status == 503
+    assert raised.value.retryable is True
+
+
+def test_a_non_ok_payload_is_refused_rather_than_parsed(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {'status': 'error', 'message': 'quota exceeded'}
+
+    monkeypatch.setattr(market.httpx, 'get', lambda *a, **k: FakeResponse())
+    with pytest.raises(PlatformError) as raised:
+        market.prices('cotton')
+    assert raised.value.status == 503
