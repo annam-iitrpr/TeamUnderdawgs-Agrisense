@@ -71,10 +71,15 @@ storage-state*.json
 coverage/
 
 # ── Local data, media and databases ────────────────────────────────────────
+# Anchored to the repository root. Unanchored, `media/` and `uploads/` match a
+# directory of that name at any depth: `media/` swallowed `web/lib/media/`, so
+# the upload module three screens import was never committed and the web build
+# only worked on the machine that wrote it. Locally stored bytes are under
+# `.local/media` (LOCAL_MEDIA_DIR), which the first rule already covers.
 .local/
 local-media/
-media/
-uploads/
+/media/
+/uploads/
 *.sqlite
 *.sqlite*
 *.db

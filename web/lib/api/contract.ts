@@ -137,6 +137,17 @@ export type Product = Schema<"Product">;
 export type LocationResult = Schema<"LocationResult">;
 export type Job = Schema<"Job">;
 
+/* ── media ───────────────────────────────────────────────────────────────── */
+
+export type UploadRequest = Schema<"UploadRequest">;
+export type UploadTicket = Schema<"UploadTicket">;
+export type MediaComplete = Schema<"MediaComplete">;
+export type MediaAsset = Schema<"MediaAsset">;
+export type MediaAccess = Schema<"MediaAccess">;
+
+/** The eight types the contract accepts; the server also sniffs the bytes. */
+export type MediaContentType = UploadRequest["content_type"];
+
 /* ── pagination ──────────────────────────────────────────────────────────── */
 
 /**

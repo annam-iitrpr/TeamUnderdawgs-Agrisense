@@ -22,6 +22,9 @@ import type {
   JournalCreate,
   JournalEntry,
   LocationResult,
+  MediaAccess,
+  MediaAsset,
+  MediaComplete,
   Message,
   MessageCreate,
   MutationReceipt,
@@ -41,6 +44,8 @@ import type {
   SoilReadingCreate,
   SoilObservation,
   Task,
+  UploadRequest,
+  UploadTicket,
   WaterEstimate,
 } from "./contract";
 
@@ -519,10 +524,10 @@ export const jobs = {
 export const media = {
   /** 201: returns an upload ticket. The object is not usable until completed. */
   requestUpload: (
-    body: Record<string, unknown>,
+    body: UploadRequest,
     idempotencyKey: string,
     o: Opts = {},
-  ): Promise<Result<unknown>> =>
+  ): Promise<Result<UploadTicket>> =>
     apiRequest("/media/uploads", {
       method: "POST",
       body,
@@ -532,10 +537,10 @@ export const media = {
 
   complete: (
     id: string,
-    body: Record<string, unknown>,
+    body: MediaComplete,
     idempotencyKey: string,
     o: Opts = {},
-  ): Promise<Result<unknown>> =>
+  ): Promise<Result<MediaAsset>> =>
     apiRequest(`/media/${encodeURIComponent(id)}/complete`, {
       method: "POST",
       body,
@@ -544,7 +549,7 @@ export const media = {
     }),
 
   /** Short-lived, owner-only read URL. Never cache or log the returned link. */
-  access: (id: string, o: Opts = {}): Promise<Result<unknown>> =>
+  access: (id: string, o: Opts = {}): Promise<Result<MediaAccess>> =>
     apiRequest(`/media/${encodeURIComponent(id)}/access`, { signal: o.signal }),
 };
 
