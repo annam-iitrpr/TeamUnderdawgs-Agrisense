@@ -14,6 +14,7 @@ import { newIdempotencyKey } from "@/lib/api/client";
 import type { Field, Season } from "@/lib/api/contract";
 import { ApiError } from "@/lib/api/envelope";
 import { fields as fieldsApi } from "@/lib/api/routes";
+import { formatArea } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Check, Sprout } from "lucide-react";
 import { useState } from "react";
@@ -34,15 +35,25 @@ export function AddSeasonForm({
     .filter((s) => s.status !== "closed")
     .reduce((sum, s) => sum + (s.allocated_area_ha ?? 0), 0);
   const remaining = Math.max(0, Number((field.area_ha - allocated).toFixed(4)));
+  /**
+   * What the input can actually hold. Its step is 0.01, and a value off that
+   * grid fails the browser's own validation — so offering the free area to four
+   * decimals made "Add this crop" refuse to submit with "the nearest valid
+   * value is 1.01", for every field whose area is not a round hundredth. A
+   * field entered in acres is never one: 2.5 acres is 1.011714 ha.
+   *
+   * Floored, not rounded, because rounding up offers land the field has not got.
+   */
+  const offerable = Math.floor(remaining * 100) / 100;
 
   const [cropId, setCropId] = useState("");
-  const [area, setArea] = useState(String(remaining || field.area_ha));
+  const [area, setArea] = useState(String(offerable));
   const [sowingDate, setSowingDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const areaValue = Number(area);
-  const areaInvalid = !Number.isFinite(areaValue) || areaValue <= 0 || areaValue > remaining + 1e-9;
+  const areaInvalid = !Number.isFinite(areaValue) || areaValue <= 0 || areaValue > offerable + 1e-9;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -87,11 +98,11 @@ export function AddSeasonForm({
     );
   }
 
-  if (remaining <= 0) {
+  if (offerable <= 0) {
     return (
       <Callout tone="info" title="This field is fully allocated">
-        Every hectare of {field.name} is already assigned to a season. Close a season, or reduce
-        its area, before adding another crop.
+        There is no unallocated land left in {field.name} to add a crop to. Close a season, or
+        reduce its area, before adding another.
       </Callout>
     );
   }
@@ -133,15 +144,19 @@ export function AddSeasonForm({
         </fieldset>
 
         <TextField
-          label={`Area in hectares (${remaining} ha left of ${field.area_ha} ha)`}
+          label={`Area in hectares (${formatArea(offerable, "ha")} left of ${formatArea(field.area_ha, "ha")})`}
           type="number"
           inputMode="decimal"
           step="0.01"
           min="0.01"
-          max={String(remaining)}
+          max={String(offerable)}
           value={area}
           onChange={(e) => setArea(e.target.value)}
-          error={areaInvalid && area !== "" ? `Enter between 0.01 and ${remaining} ha.` : undefined}
+          error={
+            areaInvalid && area !== ""
+              ? `Enter between 0.01 and ${formatArea(offerable, "ha")}.`
+              : undefined
+          }
         />
 
         <TextField

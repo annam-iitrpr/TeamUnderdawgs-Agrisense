@@ -15,6 +15,7 @@ import type { Field, SoilObservation } from "@/lib/api/contract";
 import { ApiError } from "@/lib/api/envelope";
 import { jobs as jobsApi, soil as soilApi } from "@/lib/api/routes";
 import { uploadAttachment, UploadError } from "@/lib/media/upload";
+import { explainMissing } from "@/lib/missing-reasons";
 import { FileText, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -226,7 +227,7 @@ function ReviewDraft({
               />
               {(values[key] ?? "") === "" && reading.missing_reason ? (
                 <p className="mt-1 text-xs text-slate">
-                  Not read from the card: {reading.missing_reason.replace(/_/g, " ")}
+                  Not read from the card: {explainMissing(reading.missing_reason)}
                 </p>
               ) : null}
             </div>

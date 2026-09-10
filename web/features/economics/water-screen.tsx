@@ -30,7 +30,7 @@ import { useApiQuery } from "@/lib/api/query";
 import { seasons as seasonsApi } from "@/lib/api/routes";
 import { CloudRain, Droplets, Info } from "lucide-react";
 import Link from "next/link";
-import { explainMissing } from "@/lib/missing-reasons";
+import { explainCode, explainMissing } from "@/lib/missing-reasons";
 
 export function WaterScreen({ seasonId }: { seasonId: string }) {
   const { user } = useAuth();
@@ -95,7 +95,7 @@ export function WaterScreen({ seasonId }: { seasonId: string }) {
                 </p>
                 <ul className="mt-2 list-inside list-disc text-sm text-slate">
                   {water.assumptions.map((item) => (
-                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                    <li key={item}>{explainCode(item)}</li>
                   ))}
                 </ul>
               </Card>

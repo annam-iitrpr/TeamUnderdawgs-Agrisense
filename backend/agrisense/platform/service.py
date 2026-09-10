@@ -450,7 +450,15 @@ class DomainService:
         if path.startswith('/seasons/{id}/'):
             season=self.own(d.SeasonRow,id)
             rec=self.s.scalar(select(d.RecommendationRow).where(d.RecommendationRow.season_id==id,d.RecommendationRow.tenant_id==self.actor.tenant_id,d.RecommendationRow.superseded.is_(False)).order_by(d.RecommendationRow.created_at.desc(),d.RecommendationRow.id.desc()).limit(1))
-            if not rec:raise unavailable('Current season evaluation')
+            if not rec:
+                # A superseded row means the farmer changed something the advice
+                # rested on — a soil reading, a journal entry, the season itself.
+                # That is a different thing from never having asked, and saying
+                # "nobody has asked" to someone who just supplied the reading the
+                # app requested reads as if their work was thrown away.
+                if self.s.scalar(select(d.RecommendationRow.id).where(d.RecommendationRow.season_id==id,d.RecommendationRow.tenant_id==self.actor.tenant_id).limit(1)):
+                    raise PlatformError('RECOMMENDATION_SUPERSEDED','Your newer information has made this advice out of date. Ask for it again.',409,True)
+                raise unavailable('Current season evaluation')
             if path.endswith('/recommendations/latest'):
                 value=c.Recommendation.model_validate(rec.payload['recommendation'])
                 if value.expires_at<=d.utcnow():raise PlatformError('RECOMMENDATION_EXPIRED','Request a fresh evaluation.',409,True)

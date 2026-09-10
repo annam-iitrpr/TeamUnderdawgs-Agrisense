@@ -13,6 +13,7 @@
  */
 import { Callout } from "@/components/ui";
 import type { CropComparison } from "@/lib/api/contract";
+import { explainCode } from "@/lib/missing-reasons";
 import type { ReactNode } from "react";
 
 export function NoCandidates({
@@ -80,7 +81,7 @@ export function NoCandidates({
         <ul className="mt-2 list-inside list-disc text-sm">
           {/* Keyed by position: the same code legitimately repeats once per crop. */}
           {exclusions.slice(0, 5).map((reason, index) => (
-            <li key={`${reason.code}-${index}`}>{reason.code.replace(/_/g, " ")}</li>
+            <li key={`${reason.code}-${index}`}>{explainCode(reason.code)}</li>
           ))}
         </ul>
       ) : null}

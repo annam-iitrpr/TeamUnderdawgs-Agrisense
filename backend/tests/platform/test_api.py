@@ -497,3 +497,60 @@ def test_planning_refuses_a_field_that_is_not_the_callers(ravi, field):
         'proposed_season': {'start_date': '2026-10-01', 'end_date': '2027-02-01'},
         'candidate_crop_ids': ['rice']})
     assert refused.status_code == 404
+
+
+def test_advice_retired_by_the_farmers_own_reading_says_so(asha, field, season, harness):
+    """"Nobody has asked" is the wrong thing to tell someone who just asked.
+
+    Recording a soil moisture reading bumps every open season on the field,
+    which supersedes the advice that reading was meant to improve — correctly,
+    because the water balance now has an input it did not have before. But the
+    read path answered 503 for a superseded row exactly as it does for a season
+    nobody ever evaluated, so the dashboard told a farmer who had done
+    everything the app asked that nobody had asked for advice, and their
+    evaluation appeared to have been thrown away.
+    """
+    from datetime import timedelta
+
+    from agrisense.contracts_generated import models as c
+    from agrisense.platform import db as d
+    from agrisense.platform import science
+    from sqlalchemy import select as sa_select
+
+    # A season nobody has evaluated is genuinely unavailable, not superseded.
+    never = asha.get(f'/seasons/{season["id"]}/recommendations/latest')
+    assert never.status_code == 503, never.text
+
+    sessions = harness.app.state.sessions
+    with sessions() as session:
+        row = session.scalar(sa_select(d.SeasonRow).where(d.SeasonRow.id == season['id']))
+        owner = session.scalar(sa_select(d.FieldRow).where(d.FieldRow.id == row.field_id))
+        snapshot = science.build_season_snapshot(session, row.tenant_id, season['id'], d.utcnow())
+        now = d.utcnow()
+        recommendation = c.Recommendation(
+            id='rec_superseded', field_id=row.field_id, season_id=season['id'],
+            input_version=row.version, input_hash='ignored', generated_at=now,
+            # Well inside its 45-minute life, so an expiry cannot explain the result.
+            expires_at=now + timedelta(hours=1), rule_version='advisory_v1.0.0',
+            status='insufficient_data', readiness=None, need=None, timing_fit=None,
+            viability=None, selected_window=None, reasons=[])
+        science.store_evaluation(session, row.tenant_id, owner.farmer_id, row,
+                                 c.EvaluationBundle(recommendation=recommendation,
+                                                    data_mode='live'), snapshot)
+        session.commit()
+
+    assert asha.get(f'/seasons/{season["id"]}/recommendations/latest').status_code == 200
+
+    today = d.utcnow().astimezone(
+        __import__('zoneinfo').ZoneInfo('Asia/Kolkata')
+    ).date().isoformat()
+    assert asha.post('/soil/readings', {
+        'field_id': field['id'], 'sampled_on': today,
+        'moisture': {'value': 0.20, 'unit': 'm³/m³'}, 'moisture_basis': 'volumetric',
+        'depth_cm': 30}).status_code == 201
+
+    stale = asha.get(f'/seasons/{season["id"]}/recommendations/latest')
+    assert stale.status_code == 409, stale.text
+    assert stale.json()['error']['code'] == 'RECOMMENDATION_SUPERSEDED'
+    # Retryable: asking again is exactly what fixes it.
+    assert stale.json()['error']['retryable'] is True

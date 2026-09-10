@@ -68,6 +68,15 @@ export function codeForStatus(status: number): ApiErrorCode {
  */
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
+  /**
+   * The server's own code, kept verbatim.
+   *
+   * `code` is derived from the status, and one status covers several
+   * conditions: 409 is both RECOMMENDATION_EXPIRED and
+   * RECOMMENDATION_SUPERSEDED, which a farmer must be told apart — advice that
+   * aged out, versus advice their own new reading replaced.
+   */
+  readonly serverCode: string | null;
   readonly status: number;
   readonly retryable: boolean;
   readonly requestId: string | null;
@@ -75,6 +84,7 @@ export class ApiError extends Error {
 
   constructor(init: {
     code: ApiErrorCode;
+    serverCode?: string | null;
     status: number;
     message: string;
     retryable?: boolean;
@@ -84,6 +94,7 @@ export class ApiError extends Error {
     super(init.message);
     this.name = "ApiError";
     this.code = init.code;
+    this.serverCode = init.serverCode ?? null;
     this.status = init.status;
     this.retryable = init.retryable ?? defaultRetryable(init.code);
     this.requestId = init.requestId ?? null;

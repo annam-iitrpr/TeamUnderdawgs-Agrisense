@@ -12,6 +12,7 @@
 import { UnknownValue } from "@/components/ui";
 import type { Estimate } from "@/lib/api/contract";
 import { cn } from "@/lib/utils";
+import { explainCode } from "@/lib/missing-reasons";
 
 const BASIS_LABEL: Record<string, string> = {
   scenario: "Scenario",
@@ -47,7 +48,7 @@ export function EstimateBand({
           <UnknownValue label="Not known" />
         </div>
         {estimate?.missing_reason ? (
-          <p className="mt-0.5 text-xs text-slate">{estimate.missing_reason.replace(/_/g, " ")}</p>
+          <p className="mt-0.5 text-xs text-slate">{explainCode(estimate.missing_reason)}</p>
         ) : null}
       </div>
     );

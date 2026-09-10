@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { explainMissing } from "@/lib/missing-reasons";
+import { explainCode, explainMissing } from "@/lib/missing-reasons";
 
 describe("explainMissing", () => {
   it("says what is missing and who can supply it", () => {
@@ -35,5 +35,42 @@ describe("explainMissing", () => {
     ]) {
       expect(explainMissing(code)).not.toContain("_");
     }
+  });
+
+  it("names the weather service behind its own failure code", () => {
+    expect(explainMissing("meteoblue:no_data")).toBe(
+      "the meteoblue weather service returned no data for your field",
+    );
+    expect(explainMissing("open_meteo:forecast_not_supported")).toContain(
+      "does not supply an hourly forecast",
+    );
+  });
+
+  it("does not mistake a scenario setting for a weather outage", () => {
+    // `draws:2000` and `cost_basis:market` share the prefixed shape but are
+    // settings, not providers. Phrasing them as an outage would be a lie.
+    expect(explainMissing("draws:2000")).toBe("draws: 2000");
+    expect(explainMissing("cost_basis:market")).toBe("cost basis: market");
+    expect(explainMissing("draws:2000")).not.toContain("weather");
+  });
+
+  it("phrases the assumptions the water screen shows", () => {
+    // The seven daily figures are alternatives; a farmer who adds them up
+    // overestimates the season by roughly sevenfold.
+    expect(explainMissing("daily_values_are_replenishment_alternatives_do_not_sum")).toContain(
+      "do not add them up",
+    );
+    expect(explainMissing("no_future_irrigation_assumed")).not.toContain("_");
+    expect(explainMissing("standard_demand_scenario")).not.toContain("_");
+  });
+});
+
+describe("explainCode", () => {
+  it("capitalises a phrase for standalone display", () => {
+    expect(explainCode("soil_ph_missing")).toMatch(/^Needs the pH/);
+  });
+
+  it("still surfaces a code nobody has phrased yet", () => {
+    expect(explainCode("brand_new_code")).toBe("Brand new code");
   });
 });

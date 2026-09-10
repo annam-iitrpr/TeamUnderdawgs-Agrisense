@@ -14,6 +14,7 @@ import { ScoreMeter } from "./score-meter";
 import { formatLitres, litresFromMeasurement } from "./water-figures";
 import type { Crop, CropPlan } from "@/lib/api/contract";
 import { cn } from "@/lib/utils";
+import { explainCode } from "@/lib/missing-reasons";
 import { CalendarDays, Check, Droplets, Scissors, TriangleAlert } from "lucide-react";
 
 function windowLabel(interval: { start_date: string; end_date: string } | null | undefined): string | null {
@@ -105,7 +106,9 @@ export function CropCard({
         <ScoreMeter
           score={overall}
           label="Suitability for this field"
-          missingReason={plan.exclusions?.[0]?.code?.replace(/_/g, " ")}
+          missingReason={
+            plan.exclusions?.[0]?.code ? explainCode(plan.exclusions[0].code) : undefined
+          }
         />
         <ScoreMeter
           score={waterScore}
@@ -188,7 +191,7 @@ export function CropCard({
         <Callout tone="caution" className="mt-3 text-sm" title="Warnings for this crop">
           <ul className="list-inside list-disc">
             {plan.exclusions.slice(0, 4).map((reason) => (
-              <li key={reason.code}>{reason.code.replace(/_/g, " ")}</li>
+              <li key={reason.code}>{explainCode(reason.code)}</li>
             ))}
           </ul>
         </Callout>

@@ -14,6 +14,7 @@
  */
 import { UnknownValue } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { explainCode } from "@/lib/missing-reasons";
 
 const SEGMENTS = 10;
 
@@ -57,7 +58,7 @@ export function ScoreMeter({
           <UnknownValue label="Not known" />
         </div>
         {missingReason ? (
-          <p className="mt-0.5 text-xs text-slate">{missingReason.replace(/_/g, " ")}</p>
+          <p className="mt-0.5 text-xs text-slate">{explainCode(missingReason)}</p>
         ) : null}
       </div>
     );

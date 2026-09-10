@@ -31,6 +31,7 @@ import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
 import type { Field, Recommendation, Season } from "@/lib/api/contract";
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { explainCode } from "@/lib/missing-reasons";
 import { useActiveField } from "./active-field";
 import { ChevronDown, Clock, Droplets, Flag, IndianRupee, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
 import Link from "next/link";
@@ -383,6 +384,9 @@ function NoSeasonCard({
  * insufficient recommendation says so rather than rendering an empty score,
  * which would read as "no risk" instead of "not known".
  */
+/** Why advice that once existed is not being shown. */
+type Staleness = "expired" | "superseded" | null;
+
 function SeasonCard({ field, season }: { field: Field; season: Season }) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -396,10 +400,17 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
     { enabled: Boolean(uid) },
   );
   const recommendation = recommendationQuery.data ?? null;
-  // A 409 here is RECOMMENDATION_EXPIRED: the season *was* evaluated and the
-  // advice has aged out. Reporting that as "no evaluation yet" tells a farmer
-  // the opposite of what happened, and hides the fact that a refresh will fix it.
-  const expired = recommendationQuery.error?.status === 409;
+  // Both 409s mean the season *was* evaluated, and reporting either as "no
+  // evaluation yet" tells a farmer the opposite of what happened. They differ in
+  // whose doing it was: EXPIRED is the weather moving on, SUPERSEDED is the
+  // farmer's own new reading retiring the advice that was waiting for it.
+  const staleness: Staleness =
+    recommendationQuery.error?.status !== 409
+      ? null
+      : recommendationQuery.error.serverCode === "RECOMMENDATION_SUPERSEDED"
+        ? "superseded"
+        : "expired";
+  const expired = staleness !== null;
 
   return (
     <Card className="p-5">
@@ -446,7 +457,7 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
       <RecommendationBlock
         loading={recommendationQuery.isLoading}
         recommendation={recommendation}
-        expired={expired}
+        staleness={staleness}
       />
 
       {/* Nothing else in the app asked for an evaluation, so a farmer who had
@@ -524,16 +535,24 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
 function RecommendationBlock({
   loading,
   recommendation,
-  expired,
+  staleness,
 }: {
-  expired?: boolean;
+  staleness: Staleness;
   loading: boolean;
   recommendation: Recommendation | null;
 }) {
   if (loading) return <Skeleton className="mt-4 h-20 w-full rounded-card" />;
 
   if (!recommendation) {
-    return expired ? (
+    if (staleness === "superseded") {
+      return (
+        <Callout tone="caution" className="mt-4" title="Your new information changed things">
+          The advice was worked out before you added what you just saved, so it no longer
+          matches this season. Working it out again will use the new information.
+        </Callout>
+      );
+    }
+    return staleness === "expired" ? (
       <Callout tone="caution" className="mt-4" title="The advice has expired">
         This season was evaluated, but the weather it was based on has moved on, so the advice
         no longer stands. Nothing is wrong — it just needs working out again.
@@ -559,7 +578,7 @@ function RecommendationBlock({
         {reasons.length ? (
           <ul className="mt-2 list-inside list-disc text-sm">
             {reasons.slice(0, 3).map((reason) => (
-              <li key={reason.code}>{reason.code.replace(/_/g, " ")}</li>
+              <li key={reason.code}>{explainCode(reason.code)}</li>
             ))}
           </ul>
         ) : null}
@@ -593,7 +612,7 @@ function RecommendationBlock({
       {reasons.length ? (
         <ul className="mt-2 list-inside list-disc text-sm">
           {reasons.slice(0, 3).map((reason) => (
-            <li key={reason.code}>{reason.code.replace(/_/g, " ")}</li>
+            <li key={reason.code}>{explainCode(reason.code)}</li>
           ))}
         </ul>
       ) : null}

@@ -69,6 +69,28 @@ const PHRASES: Record<string, string> = {
   scenario_not_field_validated: "this projection has not been checked against real fields",
   v1_safety_and_economics_extensions_pending:
     "spray safety and the money detail are not complete in this version",
+
+  // Assumptions. What a figure took for granted in order to exist at all.
+  standard_demand_scenario: "the crop is taken to be growing normally, at its standard water demand",
+  no_future_irrigation_assumed:
+    "no watering is assumed between now and each day shown, so each figure is the most that day could need",
+  daily_values_are_replenishment_alternatives_do_not_sum:
+    "each day's figure refills the root zone on that day — they are alternatives, so do not add them up",
+  same_day_vwc_initialization_when_available:
+    "the water already in the soil counts only when the moisture reading was taken today",
+  reviewed_regional_scenario: "based on the reviewed figures for your region",
+  remaining_field_area_used: "worked out for the part of the field that is still free",
+  paired_rows_equal_weight_resampling: "every past record counts equally towards the range",
+  paired_rows_resampled_with_equal_weight: "every past record counts equally towards the range",
+  scenario_not_calibrated_interval:
+    "the high and low figures are the spread of past records, not a calibrated forecast",
+  not_calibrated_prediction_intervals:
+    "the high and low figures are the spread of past records, not a calibrated forecast",
+  fees_already_deducted_do_not_duplicate_in_cost_ledger:
+    "market fees are already taken off this price — do not enter them again as a cost",
+  binary_feasibility_viability: "an hour is either usable for spraying or it is not; there is no partial score",
+  stull_standard_pressure_approximation:
+    "Delta T uses standard air pressure, not your field's altitude",
 };
 
 /** What a weather provider's own failure code means, once the provider is named. */
@@ -91,13 +113,18 @@ export function explainMissing(code: string | null | undefined): string | null {
   if (bare === "") return null;
   if (PHRASES[bare]) return PHRASES[bare];
 
-  // A provider attaches its own name: `meteoblue:no_data`. The service is worth
-  // naming, because "no weather" and "this one service is down" are different
-  // situations to a farmer deciding whether to wait.
-  const provider = /^([a-z][a-z0-9_.-]*):(.+)$/.exec(bare);
-  if (provider) {
-    const [, name, failure] = provider as unknown as [string, string, string];
-    return `the ${name} weather service ${PROVIDER_PHRASES[failure] ?? failure.replace(/_/g, " ")}`;
+  // Codes also arrive as `prefix:value`, and the prefix means different things:
+  // a provider attaches its own name (`meteoblue:no_data`), while a scenario
+  // attaches its settings (`draws:2000`, `cost_basis:market`). Only the known
+  // provider failures get the provider sentence — everything else is a labelled
+  // value, and phrasing it as a weather outage would be a lie.
+  const prefixed = /^([a-z][a-z0-9_.-]*):(.+)$/.exec(bare);
+  if (prefixed) {
+    const name = prefixed[1] as string;
+    const rest = prefixed[2] as string;
+    if (PROVIDER_PHRASES[rest]) return `the ${name} weather service ${PROVIDER_PHRASES[rest]}`;
+    if (PHRASES[rest]) return PHRASES[rest];
+    return `${name.replace(/_/g, " ")}: ${rest.replace(/_/g, " ")}`;
   }
 
   return bare.replace(/_/g, " ");

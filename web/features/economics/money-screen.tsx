@@ -19,6 +19,7 @@ import { EstimateBand } from "@/features/planning/estimate-band";
 import type { Economics, JournalEntry, Season } from "@/lib/api/contract";
 import { useApiQuery } from "@/lib/api/query";
 import { seasons as seasonsApi } from "@/lib/api/routes";
+import { explainCode } from "@/lib/missing-reasons";
 import { ChevronDown, IndianRupee, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -216,7 +217,7 @@ function Assumptions({ economics }: { economics: Economics }) {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate">{label}</p>
               <ul className="mt-1 list-inside list-disc text-slate">
                 {list.map((item) => (
-                  <li key={item}>{item.replace(/_/g, " ")}</li>
+                  <li key={item}>{explainCode(item)}</li>
                 ))}
               </ul>
             </div>

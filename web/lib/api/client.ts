@@ -145,6 +145,7 @@ function toApiError(response: Response, payload: unknown): ApiError {
 
   return new ApiError({
     code,
+    serverCode: envelopeError?.code ?? null,
     status: response.status,
     message: envelopeError?.message ?? fallbackMessage(code),
     retryable: envelopeError?.retryable,
