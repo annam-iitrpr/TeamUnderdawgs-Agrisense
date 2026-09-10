@@ -196,7 +196,7 @@ function FieldSwitcher({
                 )}
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">{field.name}</span>
+                  <span translate="no" className="block truncate text-sm font-semibold">{field.name}</span>
                   <span className="block text-xs text-slate">
                     {formatArea(field.area_ha, "ha")}
                   </span>
@@ -227,7 +227,7 @@ function FieldSwitcher({
 function FieldSummary({ field }: { field: Field }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-h3 font-semibold">{field.name}</p>
+      <p translate="no" className="truncate text-h3 font-semibold">{field.name}</p>
       <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate">
         <span>{formatArea(field.area_ha, "ha")}</span>
         <span className="inline-flex items-center gap-1">
@@ -341,7 +341,7 @@ function NoSeasonCard({
 }) {
   return (
     <Card className="p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate">{field.name}</p>
+      <p translate="no" className="text-xs font-semibold uppercase tracking-wide text-slate">{field.name}</p>
       <h2 className="mt-1 text-h2 font-semibold">No crop set for this field</h2>
       <p className="mt-2 text-sm text-slate">
         A spray window, a water plan and a return estimate all depend on knowing the crop and when
@@ -415,7 +415,7 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
   return (
     <Card className="p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate">
-        {field.name} · {season.status}
+        <span translate="no">{field.name}</span> · {season.status}
       </p>
       <h2 className="mt-1 break-words text-h2 font-semibold capitalize">
         {crop?.name ?? season.crop_id}

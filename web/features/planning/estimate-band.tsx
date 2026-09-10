@@ -63,6 +63,7 @@ export function EstimateBand({
     <div className={className}>
       <p className="text-xs text-slate">{label}</p>
       <p
+        translate="no"
         className={cn(
           "mt-0.5 font-semibold tabular-nums",
           emphasis ? "text-h3" : "text-sm",
@@ -72,7 +73,7 @@ export function EstimateBand({
         {formatValue(p50, unit)}
       </p>
       {hasBand ? (
-        <p className="text-xs tabular-nums text-slate">
+        <p translate="no" className="text-xs tabular-nums text-slate">
           {formatValue(p10, unit)} to {formatValue(p90, unit)}
         </p>
       ) : null}

@@ -205,7 +205,7 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
         {field ? (
           <Card className="p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate">
-              {field.name}
+              <span translate="no">{field.name}</span>
             </p>
             <p className="mt-0.5 text-sm text-slate">
               {/* Free area is only worth contrasting with the whole field once

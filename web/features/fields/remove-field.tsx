@@ -77,7 +77,7 @@ export function RemoveField({
     <Card className="border-clay/40 p-4">
       <p className="flex items-center gap-2 text-sm font-semibold text-clay">
         <AlertTriangle aria-hidden className="size-4" />
-        Remove {field.name}?
+        Remove <span translate="no">{field.name}</span>?
       </p>
       <Callout tone="caution" className="mt-2">
         <p>
