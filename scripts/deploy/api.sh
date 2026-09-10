@@ -8,6 +8,8 @@
 #
 # Requires: GCP_PROJECT_ID, GCP_REGION, CLOUDSQL_INSTANCE_CONNECTION_NAME, FIREBASE_PROJECT_ID,
 # CLOUD_RUN_API_URL, CLOUD_RUN_WEB_URL, GCS_MEDIA_BUCKET, API_SERVICE_ACCOUNT.
+# Cloud Build projects with `constraints/cloudbuild.useBuildServiceAccount` also need
+# CLOUD_BUILD_SERVICE_ACCOUNT when the local Docker daemon is unavailable.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -57,6 +59,7 @@ else
   echo "Docker is unavailable; building the pinned image with Cloud Build."
   gcloud builds submit "$ROOT" \
     --project "$GCP_PROJECT_ID" \
+    --service-account "${CLOUD_BUILD_SERVICE_ACCOUNT:?set CLOUD_BUILD_SERVICE_ACCOUNT when using Cloud Build}" \
     --config "$ROOT/infra/cloudbuild-api.yaml" \
     --substitutions="_API_IMAGE=$API_IMAGE"
 fi
