@@ -120,6 +120,34 @@ def test_media_is_recorded_but_does_not_create_an_empty_assistant_turn(harness, 
         assert session.scalars(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')).all() == []
 
 
+def test_extracts_interactive_replies_and_media_captions():
+    payload = {'entry': [{'changes': [{'value': {'messages': [
+        {'id': 'wamid.button', 'from': NUMBER, 'type': 'interactive',
+         'interactive': {'type': 'button_reply', 'button_reply': {'id': 'water', 'title': 'Water'}},
+         'timestamp': '1757462400'},
+        {'id': 'wamid.image', 'from': NUMBER, 'type': 'image',
+         'image': {'id': 'media.1', 'caption': 'Leaf photo'}, 'timestamp': '1757462400'}]}}]}]}
+    events = whatsapp.extract(payload)
+    assert events[0]['text'] == 'water'
+    assert events[1]['media_id'] == 'media.1' and events[1]['caption'] == 'Leaf photo'
+
+
+def test_whatsapp_text_converts_common_markdown():
+    assert whatsapp.whatsapp_text('## Ready\n- *now*\n**safe** [details](https://example.com)') == '*Ready\n* *now*\n*safe* details: https://example.com'
+
+
+def test_commands_list_and_select_a_farmer_field(harness, asha, field):
+    code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
+    signed(harness, message(f'LINK {code}', 'wamid.link'))
+    assert signed(harness, message('fields', 'wamid.fields')).status_code == 200
+    assert signed(harness, message(f'use {field["name"]}', 'wamid.use')).status_code == 200
+    with harness.app.state.sessions() as session:
+        channel = session.scalar(select(d.ChannelRow).where(d.ChannelRow.provider == 'whatsapp'))
+        conversation = session.get(d.ConversationRow, channel.payload['conversation_id'])
+        assert channel.payload['active_field_id'] == field['id']
+        assert conversation.payload['field_id'] == field['id']
+
+
 def test_unlinking_stops_further_ingestion(harness, asha):
     code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
     signed(harness, message(f'LINK {code}', 'wamid.link'))

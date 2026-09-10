@@ -22,6 +22,34 @@ Real credentials belong only in `~/Work/agrisense.env`, Secret Manager, or the
 team password manager. The repository contains no credential file. The local
 WhatsApp relay `.env` now points back to the consolidated file.
 
+## Status at the latest handoff
+
+### Done
+
+- Firebase web auth is phone number plus SMS OTP; email/password screens are removed.
+- The landing page and public responsive/PWA browser checks are implemented.
+- Meta webhook verification, signature checking, message deduplication, and fast 200 acknowledgement are implemented.
+- WhatsApp link codes bind a number to an authenticated farmer once.
+- Linked text, interactive replies, menu/help, field listing, and active-field switching use the backend conversation pipeline.
+- Meta image/audio IDs are downloaded by the worker, validated, stored through media custody, and attached to the assistant turn.
+- Assistant replies are queued for WhatsApp delivery and converted to WhatsApp formatting.
+- Actual local environment values are consolidated in `~/Work/agrisense.env`; no environment file is committed.
+
+### In progress
+
+- Local WhatsApp worker and media tests, including assistant and outbox delivery.
+- Mapping readiness, water, money, journal, reminders, proposals, and season closure to deterministic channel actions where the API contract permits it.
+- Authenticated browser/API E2E using Firebase fictional numbers.
+
+### Remaining
+
+- Firebase Phone provider activation and SMS/demo-number smoke test.
+- API and frontend deployment, followed by live website verification.
+- Meta live webhook/send verification against the deployed API.
+- Approved template messages for proactive notifications outside the 24 hour window.
+- Final crop calendar, regional costs, economics rows, product labels, and agronomist sign-off.
+- Real privacy policy and production security review.
+
 ## Current contracts and routes
 
 The authority is `contracts/openapi.yaml`, generated Python models under

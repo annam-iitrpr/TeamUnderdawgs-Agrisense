@@ -18,11 +18,13 @@ from sqlalchemy.orm import Session
 
 from agrisense.config import Settings
 from agrisense.platform import db as d
+from agrisense.platform import media
 from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.whatsapp')
 LINK_PREFIX = 'LINK'
 SESSION_WINDOW = timedelta(hours=24)
+MEDIA_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'audio/ogg', 'audio/mpeg', 'audio/wav', 'audio/webm'}
 
 
 def identity_hash(external_id: str) -> str:
@@ -57,10 +59,15 @@ def extract(payload: dict[str, Any]) -> list[dict[str, Any]]:
         for change in entry.get('changes', []) or []:
             value = change.get('value', {}) or {}
             for message in value.get('messages', []) or []:
+                message_type = message.get('type', '')
+                content = message.get(message_type) or {}
+                interactive = message.get('interactive') or {}
+                reply = interactive.get('button_reply') or interactive.get('list_reply') or {}
                 events.append({'kind': 'message', 'external_message_id': message.get('id', ''),
-                               'from': message.get('from', ''), 'type': message.get('type', ''),
-                               'text': (message.get('text') or {}).get('body', ''),
-                               'media_id': ((message.get(message.get('type', '')) or {}) or {}).get('id'),
+                               'from': message.get('from', ''), 'type': message_type,
+                               'text': (message.get('text') or {}).get('body', '') or reply.get('id', '') or reply.get('title', ''),
+                               'caption': content.get('caption', ''),
+                               'media_id': content.get('id'),
                                'timestamp': message.get('timestamp')})
             for status in value.get('statuses', []) or []:
                 events.append({'kind': 'status', 'external_message_id': status.get('id', ''),
@@ -124,7 +131,7 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
     if not external_id:
         return 'invalid_sender'
     digest = identity_hash(external_id)
-    text = (event.get('text') or '').strip()
+    text = (event.get('text') or event.get('caption') or '').strip()
     if text.upper().startswith(LINK_PREFIX):
         code = text[len(LINK_PREFIX):].strip()
         return 'linked' if redeem_link(session, external_id, code) else 'link_rejected'
@@ -134,11 +141,13 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         return 'unlinked'
     if not channel.opted_in:
         return 'opted_out'
-    if event.get('type') != 'text' or not text:
+    if event.get('type') not in ('text', 'interactive', 'image', 'audio'):
         # Media requires a separate Meta media download and an internal media asset
         # before the assistant can read it. Keep the signed event for audit, but do
         # not create an empty assistant turn.
         return 'unsupported_message'
+    if not text and not event.get('media_id'):
+        return 'empty_message'
     channel.last_inbound_at = d.utcnow()
     channel_payload = channel.payload or {}
     conversation_id = channel_payload.get('conversation_id')
@@ -153,6 +162,28 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
             version=1, payload={'id': conversation_id, 'language': 'en'})
         session.add(conversation)
         channel.payload = {**channel_payload, 'conversation_id': conversation_id}
+    command = None
+    lowered = text.lower()
+    if lowered in {'menu', 'help', 'start'}:
+        command = 'menu'
+    elif lowered in {'fields', 'my fields', 'switch field'}:
+        command = 'fields'
+    elif lowered.startswith('use '):
+        requested = text[4:].strip().lower()
+        fields = list(session.scalars(select(d.FieldRow).where(
+            d.FieldRow.tenant_id == channel.tenant_id,
+            d.FieldRow.farmer_id == channel.farmer_id,
+            d.FieldRow.archived.is_(False)).order_by(d.FieldRow.name)))
+        selected = next((field for field in fields if field.name.lower() == requested), None)
+        if selected is None and requested.isdigit():
+            index = int(requested) - 1
+            selected = fields[index] if 0 <= index < len(fields) else None
+        if selected is not None:
+            conversation.payload = {**conversation.payload, 'field_id': selected.id}
+            channel.payload = {**channel.payload, 'active_field_id': selected.id}
+            command = 'field_selected'
+        else:
+            command = 'fields'
     message_id = d.new_id()
     session.add(d.MessageRow(
         id=message_id, tenant_id=channel.tenant_id, farmer_id=channel.farmer_id,
@@ -164,8 +195,92 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
                          kind='whatsapp.inbound', status='pending', attempts=0,
                          payload={'id': d.new_id(), 'request': {
                              'external_message_id': event['external_message_id'],
-                             'conversation_id': conversation_id, 'message_id': message_id}}))
+                             'conversation_id': conversation_id, 'message_id': message_id,
+                             'media_id': event.get('media_id'), 'media_type': event.get('type'),
+                             'command': command}}))
     return 'queued'
+
+
+def command_reply(session: Session, request: dict[str, Any], tenant_id: str,
+                  farmer_id: str) -> str | None:
+    """Small deterministic channel commands; all agronomic answers stay in the assistant."""
+    command = request.get('command')
+    if command == 'menu':
+        return '*AgriSense menu*\nReply with readiness, water, money, journal, or fields.\nUse `use <field name>` to switch fields.'
+    if command == 'fields':
+        fields = list(session.scalars(select(d.FieldRow).where(
+            d.FieldRow.tenant_id == tenant_id, d.FieldRow.farmer_id == farmer_id,
+            d.FieldRow.archived.is_(False)).order_by(d.FieldRow.name)))
+        if not fields:
+            return 'No fields are set up yet. Add a field in the AgriSense web app first.'
+        return '*Your fields*\n' + '\n'.join(f'{index}. {field.name}' for index, field in enumerate(fields, 1)) + '\nReply `use <name>` to switch.'
+    if command == 'field_selected':
+        message = session.get(d.MessageRow, request.get('message_id'))
+        field_id = session.scalar(select(d.ConversationRow).where(
+            d.ConversationRow.id == request.get('conversation_id'),
+            d.ConversationRow.tenant_id == tenant_id)).payload.get('field_id') if message else None
+        field = session.scalar(select(d.FieldRow).where(
+            d.FieldRow.id == field_id, d.FieldRow.tenant_id == tenant_id,
+            d.FieldRow.farmer_id == farmer_id)) if field_id else None
+        return f'Active field: {field.name}.' if field else 'That field is no longer available.'
+    return None
+
+
+def whatsapp_text(text: str) -> str:
+    """Convert common model Markdown into WhatsApp's small formatting dialect."""
+    import re
+    value = re.sub(r'^#{1,6}\s+', '*', text, flags=re.MULTILINE)
+    value = value.replace('**', '*')
+    value = re.sub(r'^\s*[-•]\s+', '* ', value, flags=re.MULTILINE)
+    value = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'\1: \2', value)
+    return value.strip()[:4000]
+
+
+def download_media(settings: Settings, external_media_id: str) -> tuple[bytes, str]:
+    """Resolve a Meta media id and download it with the server-side access token."""
+    import httpx
+    if not settings.whatsapp_access_token or not external_media_id:
+        raise PlatformError('WHATSAPP_NOT_CONFIGURED', 'Media messaging is not configured.', 503, True)
+    version = settings.whatsapp_graph_api_version or 'v21.0'
+    headers = {'Authorization': f'Bearer {settings.whatsapp_access_token}'}
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            metadata = client.get(f'https://graph.facebook.com/{version}/{external_media_id}', headers=headers)
+            metadata.raise_for_status()
+            info = metadata.json()
+            url = info.get('url')
+            content_type = str(info.get('mime_type') or '').split(';', 1)[0].lower()
+            if not url or content_type not in MEDIA_TYPES:
+                raise PlatformError('WHATSAPP_MEDIA_UNSUPPORTED', 'This WhatsApp attachment type is not supported.', 422)
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            body = response.content
+    except PlatformError:
+        raise
+    except httpx.HTTPError as exc:
+        log.warning('whatsapp media download failed: %s', type(exc).__name__)
+        raise PlatformError('WHATSAPP_MEDIA_UNAVAILABLE', 'The WhatsApp attachment could not be downloaded.', 503, True) from exc
+    if len(body) > media.MAX_BYTES:
+        raise PlatformError('MEDIA_TOO_LARGE', 'The WhatsApp attachment is too large.', 413)
+    media.sniff(content_type, body)
+    return body, content_type
+
+
+def store_inbound_media(session: Session, settings: Settings, tenant_id: str,
+                        farmer_id: str, external_media_id: str) -> str:
+    """Download, validate, and custody one inbound Meta attachment."""
+    body, content_type = download_media(settings, external_media_id)
+    asset_id = d.new_id()
+    key = media.object_key(tenant_id, asset_id, content_type)
+    media.store(settings).write(key, body)
+    digest = hashlib.sha256(body).hexdigest()
+    asset = {'id': asset_id, 'content_type': content_type, 'size_bytes': len(body),
+             'status': 'ready', 'captured_at': d.utcnow().isoformat(),
+             'received_at': d.utcnow().isoformat(), 'version': 1}
+    session.add(d.MediaRow(id=asset_id, tenant_id=tenant_id, farmer_id=farmer_id,
+                           object_key=key, status='ready', sha256=digest,
+                           version=1, payload=asset))
+    return asset_id
 
 
 def graph_url(settings: Settings) -> str:
@@ -209,7 +324,7 @@ def deliver_outbound(session: Session, settings: Settings, event: d.OutboxRow) -
     if not recipient:
         # Only a digest is stored, so a send needs a number the farmer supplied for this purpose.
         return 'recipient_unknown'
-    send(settings, recipient, str(payload.get('body', ''))[:4000])
+    send(settings, recipient, whatsapp_text(str(payload.get('body', ''))))
     return 'sent'
 
 
