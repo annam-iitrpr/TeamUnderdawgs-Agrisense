@@ -33,7 +33,9 @@ import type {
   Recommendation,
   Reminder,
   Season,
+  SeasonCloseRequest,
   SeasonCreate,
+  SeasonEvaluation,
   SeasonPatch,
   SoilObservation,
   Task,
@@ -232,6 +234,30 @@ export const seasons = {
       idempotencyKey,
       signal: o.signal,
     }),
+
+  /**
+   * Ends the season and records what was actually harvested and sold.
+   *
+   * Carries `expected_version`: closing a season twice, or closing one that
+   * changed underneath, must be refused rather than silently overwriting the
+   * outcome record that later scoring is measured against.
+   */
+  close: (
+    id: string,
+    body: SeasonCloseRequest,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<SeasonEvaluation>> =>
+    apiRequest(`/seasons/${encodeURIComponent(id)}/close`, {
+      method: "POST",
+      body,
+      idempotencyKey,
+      signal: o.signal,
+    }),
+
+  /** Forecast against actual, once the season is closed. */
+  summary: (id: string, o: Opts = {}): Promise<Result<SeasonEvaluation>> =>
+    apiRequest(`/seasons/${encodeURIComponent(id)}/summary`, { signal: o.signal }),
 
   latestRecommendation: (id: string, o: Opts = {}): Promise<Result<Recommendation>> =>
     apiRequest(`/seasons/${encodeURIComponent(id)}/recommendations/latest`, {

@@ -6,6 +6,7 @@ import hashlib
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +18,9 @@ from agrisense.platform import db as d
 from agrisense.platform import locations, media, science
 from agrisense.platform.auth import Actor
 from agrisense.platform.errors import PlatformError, missing, unavailable
+
+# Harvest dates are farmer-local wall-clock dates, and India has one civil zone.
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def dump(value):
@@ -185,6 +189,11 @@ class DomainService:
     def close_season(self,id,body):
         season=self.active_season(id);self.version(season,body.expected_version)
         if body.harvested_area_ha>season.allocated_area_ha:raise PlatformError('INVALID_HARVEST_AREA','Harvested area exceeds allocated area.')
+        # A harvest that has not happened yet cannot be an outcome record, and
+        # every later forecast is scored against this one. Refused as bad input
+        # rather than accepted and then quietly unscoreable: the science rejects
+        # it too, and letting that surface as a warning would hide a typo.
+        if body.harvested_on>d.utcnow().astimezone(IST).date():raise PlatformError('INVALID_HARVEST_DATE','Harvest date is in the future.')
         recs=list(self.s.scalars(select(d.RecommendationRow).where(d.RecommendationRow.season_id==id,d.RecommendationRow.tenant_id==self.actor.tenant_id)))
         value=c.SeasonClosure(**dump(body),id=d.new_id(),season_id=id,actual_margin_inr=body.realized_sales_inr-body.realized_costs_inr,forecast_snapshot_ids=[r.id for r in recs],confirmed_at=d.utcnow(),version=1)
         self.s.add(d.ClosureRow(**self.owned_values(dump(value)),season_id=id))
@@ -194,7 +203,22 @@ class DomainService:
                 if row.status in ('pending','snoozed','scheduled','queued'):
                     row.status='cancelled';row.version+=1;row.payload={**row.payload,'status':'cancelled','version':row.version}
         self.event('season.closed',season)
-        return c.SeasonEvaluation(season_id=id,closure=value,warnings=['Science forecast-error evaluation pending integration.'])
+        return self.season_summary(id,value)
+
+    def season_summary(self,id,closure):
+        """Forecast against actual, or an honest statement of why not.
+
+        A scoring failure must not fail the close: the outcome record is the
+        farmer's own and is already committed, so a science-side problem
+        degrades to a warning rather than losing the harvest they just entered.
+        """
+        if closure is None:
+            return c.SeasonEvaluation(season_id=id,closure=None,warnings=['Season has not been closed.'])
+        try:
+            return science.summarise(self.s,self.actor.tenant_id,id,closure)
+        except Exception as exc:
+            reason=getattr(science.translate(exc,'Season summary'),'message','Season summary is unavailable.')
+            return c.SeasonEvaluation(season_id=id,closure=closure,metrics=[],warnings=[reason])
 
     def execute(self,method,path,id,body,query):
         if path=='/me':
@@ -244,7 +268,7 @@ class DomainService:
         if path=='/seasons/{id}/close':return self.close_season(id,body)
         if path=='/seasons/{id}/summary':
             self.own(d.SeasonRow,id);closure=self.s.scalar(select(d.ClosureRow).where(d.ClosureRow.season_id==id,d.ClosureRow.tenant_id==self.actor.tenant_id))
-            return c.SeasonEvaluation(season_id=id,closure=closure.payload if closure else None,warnings=['Season has not been closed.'] if closure is None else ['Science forecast-error evaluation pending integration.'])
+            return self.season_summary(id,c.SeasonClosure.model_validate(closure.payload) if closure else None)
         if path=='/seasons/{id}/journal':
             self.own(d.SeasonRow,id)
             return self.paginate(d.JournalRow,query,season_id=id) if method=='GET' else self.create_journal(id,body)

@@ -96,6 +96,35 @@ def references() -> c.ReferenceBundle:
     raise unavailable('Reviewed reference catalog')
 
 
+def summarise(session: Session, tenant_id: str, season_id: str,
+              closure: c.SeasonClosure) -> c.SeasonEvaluation:
+    """Score a closed season against the forecasts that were on record while it ran.
+
+    The platform owns the records and Phase 2 owns the arithmetic, so this builds
+    the ClosureSnapshot and hands it over rather than computing margins here. The
+    science recomputes the margin from the stored sales and costs and never trusts
+    a supplied one, because a revision to realized costs must not leave a stale
+    margin standing.
+
+    Only recommendations belonging to this season are included: `summarize_season`
+    rejects a foreign one outright, and it is right to.
+    """
+    snapshot = build_season_snapshot(session, tenant_id, season_id, closure.confirmed_at)
+    rows = session.scalars(
+        select(d.RecommendationRow).where(
+            d.RecommendationRow.season_id == season_id,
+            d.RecommendationRow.tenant_id == tenant_id,
+        )
+    )
+    draft = c.ClosureSnapshot.model_validate({
+        'season': snapshot.model_dump(mode='json'),
+        'closure': closure.model_dump(mode='json'),
+        'recommendations': [row.payload for row in rows],
+    })
+    summarize = facade('summarize_season')
+    return summarize(draft)
+
+
 def translate(exc: Exception, capability: str) -> PlatformError:
     """A science-side failure is a dependency problem, not a platform bug.
 

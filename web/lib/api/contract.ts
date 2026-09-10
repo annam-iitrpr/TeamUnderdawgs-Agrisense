@@ -66,6 +66,20 @@ export type Estimate = Schema<"Estimate">;
 export type WaterEstimate = Schema<"WaterEstimate">;
 export type Economics = Schema<"Economics">;
 export type ForecastBundle = Schema<"ForecastBundle">;
+
+/* ── closure and prediction review ───────────────────────────────────────── */
+
+export type SeasonCloseRequest = Schema<"SeasonCloseRequest">;
+export type SeasonClosure = Schema<"SeasonClosure">;
+export type SeasonEvaluation = Schema<"SeasonEvaluation">;
+
+/**
+ * A scoring metric with an explicit denominator policy.
+ *
+ * `value` is nullable and `denominator_policy` says what was counted, because a
+ * percentage error over an unstated denominator is not comparable to anything.
+ */
+export type ErrorMetric = Schema<"ErrorMetric">;
 export type ForecastHour = Schema<"ForecastHour">;
 export type Interval = Schema<"Interval">;
 

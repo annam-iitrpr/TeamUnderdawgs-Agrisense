@@ -29,7 +29,7 @@ import type { Field, Recommendation, Season } from "@/lib/api/contract";
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveField } from "./active-field";
-import { ChevronDown, Clock, Droplets, IndianRupee, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
+import { ChevronDown, Clock, Droplets, Flag, IndianRupee, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -263,6 +263,9 @@ function FieldPanel({
 
   const seasons = seasonsQuery.data?.items ?? [];
   const activeSeasons = seasons.filter((s) => s.status !== "closed");
+  // Closed seasons used to vanish from the app entirely, which made the
+  // forecast-against-actual review unreachable the moment it became possible.
+  const pastSeasons = seasons.filter((s) => s.status === "closed");
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -283,6 +286,8 @@ function FieldPanel({
             <SeasonCard key={season.id} field={field} season={season} />
           ))
         )}
+
+        {pastSeasons.length > 0 ? <PastSeasons seasons={pastSeasons} /> : null}
       </div>
 
       <div className="space-y-4">
@@ -449,6 +454,16 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
           <Droplets aria-hidden className="size-4 text-forest" />
           Water
         </Link>
+        {/* Ending the season sits with the season, not in a settings menu, and
+            is styled as an ordinary action rather than a destructive one: it is
+            the normal end of a season, and nothing is deleted by it. */}
+        <Link
+          href={`/close-season?season=${encodeURIComponent(season.id)}`}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-mist px-3 text-sm font-semibold text-ink"
+        >
+          <Flag aria-hidden className="size-4 text-forest" />
+          {season.status === "closed" ? "How it went" : "End season"}
+        </Link>
       </div>
     </Card>
   );
@@ -540,6 +555,48 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
       <dt className="text-xs text-slate">{label}</dt>
       <dd className="mt-0.5 font-semibold text-ink">{children}</dd>
     </div>
+  );
+}
+
+/**
+ * Seasons that have ended, and the way back to how each one went.
+ *
+ * Kept deliberately quiet — this is history, not something needing attention —
+ * but present, because the forecast-against-actual review is the only place a
+ * farmer can judge whether the advice was worth following, and it only exists
+ * once a season is closed.
+ */
+function PastSeasons({ seasons }: { seasons: Season[] }) {
+  const { nameFor } = useCrops();
+  return (
+    <Card className="p-4">
+      <h3 className="text-h3 font-semibold">Seasons you have finished</h3>
+      <p className="mt-1 text-xs text-slate">
+        How each one actually turned out, and how the advice compared.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {seasons.map((season) => (
+          <li key={season.id}>
+            <Link
+              href={`/close-season?season=${encodeURIComponent(season.id)}`}
+              className="flex min-h-[48px] items-center justify-between gap-2 rounded-control border border-mist bg-card px-3 text-sm"
+            >
+              <span>
+                <span className="font-semibold text-ink">{nameFor(season.crop_id)}</span>
+                <span className="block text-xs text-slate">
+                  {season.sowing_date
+                    ? `sown ${formatDateShort(season.sowing_date)}`
+                    : "sowing date not recorded"}
+                  {" · "}
+                  {season.allocated_area_ha} ha
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-semibold text-forest">How it went</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

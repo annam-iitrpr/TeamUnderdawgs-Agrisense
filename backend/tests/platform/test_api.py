@@ -1,6 +1,7 @@
 """Behaviour of the authenticated platform surface: identity, tenancy, versions and replays."""
 from __future__ import annotations
 
+import pytest
 from tests.platform.conftest import FIELD, SEASON
 
 
@@ -112,7 +113,7 @@ def test_archiving_requires_closed_seasons_and_health_probes_answer(asha, field,
     assert blocked.json()['error']['code'] == 'ACTIVE_SEASONS_EXIST'
     closed = asha.post(f'/seasons/{season["id"]}/close', {
         'expected_version': 1, 'harvest_quantity_kg': 3200.0, 'product_form': 'paddy', 'moisture_basis': '14%',
-        'harvested_area_ha': 1.0, 'realized_sales_inr': 74000.0, 'realized_costs_inr': 41000.0, 'harvested_on': '2027-01-20'})
+        'harvested_area_ha': 1.0, 'realized_sales_inr': 74000.0, 'realized_costs_inr': 41000.0, 'harvested_on': '2026-08-20'})
     assert closed.status_code == 200, closed.text
     assert closed.json()['data']['closure']['actual_margin_inr'] == 33000.0
     assert asha.post(f'/seasons/{season["id"]}/journal', {'action': 'observation', 'occurred_at': '2027-01-21T04:00:00Z'}).status_code == 409
@@ -123,6 +124,67 @@ def test_archiving_requires_closed_seasons_and_health_probes_answer(asha, field,
         assert harness.get(path).json() == {'status': 'ok'}, path
     for path in ('/health/ready', '/readyz'):
         assert harness.get(path).json() == {'status': 'ready'}, path
+
+
+def test_closing_a_season_scores_it_against_the_forecasts_on_record(asha, season):
+    """Closure returns real metrics, not a placeholder warning.
+
+    The platform used to answer both /close and /summary with "Science
+    forecast-error evaluation pending integration" while Phase 2's
+    summarize_season sat unused. A farmer who entered their harvest got no
+    comparison at all, which is the entire point of closing a season.
+    """
+    closed = asha.post(f'/seasons/{season["id"]}/close', {
+        'expected_version': 1, 'harvest_quantity_kg': 4200.0, 'product_form': 'grain',
+        'moisture_basis': 'dry_basis', 'harvested_area_ha': 1.0,
+        'realized_sales_inr': 92000.0, 'realized_costs_inr': 54000.0,
+        'harvested_on': '2026-08-20'})
+    assert closed.status_code == 200, closed.text
+    body = closed.json()['data']
+    metrics = {row['name']: row for row in body['metrics']}
+    assert metrics, 'closing produced no metrics'
+
+    # Margin is recomputed by the science from stored sales and costs; a stale
+    # supplied margin must never survive a revision.
+    assert metrics['actual_margin']['value'] == 38000.0
+    assert metrics['actual_margin']['unit'] == 'INR'
+    assert metrics['actual_margin']['denominator_policy'] == 'none'
+
+    # ROI over a non-zero cost, with the denominator policy stated so the figure
+    # is comparable to anything else claiming to be an ROI.
+    assert metrics['actual_roi']['value'] == pytest.approx(100 * 38000 / 54000)
+    assert metrics['actual_roi']['denominator_policy'] == 'null_when_cost_zero'
+
+    # No forecast-error claim is made, because vintage economics forecasts are
+    # not stored. Saying so beats implying the comparison was complete.
+    assert 'vintage_economics_forecasts_missing_no_error_claim' in body['warnings']
+
+    # The same answer is reachable afterwards, so the review survives a reload.
+    again = asha.get(f'/seasons/{season["id"]}/summary')
+    assert again.status_code == 200
+    assert again.json()['data']['metrics'] == body['metrics']
+
+
+def test_summary_before_closing_says_so_rather_than_scoring_nothing(asha, season):
+    response = asha.get(f'/seasons/{season["id"]}/summary')
+    assert response.status_code == 200
+    body = response.json()['data']
+    assert body['closure'] is None
+    assert body['metrics'] == []
+    assert body['warnings'] == ['Season has not been closed.']
+
+
+def test_a_zero_cost_season_reports_roi_as_unknown_not_as_infinite(asha, season):
+    """Dividing by a zero cost has no answer, and the metric says which."""
+    closed = asha.post(f'/seasons/{season["id"]}/close', {
+        'expected_version': 1, 'harvest_quantity_kg': 100.0, 'product_form': 'grain',
+        'moisture_basis': 'dry_basis', 'harvested_area_ha': 1.0,
+        'realized_sales_inr': 5000.0, 'realized_costs_inr': 0.0,
+        'harvested_on': '2026-08-20'})
+    assert closed.status_code == 200, closed.text
+    roi = next(row for row in closed.json()['data']['metrics'] if row['name'] == 'actual_roi')
+    assert roi['value'] is None
+    assert roi['missing_reason'] == 'zero_cost'
 
 
 def test_the_catalog_is_served_from_the_reference_bundle_never_invented(asha, monkeypatch):
