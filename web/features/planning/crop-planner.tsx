@@ -14,6 +14,7 @@
  */
 import { AppShell } from "@/components/app-shell";
 import { Button, Callout, Card, ErrorState, Skeleton } from "@/components/ui";
+import Link from "next/link";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { newIdempotencyKey } from "@/lib/api/client";
 import type { CropComparison, CropPlan, Field, Season } from "@/lib/api/contract";
@@ -78,7 +79,12 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
 
   const [comparison, setComparison] = useState<CropComparison | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<{ message: string; retryable: boolean } | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    retryable: boolean;
+    /** The field itself is gone, so retrying the same id cannot help. */
+    gone?: boolean;
+  } | null>(null);
   const [field, setField] = useState<Field | null>(null);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [sort, setSort] = useState<Sort>("suitability");
@@ -131,10 +137,18 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
         );
         setComparison(data);
       } catch (cause) {
+        // A 404 here is a field that no longer exists -- a link kept open after
+        // the field was removed, or a bookmark from another account. "This
+        // record was not found" is true and useless: it leaves a farmer on a
+        // dead screen with nothing to press. Say what happened and give them
+        // the way back.
+        const gone = cause instanceof ApiError && cause.status === 404;
         setError(
-          cause instanceof ApiError
-            ? { message: cause.message, retryable: cause.retryable }
-            : { message: "The comparison could not be loaded.", retryable: true },
+          gone
+            ? { message: "That field is no longer on this account. Go back to your fields and choose one.", retryable: false, gone: true }
+            : cause instanceof ApiError
+              ? { message: cause.message, retryable: cause.retryable }
+              : { message: "The comparison could not be loaded.", retryable: true },
         );
       } finally {
         setLoading(false);
@@ -227,16 +241,23 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
             <Skeleton className="h-56 w-full rounded-card" />
           </div>
         ) : error ? (
-          <ErrorState
-            title="Could not compare crops"
-            message={error.message}
-            retryLabel="Try again"
-            onRetry={
-              error.retryable
-                ? () => void run(focusCrop ? [focusCrop] : crops.slice(0, 5).map((c) => c.id))
-                : undefined
-            }
-          />
+          <div className="space-y-3">
+            <ErrorState
+              title={error.gone ? "That field is not here any more" : "Could not compare crops"}
+              message={error.message}
+              retryLabel="Try again"
+              onRetry={
+                error.retryable
+                  ? () => void run(focusCrop ? [focusCrop] : crops.slice(0, 5).map((c) => c.id))
+                  : undefined
+              }
+            />
+            {error.gone ? (
+              <Link href="/" className="inline-block">
+                <Button variant="secondary">Go to my fields</Button>
+              </Link>
+            ) : null}
+          </div>
         ) : (
           <>
             {mode === "suggest" && plans.length > 1 ? (
