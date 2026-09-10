@@ -55,7 +55,13 @@ def test_commodity_names_are_the_feeds_own_not_ours():
     """
     assert market.COMMODITY['rice'] == 'Paddy'
     assert market.COMMODITY['soybean'] == 'Soyabean'
-    assert set(market.COMMODITY) == {'cotton', 'wheat', 'rice', 'maize', 'soybean'}
+    assert market.COMMODITY['lentil'] == 'Lentil (Masur)(Whole)'
+    assert market.COMMODITY['bajra'] == 'Bajra(Pearl Millet/Cumbu)'
+    # Sugarcane is not traded in daily arrivals at all, so it is deliberately
+    # unmapped and served from the reference table instead.
+    assert 'sugarcane' not in market.COMMODITY
+    # Every crop the app offers resolves to a price by one route or the other.
+    assert set(market.REFERENCE_PRICES) >= set(market.COMMODITY) - {'soybean'}
 
 
 def test_the_range_spans_the_widest_price_a_farmer_could_meet(monkeypatch):
@@ -88,17 +94,36 @@ def test_unusable_rows_are_dropped_rather_than_dragging_the_range(monkeypatch):
     assert result.low.value == 8000
 
 
-def test_no_usable_row_is_a_dependency_problem_not_an_empty_answer(monkeypatch):
+def test_no_usable_row_falls_back_to_a_labelled_reference_price(monkeypatch):
+    """A blank is the one thing a price card must not show.
+
+    A farmer comparing crops cannot compare against nothing, so an upstream that
+    reports no usable row resolves to the reference figure -- labelled as one,
+    never dressed up as today's quote from a named mandi.
+    """
     serve(monkeypatch, [record(min_price='0', max_price='0', modal_price='0')])
-    with pytest.raises(PlatformError) as raised:
-        market.prices('cotton')
-    assert raised.value.status == 503
+    result = market.prices('cotton')
+    assert result.modal.value == market.REFERENCE_PRICES['cotton']['modal']
+    assert result.data_mode == 'demo'
+    assert result.quotes == []
+    assert 'indicative_reference_price_not_a_live_mandi_quote' in result.warnings
+    assert 'no_market_reported_this_crop_today' in result.warnings
 
 
-def test_an_unmapped_crop_is_a_404_not_a_guess(monkeypatch):
+def test_a_crop_with_no_mandi_series_still_gets_its_reference_price(monkeypatch):
+    """Sugarcane has no mandi quote to get: growers sell to mills at the SAP."""
+    serve(monkeypatch, [record()])
+    result = market.prices('sugarcane')
+    assert result.modal.value == market.REFERENCE_PRICES['sugarcane']['modal']
+    assert 'anchored_to_state_advised_price_2025_26' in result.warnings
+    assert 'crop_is_not_traded_in_daily_mandi_arrivals' in result.warnings
+
+
+def test_a_crop_this_build_has_never_heard_of_is_still_a_404(monkeypatch):
+    """The fallback covers the catalogue, not any string a caller invents."""
     serve(monkeypatch, [record()])
     with pytest.raises(PlatformError) as raised:
-        market.prices('barley')
+        market.prices('dragonfruit')
     assert raised.value.status == 404
 
 
@@ -120,17 +145,26 @@ def test_the_local_price_comes_only_from_the_farmers_own_state(monkeypatch):
     assert 'no_market_in_your_state_reported_today' in away.warnings
 
 
-def test_msp_is_absent_with_a_stated_reason(monkeypatch):
-    """A four-year-old MSP shown as this season's would cost a farmer money.
+def test_msp_is_the_declared_figure_for_the_current_season(monkeypatch):
+    """The MSP is the floor a mandi range is judged against, so it is shown.
 
-    The only machine-readable declared-MSP series available is 2022-23, so the
-    field stays null and names the gap rather than being filled with a figure
-    that would understate a sale.
+    It comes from the reviewed table for the current marketing season rather
+    than the machine-readable series, which is four years stale -- a 2022-23
+    figure presented as this season's would understate a sale.
     """
     serve(monkeypatch, [record()])
     result = market.prices('cotton')
+    assert result.msp is not None
+    assert result.msp.value == market.REFERENCE_PRICES['cotton']['msp']
+    assert result.msp_missing_reason is None
+
+
+def test_a_crop_without_a_declared_msp_says_so(monkeypatch):
+    """Absence is stated, not filled in: onion and potato have no MSP at all."""
+    serve(monkeypatch, [record()])
+    result = market.prices('onion')
     assert result.msp is None
-    assert result.msp_missing_reason == 'current_declared_msp_series_unavailable'
+    assert result.msp_missing_reason == 'no_msp_is_declared_for_this_crop'
 
 
 def test_prices_are_labelled_as_observations_not_a_forecast(monkeypatch):
@@ -149,11 +183,11 @@ def test_one_upstream_call_serves_a_burst_of_farmers(monkeypatch):
     assert len(calls) == 1
 
 
-def test_an_unconfigured_key_is_reported_not_silently_empty(monkeypatch):
+def test_an_unconfigured_key_falls_back_rather_than_failing(monkeypatch):
     monkeypatch.delenv('DATA_GOV_IN_API_KEY', raising=False)
-    with pytest.raises(PlatformError) as raised:
-        market.prices('cotton')
-    assert raised.value.status == 503
+    result = market.prices('cotton')
+    assert result.data_mode == 'demo'
+    assert 'live_market_feed_not_configured' in result.warnings
 
 
 def test_the_request_carries_the_key_the_filter_and_a_safe_agent(monkeypatch):
@@ -192,10 +226,13 @@ def test_a_dropped_connection_is_a_503_not_a_crash(monkeypatch):
 
     monkeypatch.setattr(market.httpx, 'get', fake_get)
     monkeypatch.setattr(market.time, 'sleep', lambda _s: None)
+    # The transport still reports honestly...
     with pytest.raises(PlatformError) as raised:
-        market.prices('cotton')
+        market._fetch('Cotton')
     assert raised.value.status == 503
     assert raised.value.retryable is True
+    # ...and the farmer still gets a price rather than an outage.
+    assert market.prices('cotton').data_mode == 'demo'
 
 
 def test_a_non_ok_payload_is_refused_rather_than_parsed(monkeypatch):
@@ -208,8 +245,9 @@ def test_a_non_ok_payload_is_refused_rather_than_parsed(monkeypatch):
 
     monkeypatch.setattr(market.httpx, 'get', lambda *a, **k: FakeResponse())
     with pytest.raises(PlatformError) as raised:
-        market.prices('cotton')
+        market._fetch('Cotton')
     assert raised.value.status == 503
+    assert market.prices('cotton').data_mode == 'demo'
 
 
 def test_cached_soil_retrieval_applies_only_near_where_it_was_measured(monkeypatch):

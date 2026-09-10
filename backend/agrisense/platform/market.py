@@ -47,6 +47,50 @@ COMMODITY = {
     'rice': 'Paddy',
     'maize': 'Maize',
     'soybean': 'Soyabean',
+    'potato': 'Potato',
+    'barley': 'Barley',
+    'field_pea': 'Peas(Dry)',
+    'lentil': 'Lentil (Masur)(Whole)',
+    'sorghum': 'Jowar(Sorghum)',
+    'bajra': 'Bajra(Pearl Millet/Cumbu)',
+    'groundnut': 'Groundnut',
+    'onion': 'Onion',
+    'tomato': 'Tomato',
+    'moong': 'Green Gram (Moong)(Whole)',
+    # Sugarcane is deliberately absent. It is not traded in APMC daily arrivals
+    # at all -- growers sell to mills at the State Advised Price -- so it is
+    # served from the reference table below, which is the correct figure for it
+    # rather than a substitute for a mandi quote it never had.
+}
+
+#: A price to show when the live feed cannot supply one.
+#:
+#: Every entry is anchored to a published figure for the 2025-26 marketing
+#: season -- the declared minimum support price where the crop has one, and the
+#: Punjab State Advised Price for sugarcane, which has no MSP. The band around
+#: it is the ordinary spread across mandis, not a forecast.
+#:
+#: This is a *reference*, and it is labelled as one everywhere it surfaces:
+#: `data_mode` is 'demo' and the warnings name it, so nothing here is ever
+#: presented as today's live quote from a named market. It exists so a farmer
+#: comparing crops always has a figure to compare, rather than a blank.
+REFERENCE_PRICES: dict[str, dict[str, Any]] = {
+    'wheat': {'msp': 2425, 'low': 2350, 'modal': 2425, 'high': 2600},
+    'rice': {'msp': 2369, 'low': 2300, 'modal': 2369, 'high': 2550},
+    'maize': {'msp': 2400, 'low': 2050, 'modal': 2300, 'high': 2600},
+    'barley': {'msp': 1980, 'low': 1850, 'modal': 1980, 'high': 2250},
+    'sorghum': {'msp': 3699, 'low': 3200, 'modal': 3699, 'high': 4100},
+    'bajra': {'msp': 2775, 'low': 2450, 'modal': 2775, 'high': 3050},
+    'lentil': {'msp': 6700, 'low': 5900, 'modal': 6700, 'high': 7400},
+    'field_pea': {'msp': None, 'low': 3400, 'modal': 4000, 'high': 4900},
+    'moong': {'msp': 8768, 'low': 7800, 'modal': 8768, 'high': 9600},
+    'groundnut': {'msp': 7263, 'low': 6400, 'modal': 7263, 'high': 8100},
+    'cotton': {'msp': 7710, 'low': 6900, 'modal': 7710, 'high': 8400},
+    'potato': {'msp': None, 'low': 800, 'modal': 1200, 'high': 1900},
+    'onion': {'msp': None, 'low': 850, 'modal': 1500, 'high': 2600},
+    'tomato': {'msp': None, 'low': 600, 'modal': 1500, 'high': 3100},
+    # Punjab State Advised Price, not an MSP: sugarcane has none.
+    'sugarcane': {'msp': None, 'low': 391, 'modal': 401, 'high': 411},
 }
 
 #: Mandi prices are reported per quintal throughout this feed.
@@ -174,24 +218,65 @@ def _quote(row: dict[str, Any]) -> c.MarketQuote | None:
     )
 
 
+def reference_prices(crop_id: str, reason: str) -> c.MarketPrices:
+    """The reference figure for a crop, when no live quote can be had.
+
+    A blank where a price should be is the least useful thing this screen can
+    show: a farmer comparing crops cannot compare against nothing. So a crop
+    always resolves to a figure, and the figure always says what it is --
+    `data_mode` is 'demo' and the warnings carry both the anchor and the reason
+    the live feed was not used, so a reference is never mistaken for today's
+    quote at a named mandi.
+    """
+    entry = REFERENCE_PRICES[crop_id]
+    measure = lambda value: c.Measurement(value=float(value), unit=UNIT)  # noqa: E731
+    return c.MarketPrices(
+        crop_id=crop_id, commodity=COMMODITY.get(crop_id, crop_id), quotes=[],
+        low=measure(entry['low']), high=measure(entry['high']), modal=measure(entry['modal']),
+        msp=measure(entry['msp']) if entry['msp'] is not None else None,
+        msp_missing_reason=None if entry['msp'] is not None else 'no_msp_is_declared_for_this_crop',
+        retrieved_at=d.utcnow(),
+        source='agrisense:reference_price_2025_26',
+        data_mode='demo',
+        warnings=[
+            'indicative_reference_price_not_a_live_mandi_quote',
+            'anchored_to_state_advised_price_2025_26'
+            if crop_id == 'sugarcane' else 'anchored_to_declared_msp_2025_26'
+            if entry['msp'] is not None else 'anchored_to_typical_mandi_range_2025_26',
+            reason,
+        ],
+    )
+
+
 def prices(crop_id: str, *, state: str | None = None) -> c.MarketPrices:
-    """Current mandi prices for a crop, cached and never averaged nationally."""
+    """Current mandi prices for a crop, cached and never averaged nationally.
+
+    Falls back to the reference table rather than failing. Every path that used
+    to raise -- an unmapped crop, an unconfigured key, an upstream that answered
+    with nothing -- ended as "not known" on the farmer's screen, which is the one
+    thing a price card must not say.
+    """
     commodity = COMMODITY.get(crop_id)
     if commodity is None:
+        if crop_id in REFERENCE_PRICES:
+            return reference_prices(crop_id, 'crop_is_not_traded_in_daily_mandi_arrivals')
         raise PlatformError('CROP_NOT_PRICED',
                             'No mandi price series is mapped for this crop.', 404)
     if not configured():
-        raise PlatformError('DEPENDENCY_UNAVAILABLE',
-                            'Market prices are not configured.', 503, True)
+        return reference_prices(crop_id, 'live_market_feed_not_configured')
 
     cached = _cache.get(commodity)
     if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
         return _localise(cached[1], state)
 
-    quotes = [quote for quote in (_quote(row) for row in _fetch(commodity)) if quote is not None]
+    try:
+        quotes = [quote for quote in (_quote(row) for row in _fetch(commodity)) if quote is not None]
+    except PlatformError:
+        # An upstream outage is not a reason to show a farmer nothing.
+        log.warning('mandi fetch failed for %s; serving the reference price', commodity)
+        return reference_prices(crop_id, 'live_market_feed_unavailable')
     if not quotes:
-        raise PlatformError('DEPENDENCY_UNAVAILABLE',
-                            'No market reported a usable price for this crop today.', 503, True)
+        return reference_prices(crop_id, 'no_market_reported_this_crop_today')
 
     # The spread across reporting markets. `low` is the lowest minimum and
     # `high` the highest maximum, because that is the range a farmer could
@@ -205,8 +290,14 @@ def prices(crop_id: str, *, state: str | None = None) -> c.MarketPrices:
     result = c.MarketPrices(
         crop_id=crop_id, commodity=commodity, quotes=quotes,
         low=measure(low), high=measure(high), modal=measure(modal),
-        msp=None,
-        msp_missing_reason='current_declared_msp_series_unavailable',
+        # The declared MSP for the current marketing season, from the reviewed
+        # table rather than the stale machine-readable series. It is the right
+        # thing to show beside a mandi range: it is the floor the range is
+        # judged against.
+        msp=(c.Measurement(value=float(REFERENCE_PRICES[crop_id]['msp']), unit=UNIT)
+             if REFERENCE_PRICES.get(crop_id, {}).get('msp') is not None else None),
+        msp_missing_reason=(None if REFERENCE_PRICES.get(crop_id, {}).get('msp') is not None
+                            else 'no_msp_is_declared_for_this_crop'),
         retrieved_at=d.utcnow(), source='data.gov.in:agmarknet_daily_prices',
         data_mode='live',
         warnings=[
