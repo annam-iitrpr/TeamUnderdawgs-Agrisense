@@ -6,8 +6,17 @@ from tests.platform.conftest import FIELD, SEASON
 
 
 def test_every_route_rejects_missing_and_unknown_credentials(harness):
+    """Auth, and only auth.
+
+    Two requests per route against a 120-per-minute anonymous cap meant this
+    test started failing with a 429 the moment the route count passed sixty —
+    it had been one route away from measuring the rate limiter instead of
+    authentication. The guard is cleared between routes so the assertion below
+    means what it says; anonymous throttling has its own tests.
+    """
     from agrisense.contracts_generated.routes import ROUTES
     for method, path, *_ in ROUTES:
+        harness.app.state.anonymous_guard.seen.clear()
         url = '/api/v1' + path.replace('{id}', 'some-id')
         anonymous = harness.request(method, url, json={})
         assert anonymous.status_code == 401, f'{method} {path} allowed an anonymous caller'

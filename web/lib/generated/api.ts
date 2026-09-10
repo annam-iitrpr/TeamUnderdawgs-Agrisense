@@ -27,6 +27,7 @@ export interface components { schemas: {
   "Envelope[ForecastBundle]": { "data": components["schemas"]["ForecastBundle"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[Job]": { "data": components["schemas"]["Job"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[JournalEntry]": { "data": components["schemas"]["JournalEntry"]; "meta": components["schemas"]["Meta"]; };
+  "Envelope[MarketPrices]": { "data": components["schemas"]["MarketPrices"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[MediaAccess]": { "data": components["schemas"]["MediaAccess"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[MediaAsset]": { "data": components["schemas"]["MediaAsset"]; "meta": components["schemas"]["Meta"]; };
   "Envelope[Message]": { "data": components["schemas"]["Message"]; "meta": components["schemas"]["Meta"]; };
@@ -77,6 +78,8 @@ export interface components { schemas: {
   "LedgerLine": { "id": string; "season_id": string; "journal_entry_id"?: (string) | (null); "kind": "cost" | "revenue" | "irrigation"; "amount": number; "unit": string; "occurred_at": string; };
   "Location": { "latitude": number; "longitude": number; "precision_m"?: (number) | (null); "source": "gps" | "map" | "manual" | "village"; };
   "LocationResult": { "id": string; "name": string; "district"?: (string) | (null); "state": string; "centroid": components["schemas"]["Location"]; };
+  "MarketPrices": { "crop_id": string; "commodity": string; "quotes"?: Array<components["schemas"]["MarketQuote"]>; "low": components["schemas"]["Measurement"]; "high": components["schemas"]["Measurement"]; "modal": components["schemas"]["Measurement"]; "nearest"?: (components["schemas"]["MarketQuote"]) | (null); "msp"?: (components["schemas"]["Measurement"]) | (null); "msp_missing_reason"?: (string) | (null); "retrieved_at": string; "source": string; "data_mode"?: "live" | "estimated" | "demo" | "mixed" | "unavailable"; "warnings"?: Array<string>; };
+  "MarketQuote": { "market": string; "district": string; "state": string; "variety"?: (string) | (null); "grade"?: (string) | (null); "minimum": components["schemas"]["Measurement"]; "maximum": components["schemas"]["Measurement"]; "modal": components["schemas"]["Measurement"]; "reported_on": string; };
   "Measurement": { "value": (number) | (null); "unit": string; "analyte"?: (string) | (null); "method"?: (string) | (null); "missing_reason"?: (string) | (null); "provenance"?: Array<components["schemas"]["Provenance"]>; };
   "MediaAccess": { "url": string; "expires_at": string; };
   "MediaAsset": { "id": string; "content_type": string; "size_bytes": number; "status": "pending" | "uploaded" | "processing" | "ready" | "rejected"; "captured_at"?: (string) | (null); "received_at": string; "version": number; };
@@ -217,6 +220,9 @@ get: { responses: { 200: components["schemas"]["Envelope[Job]"]; 401: components
 };
 "/api/v1/journal/{id}": {
 patch: { requestBody: components["schemas"]["JournalPatch"]; responses: { 200: components["schemas"]["Envelope[JournalEntry]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
+};
+"/api/v1/market/prices/{id}": {
+get: { responses: { 200: components["schemas"]["Envelope[MarketPrices]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
 };
 "/api/v1/me": {
 get: { responses: { 200: components["schemas"]["Envelope[Farmer]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };

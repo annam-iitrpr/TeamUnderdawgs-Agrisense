@@ -58,6 +58,8 @@ spec:
               value: "${CORS_ALLOWED_ORIGINS}"
             - name: OPENMETEO_PERMITTED_FREE_USE
               value: "${OPENMETEO_PERMITTED_FREE_USE}"
+            - name: DATA_GOV_IN_API_KEY
+              value: "${DATA_GOV_IN_API_KEY}"
             - name: GCS_MEDIA_BUCKET
               value: "${GCS_MEDIA_BUCKET}"
             # Signing goes through IAM signBlob; the metadata credential has no private key.

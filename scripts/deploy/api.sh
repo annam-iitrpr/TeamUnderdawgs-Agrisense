@@ -28,6 +28,9 @@ export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-$CLOUD_RUN_WEB_URL}"
 export WHATSAPP_SEND_MODE="${WHATSAPP_SEND_MODE:-outbox}"
 export GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 export CEHUB_API_KEY_HEADER="${CEHUB_API_KEY_HEADER:-ApiKey}"
+# data.gov.in key for live mandi prices. Absent it, the market route reports
+# its dependency rather than returning invented prices.
+export DATA_GOV_IN_API_KEY="${DATA_GOV_IN_API_KEY:-}"
 # Open-Meteo is the fallback forecast provider and the only configured source of
 # FAO-56 reference ET0: CE Hub's daily series has none, and without ET0 the soil
 # water balance cannot run at all. Its free tier requires the caller to confirm

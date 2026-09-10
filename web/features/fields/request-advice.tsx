@@ -40,12 +40,24 @@ export function RequestAdvice({
   seasonId,
   expectedVersion,
   expired,
+  autoRefresh,
   onEvaluated,
 }: {
   seasonId: string;
   expectedVersion: number;
   /** Advice exists but has aged out, which reads differently from having none. */
   expired?: boolean;
+  /**
+   * Re-evaluate without being asked, once, when advice has merely gone stale.
+   *
+   * A spray window is only valid for 45 minutes because it names particular
+   * hours, so by the time a farmer opens the app it has almost always expired.
+   * Making them press a button to recover from that puts the cost of an
+   * implementation detail onto the person: they did nothing wrong and there is
+   * nothing to decide. It runs only for staleness, never for a season with no
+   * advice at all — that is a real choice, and asking first is right.
+   */
+  autoRefresh?: boolean;
   onEvaluated: () => void;
 }) {
   const [working, setWorking] = useState(false);
@@ -129,8 +141,30 @@ export function RequestAdvice({
     }
   }
 
+  /**
+   * Fires at most once per mount, guarded by a ref rather than by state.
+   *
+   * Without the guard a re-evaluation that itself returns stale advice — a
+   * clock skew, or a season the engine keeps declining — would refresh in a
+   * loop and hammer the API. One attempt, then the farmer decides.
+   */
+  const autoAttempted = useRef(false);
+  useEffect(() => {
+    if (!autoRefresh || !expired || autoAttempted.current) return;
+    autoAttempted.current = true;
+    void run();
+    // `run` is stable enough for this: it closes over the season and version,
+    // both of which change identity only when the card itself remounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh, expired]);
+
   return (
     <div className="mt-3">
+      {autoRefresh && working ? (
+        <p className="mb-2 text-xs text-slate" aria-live="polite">
+          The last advice went out of date, so AgriSense is working it out again.
+        </p>
+      ) : null}
       <Button
         onClick={() => void run()}
         busy={working}

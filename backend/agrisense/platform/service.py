@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from agrisense.config import Settings, get_settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import locations, media, science
+from agrisense.platform import locations, market, media, science
 from agrisense.platform.auth import Actor
 from agrisense.platform.errors import PlatformError, missing, unavailable
 
@@ -448,6 +448,13 @@ class DomainService:
             raise unavailable('Crop planning')
         if path.startswith('/catalog/'):
             return self.catalog(path,query)
+        if path=='/market/prices/{id}':
+            # `state` is supplied by the caller, not inferred here. A field
+            # stores a centroid but no place name, and there is no reverse
+            # geocoder wired: guessing the state from coordinates would risk
+            # presenting a mandi the farmer cannot sell at as their local
+            # price. Absent it, the national spread is returned and says so.
+            return market.prices(id,state=query.get('state'))
         if path=='/seasons/{id}/evaluate':
             season=self.active_season(id);self.version(season,body.expected_version)
             return self.job('science.evaluate',{'season_id':id,'expected_version':body.expected_version})

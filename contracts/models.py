@@ -390,6 +390,56 @@ class Economics(ContractModel):
     price_source: str | None = None
 
 
+class MarketQuote(ContractModel):
+    """One market's reported price for a commodity on one day.
+
+    These are arrivals-based mandi prices: what a commodity actually traded for
+    at a named APMC market on a named date. They are observations, not a
+    forecast, so they carry the market and the date and are never averaged into
+    a single national figure — a farmer sells at a particular mandi.
+    """
+
+    market: str
+    district: str
+    state: str
+    variety: str | None = None
+    grade: str | None = None
+    minimum: Measurement
+    maximum: Measurement
+    modal: Measurement
+    reported_on: date
+
+
+class MarketPrices(ContractModel):
+    """What a crop is fetching, with the spread across reporting markets.
+
+    The range is the honest form: prices differ by mandi, variety and grade on
+    the same day, so a single number would hide the variation a farmer is
+    actually exposed to. `nearest` is populated only when the farmer's own
+    state reported, because a price 1500 km away is not a price they can get.
+
+    `msp` is present but unpopulated. India's declared minimum support price is
+    the right thing to show beside a mandi range, and the only machine-readable
+    series available is four years stale. Showing a 2022-23 figure as this
+    season's MSP would understate it badly, and a farmer quoting it in a sale
+    would lose money — so it stays null with a stated reason.
+    """
+
+    crop_id: Id
+    commodity: str
+    quotes: list[MarketQuote] = []
+    low: Measurement
+    high: Measurement
+    modal: Measurement
+    nearest: MarketQuote | None = None
+    msp: Measurement | None = None
+    msp_missing_reason: str | None = None
+    retrieved_at: AwareDatetime
+    source: str
+    data_mode: DataMode = 'live'
+    warnings: list[str] = []
+
+
 class CropPlan(ContractModel):
     crop_id: Id
     sowing_interval: DateInterval | None

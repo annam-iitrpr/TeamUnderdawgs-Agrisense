@@ -468,6 +468,9 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
           seasonId={season.id}
           expectedVersion={season.version}
           expired={expired}
+          // Only stale advice refreshes itself. A season that has never been
+          // evaluated is a decision, so it still waits to be asked.
+          autoRefresh={staleness === "expired"}
           onEvaluated={() => void recommendationQuery.refetch()}
         />
       ) : null}

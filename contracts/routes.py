@@ -56,6 +56,10 @@ ROUTES = [
     ('DELETE', '/channels/whatsapp/link', None, MutationReceipt, 200),
     ('POST', '/channels/push', PushRegistration, MutationReceipt, 201),
     ('DELETE', '/channels/push', PushUnregister, MutationReceipt, 200),
+    # Live mandi prices for a crop. Read-only and cached server-side: the
+    # upstream is a public government API with a modest rate limit, so every
+    # farmer opening a crop card must not become an upstream request.
+    ('GET', '/market/prices/{id}', None, MarketPrices, 200),
     ('GET', '/catalog/crops', None, Page[Crop], 200),
     ('GET', '/catalog/products', None, Page[Product], 200),
     ('GET', '/catalog/locations', None, Page[LocationResult], 200),

@@ -894,6 +894,23 @@
         "title": "Envelope[JournalEntry]",
         "type": "object"
       },
+      "Envelope[MarketPrices]": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MarketPrices"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "Envelope[MarketPrices]",
+        "type": "object"
+      },
       "Envelope[MediaAccess]": {
         "additionalProperties": false,
         "properties": {
@@ -2929,6 +2946,180 @@
           "centroid"
         ],
         "title": "LocationResult",
+        "type": "object"
+      },
+      "MarketPrices": {
+        "additionalProperties": false,
+        "description": "What a crop is fetching, with the spread across reporting markets.\n\nThe range is the honest form: prices differ by mandi, variety and grade on\nthe same day, so a single number would hide the variation a farmer is\nactually exposed to. `nearest` is populated only when the farmer's own\nstate reported, because a price 1500 km away is not a price they can get.\n\n`msp` is present but unpopulated. India's declared minimum support price is\nthe right thing to show beside a mandi range, and the only machine-readable\nseries available is four years stale. Showing a 2022-23 figure as this\nseason's MSP would understate it badly, and a farmer quoting it in a sale\nwould lose money \u2014 so it stays null with a stated reason.",
+        "properties": {
+          "commodity": {
+            "title": "Commodity",
+            "type": "string"
+          },
+          "crop_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "data_mode": {
+            "default": "live",
+            "enum": [
+              "live",
+              "estimated",
+              "demo",
+              "mixed",
+              "unavailable"
+            ],
+            "title": "Data Mode",
+            "type": "string"
+          },
+          "high": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "low": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "modal": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "msp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Measurement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "msp_missing_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Msp Missing Reason"
+          },
+          "nearest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketQuote"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "quotes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MarketQuote"
+            },
+            "title": "Quotes",
+            "type": "array"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "crop_id",
+          "commodity",
+          "low",
+          "high",
+          "modal",
+          "retrieved_at",
+          "source"
+        ],
+        "title": "MarketPrices",
+        "type": "object"
+      },
+      "MarketQuote": {
+        "additionalProperties": false,
+        "description": "One market's reported price for a commodity on one day.\n\nThese are arrivals-based mandi prices: what a commodity actually traded for\nat a named APMC market on a named date. They are observations, not a\nforecast, so they carry the market and the date and are never averaged into\na single national figure \u2014 a farmer sells at a particular mandi.",
+        "properties": {
+          "district": {
+            "title": "District",
+            "type": "string"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Grade"
+          },
+          "market": {
+            "title": "Market",
+            "type": "string"
+          },
+          "maximum": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "minimum": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "modal": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "reported_on": {
+            "format": "date",
+            "title": "Reported On",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "variety": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Variety"
+          }
+        },
+        "required": [
+          "market",
+          "district",
+          "state",
+          "minimum",
+          "maximum",
+          "modal",
+          "reported_on"
+        ],
+        "title": "MarketQuote",
         "type": "object"
       },
       "Measurement": {
@@ -9752,6 +9943,113 @@
         ],
         "tags": [
           "journal"
+        ]
+      }
+    },
+    "/api/v1/market/prices/{id}": {
+      "get": {
+        "operationId": "get_market_prices_by_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope[MarketPrices]"
+                }
+              }
+            },
+            "description": "Successful result"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "401"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "403"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "404"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "409"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "422"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "429"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "503"
+          }
+        },
+        "security": [
+          {
+            "firebaseBearer": []
+          }
+        ],
+        "tags": [
+          "market"
         ]
       }
     },
