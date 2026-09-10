@@ -406,16 +406,71 @@ function ConsentRow({
   );
 }
 
+/**
+ * Why a location attempt did not produce a position.
+ *
+ * Kept as four distinct outcomes rather than one "failed", because they ask
+ * different things of the farmer. A refusal is a browser setting to change; a
+ * timeout is worth simply trying again; an unavailable position is the device
+ * failing to fix itself, often indoors. Telling any of the last three that
+ * permission was declined sends a farmer into their settings to repair
+ * something that is not broken.
+ */
+type LocationFailure = "denied" | "timeout" | "unavailable" | "unsupported";
+
+/** What the browser says about the geolocation permission, where it will say. */
+type GeoPermission = "granted" | "prompt" | "denied" | "unknown";
+
 function LocationStep({ draft, update }: StepProps) {
-  const [state, setState] = useState<"idle" | "asking" | "denied" | "unsupported">("idle");
+  const [asking, setAsking] = useState(false);
+  const [failure, setFailure] = useState<LocationFailure | null>(null);
+  const [permission, setPermission] = useState<GeoPermission>("unknown");
   const [manual, setManual] = useState("");
+
+  /**
+   * The Permissions API is the only thing that makes "declined" distinguishable
+   * from "not asked yet" before an attempt is made. `getCurrentPosition` only
+   * reports a refusal after the fact, so without this the step guessed — and
+   * guessed wrong both for a farmer who had already granted permission and for
+   * one who had never been asked, both of whom were told they had declined.
+   *
+   * Safari and older Android browsers do not implement it and Firefox rejects
+   * the query name outright. That is what `unknown` is for: there the step says
+   * nothing about permission until a real error arrives.
+   */
+  useEffect(() => {
+    if (typeof navigator.permissions?.query !== "function") return;
+    let status: PermissionStatus | null = null;
+    let cancelled = false;
+    const apply = () => {
+      if (status) setPermission(status.state);
+    };
+    navigator.permissions
+      .query({ name: "geolocation" as PermissionName })
+      .then((result) => {
+        if (cancelled) return;
+        status = result;
+        apply();
+        // A farmer who fixes the permission in browser settings and comes back
+        // finds the step already updated rather than still accusing them.
+        result.addEventListener("change", apply);
+      })
+      .catch(() => {
+        /* Unsupported query name. `unknown` is the honest answer. */
+      });
+    return () => {
+      cancelled = true;
+      status?.removeEventListener("change", apply);
+    };
+  }, []);
 
   function requestLocation() {
     if (!("geolocation" in navigator)) {
-      setState("unsupported");
+      setFailure("unsupported");
       return;
     }
-    setState("asking");
+    setFailure(null);
+    setAsking(true);
     // Only ever called from this tap — never on page load, which would show a
     // browser permission prompt before the farmer knows what it is for.
     navigator.geolocation.getCurrentPosition(
@@ -431,27 +486,55 @@ function LocationStep({ draft, update }: StepProps) {
             label: null,
           };
         });
-        setState("idle");
+        setAsking(false);
+        // A grant is proven by the position arriving, whatever the Permissions
+        // API did or did not say on a browser that does not implement it.
+        setPermission("granted");
       },
-      () => setState("denied"),
+      (error) => {
+        setAsking(false);
+        setFailure(
+          error.code === error.PERMISSION_DENIED
+            ? "denied"
+            : error.code === error.TIMEOUT
+              ? "timeout"
+              : "unavailable",
+        );
+      },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
     );
   }
 
   const hasLocation = draft.location.latitude !== null;
+  // Only the browser's own word counts as a refusal: either the permission it
+  // reports as blocked, or a PERMISSION_DENIED from an attempt actually made.
+  const declined = failure === "denied" || permission === "denied";
 
   return (
     <div className="space-y-4">
-      <Button size="lg" className="w-full" onClick={requestLocation} busy={state === "asking"}>
+      <Button size="lg" className="w-full" onClick={requestLocation} busy={asking}>
         <MapPin aria-hidden className="size-4" />
         Use my location
       </Button>
 
-      {state === "denied" || state === "unsupported" ? (
+      {declined ? (
+        <Callout tone="caution" title="Location sharing is switched off">
+          Your browser is blocking AgriSense from reading this device&apos;s location. You can
+          switch it on in your browser settings, or enter your village or pincode below.
+        </Callout>
+      ) : failure === "unsupported" ? (
         <Callout tone="caution" title="We could not read your location">
-          {state === "unsupported"
-            ? "This device does not offer location sharing."
-            : "Location permission was declined. You can enter your village or pincode instead."}
+          This device does not offer location sharing. Enter your village or pincode instead.
+        </Callout>
+      ) : failure === "timeout" ? (
+        <Callout tone="caution" title="Your device did not answer in time">
+          Nothing was refused — the position simply did not arrive. Try again, ideally standing
+          outside, or enter your village or pincode below.
+        </Callout>
+      ) : failure === "unavailable" ? (
+        <Callout tone="caution" title="Your device could not work out where it is">
+          This is the device, not a permission. It often happens indoors or with GPS switched
+          off. Try again outside, or enter your village or pincode below.
         </Callout>
       ) : null}
 

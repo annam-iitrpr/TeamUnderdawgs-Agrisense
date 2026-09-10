@@ -9,6 +9,8 @@
  * water and money estimate derived from them.
  */
 import { Button, Callout, Card, Skeleton, TextField } from "@/components/ui";
+import { freeAreaHa } from "@/features/crops/allocation";
+import { cropIcon } from "@/features/crops/crop-identity";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { newIdempotencyKey } from "@/lib/api/client";
 import type { Field, Season } from "@/lib/api/contract";
@@ -16,7 +18,7 @@ import { ApiError } from "@/lib/api/envelope";
 import { fields as fieldsApi } from "@/lib/api/routes";
 import { formatArea } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Check, Sprout } from "lucide-react";
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 export function AddSeasonForm({
@@ -129,7 +131,13 @@ export function AddSeasonForm({
                 {cropId === crop.id ? (
                   <Check aria-hidden className="size-4" />
                 ) : (
-                  <Sprout aria-hidden className="size-4 text-forest" />
+                  // The crop's own glyph, so one crop is findable in a list of
+                  // several. The name is always beside it: the icon narrows the
+                  // search, it does not identify the crop on its own.
+                  (() => {
+                    const CropGlyph = cropIcon(crop.id);
+                    return <CropGlyph aria-hidden className="size-4 text-forest" />;
+                  })()
                 )}
                 {crop.name}
               </button>
