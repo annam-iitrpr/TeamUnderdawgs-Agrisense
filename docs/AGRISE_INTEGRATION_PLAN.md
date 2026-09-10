@@ -101,11 +101,11 @@ The guide needs these updates before production rollout:
 
 ### First contact and authentication
 
-`hello` or an unknown number starts the OTP/link flow. The bot explains what is
-being requested, obtains WhatsApp consent, sends the approved authentication
-template, verifies one code, and creates or resumes the farmer account. A
-verified web login must resolve to the same farmer when the E.164 number is the
-same. A WhatsApp number must never be guessed from display name or message text.
+The farmer first creates or resumes the account on the web with Firebase SMS
+OTP. After signing in, the farmer requests a short-lived WhatsApp link code and
+sends LINK <code> from the WhatsApp number. The signed webhook redeems the
+code once and binds that channel to the already authenticated farmer. A
+WhatsApp number must never be guessed from display name or message text.
 
 ### Onboarding
 
@@ -140,12 +140,11 @@ the versioned close route and renders the summary.
 
 ## Work order
 
-1. **Configuration and contract preparation.** Use the canonical env file,
-   provision missing Secret Manager entries, decide the Firebase custom-token
-   broker, add OTP/channel schemas and routes, and regenerate bindings.
+1. **Configuration and contract preparation.** Use the canonical env file and
+   provision missing Secret Manager entries.
 2. **Auth migration.** Replace email/password UI, reset-password and email
-   verification copy with phone-number/WhatsApp OTP screens. Preserve existing
-   tenant isolation and add migration behavior for any existing test accounts.
+   verification copy with Firebase phone/SMS OTP. Preserve existing tenant
+   isolation and test account migration behavior.
 3. **Real WhatsApp adapter.** The backend now verifies webhooks, deduplicates
    Meta IDs, redeems link codes, creates text conversation turns, runs the
    grounded assistant worker, and queues replies. Complete media download,
