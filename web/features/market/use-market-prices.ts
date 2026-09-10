@@ -82,9 +82,15 @@ function fromEdge(
 
   // Lowest minimum to highest maximum: the range a farmer could actually meet,
   // not the narrower spread of modal prices.
-  const lows = quotes.map((q) => q.minimum.value ?? 0);
-  const highs = quotes.map((q) => q.maximum.value ?? 0);
-  const modals = quotes.map((q) => q.modal.value ?? 0).sort((a, b) => a - b);
+  // A quote missing a bound is left out of that bound, never counted as zero:
+  // one unpriced row would otherwise drag the whole range down to ₹0 and make
+  // the crop look worthless.
+  const known = (values: (number | null | undefined)[]) =>
+    values.filter((value): value is number => typeof value === "number");
+  const lows = known(quotes.map((q) => q.minimum.value));
+  const highs = known(quotes.map((q) => q.maximum.value));
+  const modals = known(quotes.map((q) => q.modal.value)).sort((a, b) => a - b);
+  if (lows.length === 0 || highs.length === 0 || modals.length === 0) return null;
 
   const local = state
     ? quotes.filter((q) => q.state.toLowerCase() === state.toLowerCase())
@@ -97,7 +103,8 @@ function fromEdge(
     quotes,
     low: { value: Math.min(...lows), unit: UNIT },
     high: { value: Math.max(...highs), unit: UNIT },
-    modal: { value: modals[Math.floor(modals.length / 2)] ?? 0, unit: UNIT },
+    // Guarded non-empty above; null rather than 0 if that ever changes.
+    modal: { value: modals[Math.floor(modals.length / 2)] ?? null, unit: UNIT },
     nearest: local[Math.floor(local.length / 2)] ?? null,
     // Deliberately absent: the only machine-readable declared-MSP series ends
     // at 2022-23, and a stale figure quoted in a sale would cost a farmer money.

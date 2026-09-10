@@ -37,6 +37,18 @@ const COMMODITY: Record<string, string> = {
   rice: "Paddy",
   maize: "Maize",
   soybean: "Soyabean",
+  potato: "Potato",
+  barley: "Barley",
+  field_pea: "Peas(Dry)",
+  lentil: "Lentil (Masur)(Whole)",
+  sorghum: "Jowar(Sorghum)",
+  bajra: "Bajra(Pearl Millet/Cumbu)",
+  groundnut: "Groundnut",
+  onion: "Onion",
+  tomato: "Tomato",
+  moong: "Green Gram (Moong)(Whole)",
+  // Sugarcane is absent on purpose: it is not traded in APMC daily arrivals,
+  // so the API serves it the State Advised Price instead of a mandi quote.
 };
 
 const MAX_RECORDS = "200";
