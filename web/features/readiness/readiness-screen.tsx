@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { StressCurve } from "./stress-curve";
-import { explainMissing } from "@/lib/missing-reasons";
+import { explainCode } from "@/lib/missing-reasons";
 
 const IST = "Asia/Kolkata";
 
@@ -77,12 +77,6 @@ function windowHours(interval: Interval): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return rest === 0 ? `${hours} hour${hours === 1 ? "" : "s"}` : `${hours}h ${rest}m`;
-}
-
-/** Engine codes must never reach a farmer verbatim. */
-function humanise(code: string): string {
-  const phrase = explainMissing(code) ?? code.replace(/_/g, " ");
-  return phrase.replace(/^./, (c) => c.toUpperCase());
 }
 
 export function ReadinessScreen({ seasonId }: { seasonId: string }) {
@@ -173,8 +167,8 @@ function Detail({
       {/* The decision. */}
       <Card className="p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate">
-          {recommendation.stage ? `${humanise(recommendation.stage)} · ` : ""}
-          {humanise(recommendation.status)}
+          {recommendation.stage ? `${explainCode(recommendation.stage)} · ` : ""}
+          {explainCode(recommendation.status)}
         </p>
 
         {recommendation.selected_window ? (
@@ -255,7 +249,7 @@ function Detail({
           <ul className="space-y-1">
             {failedChecks.map((check) => (
               <li key={check.code}>
-                {humanise(check.code)} — {humanise(check.reason.code)}
+                {explainCode(check.code)} — {explainCode(check.reason.code)}
               </li>
             ))}
           </ul>
@@ -272,11 +266,11 @@ function Detail({
               <li key={reason.code} className="flex gap-2 text-sm">
                 <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-forest" />
                 <span>
-                  <span className="text-ink">{humanise(reason.code)}</span>
+                  <span className="text-ink">{explainCode(reason.code)}</span>
                   {reason.facts && Object.keys(reason.facts).length > 0 ? (
                     <span className="block text-xs text-slate">
                       {Object.entries(reason.facts)
-                        .map(([key, value]) => `${humanise(key).toLowerCase()} ${value ?? "unknown"}`)
+                        .map(([key, value]) => `${explainCode(key).toLowerCase()} ${value ?? "unknown"}`)
                         .join(" · ")}
                     </span>
                   ) : null}
@@ -342,13 +336,13 @@ function SafetyRow({ check }: { check: SafetyCheck }) {
     <li className="flex gap-2 text-sm">
       {icon}
       <span>
-        <span className="text-ink">{humanise(check.code)}</span>
+        <span className="text-ink">{explainCode(check.code)}</span>
         <span className="block text-xs text-slate">
           {check.status === "unknown"
             ? "Could not be checked — treat this as not cleared, not as cleared"
             : check.status === "not_applicable"
               ? "Does not apply to this field"
-              : humanise(check.reason.code)}
+              : explainCode(check.reason.code)}
         </span>
       </span>
     </li>
@@ -359,7 +353,7 @@ function OnsetRow({ onset }: { onset: StressOnset }) {
   const date = onset.local_date;
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-sm">
-      <span className="text-ink">{humanise(onset.stress_type)}</span>
+      <span className="text-ink">{explainCode(onset.stress_type)}</span>
       {date ? (
         <span className="text-slate">
           from{" "}
@@ -373,7 +367,7 @@ function OnsetRow({ onset }: { onset: StressOnset }) {
       ) : (
         <UnknownValue
           label="no start date"
-          reason={onset.reason ? humanise(onset.reason).toLowerCase() : undefined}
+          reason={onset.reason ? explainCode(onset.reason).toLowerCase() : undefined}
         />
       )}
     </li>
@@ -399,7 +393,7 @@ function ProductFitCard({ fit }: { fit: ProductFit }) {
       {fit.reasons.length > 0 ? (
         <ul className="mt-2 space-y-1 text-sm text-slate">
           {fit.reasons.map((reason) => (
-            <li key={reason.code}>{humanise(reason.code)}</li>
+            <li key={reason.code}>{explainCode(reason.code)}</li>
           ))}
         </ul>
       ) : null}

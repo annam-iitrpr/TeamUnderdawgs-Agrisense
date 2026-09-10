@@ -18,6 +18,8 @@ import { useCrops } from "@/features/crops/use-crop-name";
 import { newIdempotencyKey } from "@/lib/api/client";
 import type { CropComparison, CropPlan, Field, Season } from "@/lib/api/contract";
 import { ApiError } from "@/lib/api/envelope";
+import { formatArea } from "@/lib/format";
+import { explainCode } from "@/lib/missing-reasons";
 import { fields as fieldsApi, planning as planningApi } from "@/lib/api/routes";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Sparkles } from "lucide-react";
@@ -86,12 +88,15 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
   const [mode, setMode] = useState<"single" | "suggest">(initialCropId ? "single" : "suggest");
   const [focusCrop, setFocusCrop] = useState<string | undefined>(initialCropId);
 
-  const remainingHa = useMemo(() => {
-    if (!field) return 0;
+  const { allocatedHa, remainingHa } = useMemo(() => {
+    if (!field) return { allocatedHa: 0, remainingHa: 0 };
     const taken = seasons
       .filter((s) => s.status !== "closed")
       .reduce((sum, s) => sum + (s.allocated_area_ha ?? 0), 0);
-    return Math.max(0, Number((field.area_ha - taken).toFixed(4)));
+    return {
+      allocatedHa: taken,
+      remainingHa: Math.max(0, Number((field.area_ha - taken).toFixed(4))),
+    };
   }, [field, seasons]);
 
   const run = useCallback(
@@ -203,9 +208,15 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
               {field.name}
             </p>
             <p className="mt-0.5 text-sm text-slate">
-              {remainingHa > 0
-                ? `${remainingHa} ha free of ${field.area_ha} ha. Figures below are for the free area.`
-                : `All ${field.area_ha} ha is already assigned to a season.`}
+              {/* Free area is only worth contrasting with the whole field once
+                  part of it is actually taken. Printing both when nothing is
+                  allocated showed the rounding difference between them as if it
+                  were a real allocation. */}
+              {remainingHa <= 0
+                ? `All ${formatArea(field.area_ha, "ha")} is already assigned to a season.`
+                : allocatedHa > 0
+                  ? `${formatArea(remainingHa, "ha")} free of ${formatArea(field.area_ha, "ha")}. Figures below are for the free area.`
+                  : `${formatArea(field.area_ha, "ha")}. Figures below are for the whole field.`}
             </p>
           </Card>
         ) : null}
@@ -311,7 +322,7 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
               <Callout tone="info" className="text-sm" title="About these figures">
                 <ul className="list-inside list-disc">
                   {comparison.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
+                    <li key={warning}>{explainCode(warning)}</li>
                   ))}
                 </ul>
               </Callout>

@@ -1,13 +1,16 @@
 /**
- * Turning the engine's missing-data codes into something a farmer can act on.
+ * Turning the engine's codes into something a farmer can act on.
  *
- * The codes are precise and are the right thing to send over the wire, but
- * `initial_storage_unknown` shown verbatim tells a farmer nothing about what to
- * do, and `.replace(/_/g, " ")` only makes it lowercase jargon.
+ * Two vocabularies arrive over the wire and both land on screen: the
+ * missing-data codes that say why a figure is absent, and the warnings that
+ * qualify a figure that is present. The codes are precise and are the right
+ * thing to send, but `initial_storage_unknown` shown verbatim tells a farmer
+ * nothing about what to do, and `.replace(/_/g, " ")` only makes it lowercase
+ * jargon.
  *
  * Two rules:
- *  - Every phrase says what is missing, and where possible who can supply it.
- *    "Not known" with no reason is a dead end.
+ *  - Every phrase says what is missing or what the caveat means, and where
+ *    possible who can supply it. "Not known" with no reason is a dead end.
  *  - An unrecognised code falls through to its spaced form rather than being
  *    swallowed. A code nobody has written a phrase for should still reach the
  *    screen, because hiding it would make a real gap invisible.
@@ -55,6 +58,29 @@ const PHRASES: Record<string, string> = {
   // Providers.
   provider_value_invalid: "the weather service returned a value that cannot be true",
   no_forecast_provider_available: "no weather service could be reached",
+
+  // Warnings. These qualify a figure that is present, rather than explaining an
+  // absent one, and the engine attaches them to every comparison and evaluation.
+  ranking_weights_are_project_choices:
+    "how much each factor counts towards the ranking is this project's choice, not an agronomist's",
+  no_cross_crop_yield_comparison: "these figures do not compare expected yield between crops",
+  economics_requires_paired_yield_price_cost_records:
+    "money figures need real yield, price and cost records, which nobody has published for these crops yet",
+  scenario_not_field_validated: "this projection has not been checked against real fields",
+  v1_safety_and_economics_extensions_pending:
+    "spray safety and the money detail are not complete in this version",
+};
+
+/** What a weather provider's own failure code means, once the provider is named. */
+const PROVIDER_PHRASES: Record<string, string> = {
+  forecast_not_supported: "does not supply an hourly forecast",
+  no_data: "returned no data for your field",
+  circuit_open: "is being left alone after repeated failures",
+  timeout: "did not answer in time",
+  https_required: "was not reachable over a secure connection",
+  payload_too_large: "returned more data than can be read",
+  invalid_json: "returned a response that could not be read",
+  invalid_history_schema: "returned history in a shape that could not be read",
 };
 
 /** A farmer-readable phrase for a code, or its spaced form if none is written. */
@@ -63,5 +89,22 @@ export function explainMissing(code: string | null | undefined): string | null {
   // Several codes arrive prefixed with the date they apply to.
   const bare = /^\d{4}-\d{2}-\d{2}:(.*)$/.exec(code)?.[1] ?? code;
   if (bare === "") return null;
-  return PHRASES[bare] ?? bare.replace(/_/g, " ");
+  if (PHRASES[bare]) return PHRASES[bare];
+
+  // A provider attaches its own name: `meteoblue:no_data`. The service is worth
+  // naming, because "no weather" and "this one service is down" are different
+  // situations to a farmer deciding whether to wait.
+  const provider = /^([a-z][a-z0-9_.-]*):(.+)$/.exec(bare);
+  if (provider) {
+    const [, name, failure] = provider as unknown as [string, string, string];
+    return `the ${name} weather service ${PROVIDER_PHRASES[failure] ?? failure.replace(/_/g, " ")}`;
+  }
+
+  return bare.replace(/_/g, " ");
+}
+
+/** The same phrase, capitalised, for a code shown on its own in a list. */
+export function explainCode(code: string): string {
+  const phrase = explainMissing(code) ?? code.replace(/_/g, " ");
+  return phrase.replace(/^./, (first) => first.toUpperCase());
 }

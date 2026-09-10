@@ -14,6 +14,7 @@
  */
 import { Button, Card } from "@/components/ui";
 import type { Crop, CropPlan } from "@/lib/api/contract";
+import { explainCode } from "@/lib/missing-reasons";
 import { X } from "lucide-react";
 import { EstimateBand } from "./estimate-band";
 import { formatLitres, litresFromMeasurement } from "./water-figures";
@@ -98,7 +99,7 @@ const ROWS: Row[] = [
       plan.exclusions && plan.exclusions.length > 0 ? (
         <ul className="list-inside list-disc text-sm">
           {plan.exclusions.slice(0, 3).map((r) => (
-            <li key={r.code}>{r.code.replace(/_/g, " ")}</li>
+            <li key={r.code}>{explainCode(r.code)}</li>
           ))}
         </ul>
       ) : (

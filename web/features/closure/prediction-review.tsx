@@ -20,7 +20,7 @@ import { Callout, Card, UnknownValue } from "@/components/ui";
 import type { ErrorMetric, SeasonClosure, SeasonEvaluation } from "@/lib/api/contract";
 import { cn } from "@/lib/utils";
 import { CircleHelp, TrendingDown, TrendingUp } from "lucide-react";
-import { explainMissing } from "@/lib/missing-reasons";
+import { explainCode } from "@/lib/missing-reasons";
 
 const IST = "Asia/Kolkata";
 
@@ -29,11 +29,6 @@ function rupees(value: number): string {
 }
 
 /** Engine codes must never reach a farmer verbatim. */
-function humanise(code: string): string {
-  const phrase = explainMissing(code) ?? code.replace(/_/g, " ");
-  return phrase.replace(/^./, (c) => c.toUpperCase());
-}
-
 export function PredictionReview({
   evaluation,
   cropName,
@@ -78,7 +73,7 @@ export function PredictionReview({
         <Callout tone="caution" title="Read these alongside the figures above">
           <ul className="space-y-0.5">
             {evaluation.warnings.map((warning) => (
-              <li key={warning}>{humanise(warning)}</li>
+              <li key={warning}>{explainCode(warning)}</li>
             ))}
           </ul>
         </Callout>
@@ -176,7 +171,7 @@ function MetricRow({ metric }: { metric: ErrorMetric }) {
   return (
     <li className="flex items-baseline justify-between gap-3 py-2.5">
       <span className="min-w-0">
-        <span className="text-sm text-ink">{humanise(metric.name)}</span>
+        <span className="text-sm text-ink">{explainCode(metric.name)}</span>
         {/* Never omitted: two metrics with different denominator policies are
             not comparable, and the reader cannot tell without being told. */}
         <span className="block text-xs text-slate">
@@ -193,7 +188,7 @@ function MetricRow({ metric }: { metric: ErrorMetric }) {
           <span className="inline-flex items-center gap-1.5 text-slate">
             <CircleHelp aria-hidden className="size-3.5 shrink-0" />
             <span className="text-sm">
-              {metric.missing_reason ? humanise(metric.missing_reason) : "Not known"}
+              {metric.missing_reason ? explainCode(metric.missing_reason) : "Not known"}
             </span>
           </span>
         )}
