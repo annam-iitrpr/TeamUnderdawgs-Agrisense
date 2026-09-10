@@ -521,3 +521,14 @@ def test_a_half_finished_add_field_keeps_its_place(harness, asha):
             d.ConversationRow.payload['source'].as_string() == 'whatsapp'))
         state = (conversation.payload or {}).get('add_field') or {}
     assert state, 'the add-field flow kept nothing between messages'
+
+
+def test_readiness_is_reported_on_the_scale_it_is_scored_on():
+    """It is scored out of a hundred and arrives as a float.
+
+    The reply read "Score: 67.0 out of 10", which is both scales wrong at once
+    and would have a farmer believe the crop was nearly seven times ready.
+    """
+    reply = whatsapp.with_menu('*Readiness*\nScore: 67 out of 100')
+    assert 'out of 10\n' not in reply.body
+    assert 'out of 100' in reply.body

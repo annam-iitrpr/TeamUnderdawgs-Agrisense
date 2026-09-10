@@ -1078,7 +1078,9 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             water_value = recommendation.payload.get('water') or {}
             lines = ['*Readiness*']
             if readiness is not None:
-                lines.append(f'Score: {readiness} out of 10')
+                # Readiness is scored out of a hundred, and arrives as a float.
+                # "67.0 out of 10" was both scales wrong at once.
+                lines.append(f'Score: {round(readiness)} out of 100')
             # Lead with what is known. The crop stage and whether the field needs
             # water are both real answers, and reporting only the score meant a
             # farmer whose score was still pending was told nothing at all.
