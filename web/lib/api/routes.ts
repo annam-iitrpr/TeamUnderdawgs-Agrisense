@@ -38,6 +38,7 @@ import type {
   SeasonCreate,
   SeasonEvaluation,
   SeasonPatch,
+  SoilReadingCreate,
   SoilObservation,
   Task,
   WaterEstimate,
@@ -457,6 +458,25 @@ export const proposals = {
 /* ── soil and jobs ───────────────────────────────────────────────────────── */
 
 export const soil = {
+  /**
+   * A moisture reading the farmer took themselves.
+   *
+   * The only soil input that can be dated today, which is what the water
+   * balance needs. A photographed Soil Health Card carries a lab date and can
+   * never satisfy it.
+   */
+  recordReading: (
+    body: SoilReadingCreate,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<SoilObservation>> =>
+    apiRequest("/soil/readings", {
+      method: "POST",
+      body,
+      idempotencyKey,
+      signal: o.signal,
+    }),
+
   /** Read the extracted draft, so a farmer sees the values before confirming them. */
   get: (id: string, o: Opts = {}): Promise<Result<SoilObservation>> =>
     apiRequest(`/soil/extractions/${encodeURIComponent(id)}`, { signal: o.signal }),

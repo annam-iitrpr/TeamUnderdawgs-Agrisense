@@ -19,6 +19,7 @@ import { Button, Callout, Card, DataModeBadge, EmptyState, ErrorState, Skeleton,
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
 import { AddSeasonForm } from "@/features/crops/add-season-form";
+import { MoistureReadingForm } from "@/features/soil/moisture-reading-form";
 import { SoilCardUpload } from "@/features/soil/soil-card-upload";
 import { FieldInputsForm } from "./field-inputs-form";
 import { RemoveField } from "./remove-field";
@@ -255,6 +256,7 @@ function FieldPanel({
 }) {
   const { t } = useLanguage();
   const [editingInputs, setEditingInputs] = useState(false);
+  const [recordingMoisture, setRecordingMoisture] = useState(false);
 
   const seasonsQuery = useApiQuery(
     // field id in the key: this is the Field A / Field B isolation guarantee.
@@ -297,7 +299,18 @@ function FieldPanel({
           field={field}
           seasonCount={activeSeasons.length}
           onEditInputs={() => setEditingInputs(true)}
+          onRecordMoisture={() => setRecordingMoisture(true)}
         />
+        {recordingMoisture ? (
+          <MoistureReadingForm
+            field={field}
+            onSaved={() => {
+              setRecordingMoisture(false);
+              onFieldChanged();
+            }}
+            onCancel={() => setRecordingMoisture(false)}
+          />
+        ) : null}
         {editingInputs ? (
           <FieldInputsForm
             field={field}
@@ -650,10 +663,12 @@ function DataRequests({
   field,
   seasonCount,
   onEditInputs,
+  onRecordMoisture,
 }: {
   field: Field;
   seasonCount: number;
   onEditInputs: () => void;
+  onRecordMoisture: () => void;
 }) {
   const requests: Array<{
     label: string;
@@ -683,6 +698,13 @@ function DataRequests({
   if (field.irrigation_method == null) {
     requests.push({ label: "Say how you water this field", onClick: onEditInputs });
   }
+  // Always offered, not only when absent: a water plan needs *today's* reading,
+  // so yesterday's does not satisfy this and the request cannot be "done".
+  requests.push({
+    label: "Add today's soil moisture reading",
+    detail: "Needed before AgriSense can say how much water your crop needs.",
+    onClick: onRecordMoisture,
+  });
   // Soil is handled inline by its own card below, not as a link to somewhere else.
   if (field.centroid.source !== "gps") {
     requests.push({

@@ -590,6 +590,29 @@ class SoilConfirmRequest(VersionedPatch):
     observation: SoilObservation
 
 
+class SoilReadingCreate(ContractModel):
+    """A measurement the farmer took themselves, not a lab card.
+
+    Soil observations could previously only be created by photographing a Soil
+    Health Card. A card carries lab values and its `sampled_on` is the lab date,
+    so it can never satisfy the water balance, which needs the moisture in the
+    root zone *now*. Every water figure was therefore unreachable no matter what
+    the farmer did.
+
+    This is deliberately narrow. It records what a farmer read off a probe on a
+    stated day, and nothing is inferred from it: `source` is fixed to `farmer`
+    so it can never be mistaken for a lab result, and the reading is stored with
+    the date given rather than the date received, because a reading taken
+    yesterday is not a reading taken today.
+    """
+
+    field_id: Id
+    sampled_on: date
+    moisture: Measurement
+    moisture_basis: Literal['volumetric', 'gravimetric', 'percent_field_capacity']
+    depth_cm: Nonnegative | None = None
+
+
 class ConversationCreate(ContractModel):
     field_id: Id | None = None
     season_id: Id | None = None

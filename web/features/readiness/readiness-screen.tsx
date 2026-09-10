@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { StressCurve } from "./stress-curve";
+import { explainMissing } from "@/lib/missing-reasons";
 
 const IST = "Asia/Kolkata";
 
@@ -78,8 +79,10 @@ function windowHours(interval: Interval): string {
   return rest === 0 ? `${hours} hour${hours === 1 ? "" : "s"}` : `${hours}h ${rest}m`;
 }
 
+/** Engine codes must never reach a farmer verbatim. */
 function humanise(code: string): string {
-  return code.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const phrase = explainMissing(code) ?? code.replace(/_/g, " ");
+  return phrase.replace(/^./, (c) => c.toUpperCase());
 }
 
 export function ReadinessScreen({ seasonId }: { seasonId: string }) {

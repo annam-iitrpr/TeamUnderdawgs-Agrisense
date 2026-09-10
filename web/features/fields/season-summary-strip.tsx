@@ -22,6 +22,7 @@ import { seasons as seasonsApi } from "@/lib/api/routes";
 import { cn } from "@/lib/utils";
 import { CloudRain, Droplets, IndianRupee, Wind } from "lucide-react";
 import Link from "next/link";
+import { explainMissing } from "@/lib/missing-reasons";
 
 const IST = "Asia/Kolkata";
 
@@ -118,7 +119,7 @@ export function SeasonSummaryStrip({
               waterQuery.error?.isDependencyUnavailable
                 ? "service unavailable"
                 : water?.missing_reason
-                  ? water.missing_reason.replace(/_/g, " ")
+                  ? explainMissing(water.missing_reason) ?? undefined
                   : undefined
             }
           />
@@ -147,7 +148,7 @@ export function SeasonSummaryStrip({
               economicsQuery.error?.isDependencyUnavailable
                 ? "service unavailable"
                 : economics?.profit?.missing_reason
-                  ? economics.profit.missing_reason.replace(/_/g, " ")
+                  ? explainMissing(economics.profit.missing_reason) ?? undefined
                   : undefined
             }
           />

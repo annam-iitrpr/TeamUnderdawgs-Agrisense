@@ -142,6 +142,7 @@ export interface components { schemas: {
   "SoilConfirmRequest": { "expected_version": number; "observation": components["schemas"]["SoilObservation"]; };
   "SoilExtractionRequest": { "field_id": string; "media_id": string; };
   "SoilObservation": { "id": string; "field_id": string; "sampled_on"?: (string) | (null); "depth_cm"?: (number) | (null); "ph"?: (components["schemas"]["Measurement"]) | (null); "organic_carbon"?: (components["schemas"]["Measurement"]) | (null); "organic_matter"?: (components["schemas"]["Measurement"]) | (null); "nitrogen"?: (components["schemas"]["Measurement"]) | (null); "phosphorus"?: (components["schemas"]["Measurement"]) | (null); "potassium"?: (components["schemas"]["Measurement"]) | (null); "micronutrients"?: { [key: string]: components["schemas"]["Measurement"]; }; "texture"?: (string) | (null); "bulk_density"?: (components["schemas"]["Measurement"]) | (null); "moisture"?: (components["schemas"]["Measurement"]) | (null); "moisture_basis"?: ("volumetric" | "gravimetric" | "percent_field_capacity") | (null); "source": "lab" | "farmer" | "gridded_estimate"; "confirmation_state": "draft" | "confirmed" | "rejected"; "attachment_id"?: (string) | (null); "original_ocr"?: (string) | (null); "version": number; };
+  "SoilReadingCreate": { "field_id": string; "sampled_on": string; "moisture": components["schemas"]["Measurement"]; "moisture_basis": "volumetric" | "gravimetric" | "percent_field_capacity"; "depth_cm"?: (number) | (null); };
   "StressMapPoint": { "field_id": string; "centroid": components["schemas"]["Location"]; "stress": (number) | (null); "missing_reason"?: (string) | (null); };
   "StressOnset": { "stress_type": string; "local_date": (string) | (null); "threshold": (number) | (null); "reason"?: (string) | (null); };
   "StressPoint": { "local_date": string; "stress_type": string; "value": (number) | (null); "missing_reason"?: (string) | (null); };
@@ -300,6 +301,9 @@ get: { responses: { 200: components["schemas"]["Envelope[SoilObservation]"]; 401
 };
 "/api/v1/soil/extractions/{id}/confirm": {
 post: { requestBody: components["schemas"]["SoilConfirmRequest"]; responses: { 200: components["schemas"]["Envelope[SoilObservation]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
+};
+"/api/v1/soil/readings": {
+post: { requestBody: components["schemas"]["SoilReadingCreate"]; responses: { 201: components["schemas"]["Envelope[SoilObservation]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };
 };
 "/api/v1/tasks": {
 get: { responses: { 200: components["schemas"]["Envelope[Page[Task]]"]; 401: components["schemas"]["ErrorResponse"]; 403: components["schemas"]["ErrorResponse"]; 404: components["schemas"]["ErrorResponse"]; 409: components["schemas"]["ErrorResponse"]; 422: components["schemas"]["ErrorResponse"]; 429: components["schemas"]["ErrorResponse"]; 503: components["schemas"]["ErrorResponse"]; } };

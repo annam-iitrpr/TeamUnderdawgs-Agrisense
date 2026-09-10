@@ -6326,6 +6326,56 @@
         "title": "SoilObservation",
         "type": "object"
       },
+      "SoilReadingCreate": {
+        "additionalProperties": false,
+        "description": "A measurement the farmer took themselves, not a lab card.\n\nSoil observations could previously only be created by photographing a Soil\nHealth Card. A card carries lab values and its `sampled_on` is the lab date,\nso it can never satisfy the water balance, which needs the moisture in the\nroot zone *now*. Every water figure was therefore unreachable no matter what\nthe farmer did.\n\nThis is deliberately narrow. It records what a farmer read off a probe on a\nstated day, and nothing is inferred from it: `source` is fixed to `farmer`\nso it can never be mistaken for a lab result, and the reading is stored with\nthe date given rather than the date received, because a reading taken\nyesterday is not a reading taken today.",
+        "properties": {
+          "depth_cm": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Depth Cm"
+          },
+          "field_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Field Id",
+            "type": "string"
+          },
+          "moisture": {
+            "$ref": "#/components/schemas/Measurement"
+          },
+          "moisture_basis": {
+            "enum": [
+              "volumetric",
+              "gravimetric",
+              "percent_field_capacity"
+            ],
+            "title": "Moisture Basis",
+            "type": "string"
+          },
+          "sampled_on": {
+            "format": "date",
+            "title": "Sampled On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field_id",
+          "sampled_on",
+          "moisture",
+          "moisture_basis"
+        ],
+        "title": "SoilReadingCreate",
+        "type": "object"
+      },
       "StressMapPoint": {
         "additionalProperties": false,
         "properties": {
@@ -13296,6 +13346,123 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope[SoilObservation]"
+                }
+              }
+            },
+            "description": "Successful result"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "401"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "403"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "404"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "409"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "422"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "429"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "503"
+          }
+        },
+        "security": [
+          {
+            "firebaseBearer": []
+          }
+        ],
+        "tags": [
+          "soil"
+        ]
+      }
+    },
+    "/api/v1/soil/readings": {
+      "post": {
+        "operationId": "post_soil_readings",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoilReadingCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {

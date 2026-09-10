@@ -288,6 +288,61 @@ def test_re_evaluating_an_unchanged_season_does_not_collide(asha, season, harnes
         assert [r.id for r in live] == ['rec_refresh_1'], 'the older advice was not retired'
 
 
+def test_a_farmer_can_record_a_soil_moisture_reading_dated_today(asha, field, season):
+    """The only soil input that can satisfy the water balance.
+
+    Observations could previously only come from a photographed Soil Health
+    Card, whose `sampled_on` is the lab date. The water balance needs the
+    moisture in the root zone *now*, so every water figure was unreachable no
+    matter what the farmer did.
+    """
+    from agrisense.platform import db as d
+
+    today = d.utcnow().astimezone(
+        __import__('zoneinfo').ZoneInfo('Asia/Kolkata')
+    ).date().isoformat()
+    created = asha.post('/soil/readings', {
+        'field_id': field['id'], 'sampled_on': today,
+        'moisture': {'value': 0.24, 'unit': 'm³/m³'}, 'moisture_basis': 'volumetric',
+        'depth_cm': 30})
+    assert created.status_code == 201, created.text
+    body = created.json()['data']
+    assert body['sampled_on'] == today
+    assert body['moisture']['value'] == 0.24
+    # A self-reported figure must never be mistaken for a lab result, and there
+    # is nothing for the farmer to approve in a value they typed themselves.
+    assert body['source'] == 'farmer'
+    assert body['confirmation_state'] == 'confirmed'
+
+    # The reading has to change the advice, not sit in a record nobody reads:
+    # every open season on the field is bumped so it re-evaluates.
+    assert asha.get(f'/seasons/{season["id"]}').json()['data']['version'] > 1
+
+
+def test_a_soil_reading_cannot_be_dated_in_the_future(asha, field):
+    from datetime import timedelta
+
+    from agrisense.platform import db as d
+
+    ahead = (d.utcnow() + timedelta(days=3)).date().isoformat()
+    response = asha.post('/soil/readings', {
+        'field_id': field['id'], 'sampled_on': ahead,
+        'moisture': {'value': 0.24, 'unit': 'm³/m³'}, 'moisture_basis': 'volumetric'})
+    assert response.status_code == 422
+    assert response.json()['error']['code'] == 'INVALID_SAMPLE_DATE'
+
+
+def test_a_soil_reading_cannot_be_attached_to_another_farmers_field(ravi, field):
+    """Tenancy holds on the new route as it does everywhere else."""
+    from agrisense.platform import db as d
+
+    today = d.utcnow().date().isoformat()
+    response = ravi.post('/soil/readings', {
+        'field_id': field['id'], 'sampled_on': today,
+        'moisture': {'value': 0.24, 'unit': 'm³/m³'}, 'moisture_basis': 'volumetric'})
+    assert response.status_code == 404, response.text
+
+
 def test_summary_before_closing_says_so_rather_than_scoring_nothing(asha, season):
     response = asha.get(f'/seasons/{season["id"]}/summary')
     assert response.status_code == 200

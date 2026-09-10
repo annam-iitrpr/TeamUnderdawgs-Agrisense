@@ -31,6 +31,10 @@ ROUTES = [
     ('POST', '/media/uploads', UploadRequest, UploadTicket, 201),
     ('POST', '/media/{id}/complete', MediaComplete, MediaAsset, 200),
     ('GET', '/media/{id}/access', None, MediaAccess, 200),
+    # A farmer's own probe reading. Separate from the card extraction because it
+    # needs no media and no OCR, and because it is the only soil input that can
+    # be dated today — which the water balance requires.
+    ('POST', '/soil/readings', SoilReadingCreate, SoilObservation, 201),
     ('POST', '/soil/extractions', SoilExtractionRequest, Job, 202),
     ('GET', '/soil/extractions/{id}', None, SoilObservation, 200),
     ('POST', '/soil/extractions/{id}/confirm', SoilConfirmRequest, SoilObservation, 200),

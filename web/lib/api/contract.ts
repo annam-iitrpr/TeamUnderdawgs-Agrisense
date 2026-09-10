@@ -56,6 +56,15 @@ export type StageSource = Season["stage_source"];
 /* ── soil ────────────────────────────────────────────────────────────────── */
 
 export type SoilObservation = Schema<"SoilObservation">;
+
+/**
+ * A moisture reading the farmer took themselves.
+ *
+ * The only soil input that can carry today's date, and therefore the only one
+ * the water balance can start from.
+ */
+export type SoilReadingCreate = Schema<"SoilReadingCreate">;
+export type MoistureBasis = SoilReadingCreate["moisture_basis"];
 export type Measurement = Schema<"Measurement">;
 
 /* ── recommendation and evaluation ───────────────────────────────────────── */

@@ -30,6 +30,7 @@ import { useApiQuery } from "@/lib/api/query";
 import { seasons as seasonsApi } from "@/lib/api/routes";
 import { CloudRain, Droplets, Info } from "lucide-react";
 import Link from "next/link";
+import { explainMissing } from "@/lib/missing-reasons";
 
 export function WaterScreen({ seasonId }: { seasonId: string }) {
   const { user } = useAuth();
@@ -144,11 +145,7 @@ function SeasonalNeed({ water, areaHa }: { water: WaterEstimate; areaHa: number 
       ) : (
         <p className="mt-3 text-sm text-slate">
           Whether irrigation is needed over the whole season is not known yet.
-          {water.missing_reason === "initial_storage_unknown"
-            ? " A season total needs to know how much water is already in the soil, which needs a soil moisture reading for this field. The day-by-day figures below do not need it."
-            : water.missing_reason
-              ? ` ${water.missing_reason.replace(/_/g, " ")}.`
-              : ""}
+          {water.missing_reason ? ` It ${explainMissing(water.missing_reason)}.` : ""}
         </p>
       )}
     </Card>
@@ -226,7 +223,7 @@ function DailyPlan({ daily, areaHa }: { daily: Measurement[]; areaHa: number }) 
                 ) : (
                   <UnknownValue
                     label="Not known"
-                    reason={reason ? reason.replace(/_/g, " ") : undefined}
+                    reason={explainMissing(reason) ?? undefined}
                   />
                 )}
               </span>

@@ -20,6 +20,7 @@ import { Callout, Card, UnknownValue } from "@/components/ui";
 import type { ErrorMetric, SeasonClosure, SeasonEvaluation } from "@/lib/api/contract";
 import { cn } from "@/lib/utils";
 import { CircleHelp, TrendingDown, TrendingUp } from "lucide-react";
+import { explainMissing } from "@/lib/missing-reasons";
 
 const IST = "Asia/Kolkata";
 
@@ -27,8 +28,10 @@ function rupees(value: number): string {
   return `₹${Math.round(value).toLocaleString("en-IN")}`;
 }
 
+/** Engine codes must never reach a farmer verbatim. */
 function humanise(code: string): string {
-  return code.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const phrase = explainMissing(code) ?? code.replace(/_/g, " ");
+  return phrase.replace(/^./, (c) => c.toUpperCase());
 }
 
 export function PredictionReview({

@@ -352,6 +352,29 @@ class DomainService:
             row.version=value.version;row.payload=dump(value)
             self.own(d.FieldRow,value.field_id)
             return value
+        if path=='/soil/readings':
+            # The farmer's own probe reading. Stored confirmed, because they
+            # typed it themselves — there is no OCR to check and nothing for
+            # them to approve. `source` is forced to 'farmer' whatever the
+            # caller says, so a self-reported figure can never be mistaken for
+            # a lab result.
+            self.own(d.FieldRow,body.field_id)
+            if body.sampled_on>d.utcnow().astimezone(IST).date():
+                raise PlatformError('INVALID_SAMPLE_DATE','A soil reading cannot be dated in the future.')
+            value=c.SoilObservation(
+                id=d.new_id(),field_id=body.field_id,sampled_on=body.sampled_on,
+                depth_cm=body.depth_cm,moisture=body.moisture,moisture_basis=body.moisture_basis,
+                source='farmer',confirmation_state='confirmed',version=1)
+            row=d.SoilRow(**self.owned_values(dump(value)),field_id=body.field_id)
+            self.s.add(row)
+            # Every open season on this field is re-evaluated against it, so the
+            # reading changes the advice rather than sitting in a record nobody reads.
+            # `bump_season` already emits season.updated and supersedes the stale
+            # advice, so no separate soil event is needed — and 'soil.recorded'
+            # is not in the contract's closed set of event types anyway.
+            for season in self.s.scalars(select(d.SeasonRow).where(d.SeasonRow.field_id==body.field_id,d.SeasonRow.tenant_id==self.actor.tenant_id,d.SeasonRow.status!='closed').with_for_update()):
+                self.bump_season(season)
+            return value
         if path=='/soil/extractions':
             self.own(d.FieldRow,body.field_id)
             asset=self.own(d.MediaRow,body.media_id)
