@@ -22,6 +22,7 @@ async def one_pass(settings: Settings, sessions) -> dict[str, int]:
     """Every stage is independent: one failing stage must not stop the others."""
     outcome: dict[str, int] = {}
     outcome['jobs'] = await worker.drain_jobs(sessions, settings)
+    outcome['whatsapp'] = worker.drain_whatsapp_outbox(sessions, settings)
     try:
         outcome['reminders'] = sum(reminders.dispatch(sessions, settings).values())
     except Exception:

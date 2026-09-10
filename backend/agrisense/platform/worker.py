@@ -24,6 +24,7 @@ ERASED = object()
 MAX_ATTEMPTS = 5
 LEASE = timedelta(minutes=5)
 BACKOFF_SECONDS = 30
+WHATSAPP_CONSUMER = 'whatsapp'
 
 
 def backoff(attempts: int) -> timedelta:
@@ -211,6 +212,29 @@ def drain_outbox(sessions: sessionmaker, consumer: str, handler, limit: int = 50
     return delivered
 
 
+def drain_whatsapp_outbox(sessions: sessionmaker, settings: Settings, limit: int = 50) -> int:
+    """Deliver WhatsApp rows only when live mode is explicitly enabled."""
+    if settings.whatsapp_send_mode != 'live':
+        return 0
+
+    from agrisense.platform import whatsapp
+
+    def deliver(event: d.OutboxRow) -> None:
+        session = sessions()
+        try:
+            current = session.get(d.OutboxRow, event.id)
+            if current is None:
+                return
+            result = whatsapp.deliver_outbound(session, settings, current)
+            if result != 'sent':
+                raise RuntimeError(f'WhatsApp delivery was not sent: {result}')
+            session.commit()
+        finally:
+            session.close()
+
+    return drain_outbox(sessions, WHATSAPP_CONSUMER, deliver, limit=limit)
+
+
 async def worker_loop(settings: Settings, interval: float = 5.0, iterations: int | None = None) -> None:
     engine = d.make_engine(settings)
     sessions = d.session_factory(engine)
@@ -218,6 +242,7 @@ async def worker_loop(settings: Settings, interval: float = 5.0, iterations: int
     try:
         while iterations is None or count < iterations:
             processed = await drain_jobs(sessions, settings)
+            whatsapp_delivered = drain_whatsapp_outbox(sessions, settings)
             delivered = sum(reminders.dispatch(sessions, settings).values())
             session = sessions()
             try:
@@ -225,7 +250,7 @@ async def worker_loop(settings: Settings, interval: float = 5.0, iterations: int
                 session.commit()
             finally:
                 session.close()
-            if not processed and not delivered and not expired:
+            if not processed and not whatsapp_delivered and not delivered and not expired:
                 await asyncio.sleep(interval)
             count += 1
     finally:
