@@ -108,18 +108,35 @@ def reference_bundle() -> api.ReferenceBundle:
         # "rules-only-unreviewed-v1" while serving FAO-sourced water parameters
         # would understate the bundle; reporting a reviewed version while the
         # files are empty would overstate it.
-        version="fao56-water-v1" if parameters else "rules-only-unreviewed-v1",
+        version="punjab-pau-fao-v1" if parameters else "rules-only-unreviewed-v1",
+        # Exactly the crops we hold a reviewed regional reference for. A
+        # catalogue longer than the reference set would let a farmer pick
+        # something the engine can only decline, which is a worse experience
+        # than a shorter list of crops it can actually reason about.
         crops=[
             api.Crop(
                 id=crop_id,
                 name=name,
-                supported_for_biological_advice=crop_id in {"rice", "wheat", "cotton"},
+                # Biological product advice needs an approved product label, and
+                # none is supplied for any crop yet. This flag says which crops
+                # the product rules are *written* for, not that advice is ready.
+                supported_for_biological_advice=crop_id in {"rice", "wheat", "cotton", "maize"},
             )
             for crop_id, name in (
-                ("rice", "Rice"),
                 ("wheat", "Wheat"),
+                ("rice", "Rice (Paddy)"),
                 ("maize", "Maize"),
-                ("soybean", "Soybean"),
+                ("potato", "Potato"),
+                ("sugarcane", "Sugarcane"),
+                ("barley", "Barley"),
+                ("field_pea", "Field Pea"),
+                ("lentil", "Lentil"),
+                ("sorghum", "Sorghum"),
+                ("bajra", "Pearl Millet (Bajra)"),
+                ("groundnut", "Groundnut"),
+                ("onion", "Onion"),
+                ("tomato", "Tomato"),
+                ("moong", "Green Gram (Moong)"),
                 ("cotton", "Cotton"),
             )
         ],
@@ -156,17 +173,48 @@ def number(record: dict, key: str, *, low: float | None = None, high: float | No
 def select_soil(
     observations: list[api.SoilObservation], field_id: str, as_of: date
 ) -> api.SoilObservation | None:
-    eligible = [
+    """The best soil record for a field: a real sample if there is one, else a model.
+
+    A measured, farmer-confirmed sample always wins. That ordering is the whole
+    point, so it is expressed as two passes rather than one sort with a tie-break
+    that could be reordered by accident.
+
+    The second pass exists because the planner will not rank a crop without a
+    soil pH, and a Soil Health Card is the only soil input most farmers can
+    give — which most do not have to hand. With only the first pass, every crop
+    was declined and the farmer was told to go and find a lab report, which is
+    not an answer to "what should I sow". A gridded estimate opens that gate.
+
+    A gridded estimate is deliberately *not* required to be confirmed or dated:
+    a farmer confirms their own card, nobody can confirm a model on their
+    behalf, and a modelled long-term average is not a sample taken on a day. It
+    carries `source='gridded_estimate'` and its own provenance so every screen
+    can say where the number came from.
+    """
+    mine = [row for row in observations if row.field_id == field_id]
+
+    measured = [
         row
-        for row in observations
-        if row.field_id == field_id
+        for row in mine
+        if row.source in ("lab", "farmer")
         and row.confirmation_state == "confirmed"
         and row.sampled_on is not None
         and row.sampled_on <= as_of
     ]
-    priority = {"lab": 0, "farmer": 1, "gridded_estimate": 2}
-    eligible.sort(key=lambda row: (priority[row.source], -row.sampled_on.toordinal(), row.id))
-    return eligible[0] if eligible else None
+    if measured:
+        priority = {"lab": 0, "farmer": 1}
+        measured.sort(key=lambda row: (priority[row.source], -row.sampled_on.toordinal(), row.id))
+        return measured[0]
+
+    modelled = [
+        row
+        for row in mine
+        if row.source == "gridded_estimate"
+        and row.confirmation_state != "rejected"
+        and (row.sampled_on is None or row.sampled_on <= as_of)
+    ]
+    modelled.sort(key=lambda row: row.id)
+    return modelled[0] if modelled else None
 
 
 def select_soil_moisture(

@@ -34,6 +34,10 @@ def harness(tmp_path):
     settings = Settings(app_env='test', database_url='sqlite://', firebase_project_id='demo-agrisense',
                         local_media_dir=str(tmp_path / 'media'), media_signing_secret='test-signing-secret',
                         meta_app_secret='test-meta-app-secret', whatsapp_webhook_verify_token='test-verify-token',
+                        # No test may depend on an upstream being reachable.
+                        # Leaving the soil estimate on took this suite from
+                        # eight seconds to four and a half minutes.
+                        soilgrids_enabled=False,
                         start_jobs_inline=False)
     app = create_app(settings)
     d.Base.metadata.create_all(app.state.engine)

@@ -33,6 +33,12 @@ secrets/
 # Local working status and agent handoff notes. Deliberately not published:
 # the per-phase ledgers in workstreams/ are the committed record.
 /progress.md
+# Operator-supplied briefs and credential notes. These live outside the repo,
+# but are named here so a stray copy inside it can never be committed.
+confidential*
+*MASTER PROMPT*
+*ui:ux*
+*pro max*
 
 # ── Node / Next.js ─────────────────────────────────────────────────────────
 node_modules/

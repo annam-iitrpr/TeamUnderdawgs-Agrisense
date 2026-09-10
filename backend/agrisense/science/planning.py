@@ -50,7 +50,11 @@ def compare_crops(
     for crop in ids:
         reasons = []
         record = reviewed_parameters(references, f"planning:{crop}", now)
-        if crop not in known_crops or crop not in ("rice", "wheat", "cotton", "maize", "soybean"):
+        # The catalogue is the allow-list. A second hardcoded tuple beside it
+        # meant adding a crop to the reference set silently failed to make it
+        # plannable, which is exactly the drift the reference files exist to
+        # prevent.
+        if crop not in known_crops:
             reasons.append("crop_not_supported")
         if record is None:
             reasons.append("reviewed_regional_crop_reference_missing")

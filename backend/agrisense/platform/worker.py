@@ -78,7 +78,7 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
             d.SeasonRow.id == request['season_id'], d.SeasonRow.tenant_id == row.tenant_id))
         if season is None:
             raise PlatformError('SEASON_MISSING', 'This season no longer exists.', 404)
-        bundle, forecast, snapshot = await science.evaluate(session, row.tenant_id, season.id)
+        bundle, forecast, snapshot = await science.evaluate(session, row.tenant_id, season.id, settings)
         stored = science.store_evaluation(session, row.tenant_id, row.farmer_id, season, bundle, snapshot, forecast)
         return stored.id
     if row.kind == 'assistant.reply':

@@ -15,8 +15,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
+from agrisense.platform import soilgrids
 from agrisense.platform.errors import PlatformError, unavailable
 
 log = logging.getLogger('agrisense.platform.science')
@@ -46,7 +48,8 @@ def snapshot_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def build_season_snapshot(session: Session, tenant_id: str, season_id: str, as_of: datetime) -> c.SeasonSnapshot:
+def build_season_snapshot(session: Session, tenant_id: str, season_id: str, as_of: datetime,
+                          settings: Settings | None = None) -> c.SeasonSnapshot:
     """Immutable inputs for one evaluation. Everything the science reads is captured here."""
     season = session.scalar(select(d.SeasonRow).where(d.SeasonRow.id == season_id, d.SeasonRow.tenant_id == tenant_id))
     if season is None:
@@ -55,11 +58,11 @@ def build_season_snapshot(session: Session, tenant_id: str, season_id: str, as_o
     farmer = session.scalar(select(d.FarmerRow).where(d.FarmerRow.id == field.farmer_id, d.FarmerRow.tenant_id == tenant_id))
     journal = list(session.scalars(select(d.JournalRow).where(d.JournalRow.season_id == season_id, d.JournalRow.tenant_id == tenant_id).order_by(d.JournalRow.occurred_at)))
     ledger = list(session.scalars(select(d.LedgerRow).where(d.LedgerRow.season_id == season_id, d.LedgerRow.tenant_id == tenant_id)))
-    soil = list(session.scalars(select(d.SoilRow).where(d.SoilRow.field_id == season.field_id, d.SoilRow.tenant_id == tenant_id)))
+    soil = soil_observations(session, tenant_id, field, settings)
     body = {
         'snapshot_id': d.new_id(), 'input_hash': 'pending', 'as_of': as_of,
         'farmer': farmer.payload, 'field': field.payload, 'season': season.payload,
-        'soil_observations': [row.payload for row in soil],
+        'soil_observations': soil,
         'journal': [row.payload for row in journal],
         'cost_ledger': [row.payload for row in ledger],
     }
@@ -97,7 +100,7 @@ def references() -> c.ReferenceBundle:
 
 
 def summarise(session: Session, tenant_id: str, season_id: str,
-              closure: c.SeasonClosure) -> c.SeasonEvaluation:
+              closure: c.SeasonClosure, settings: Settings | None = None) -> c.SeasonEvaluation:
     """Score a closed season against the forecasts that were on record while it ran.
 
     The platform owns the records and Phase 2 owns the arithmetic, so this builds
@@ -109,7 +112,7 @@ def summarise(session: Session, tenant_id: str, season_id: str,
     Only recommendations belonging to this season are included: `summarize_season`
     rejects a foreign one outright, and it is right to.
     """
-    snapshot = build_season_snapshot(session, tenant_id, season_id, closure.confirmed_at)
+    snapshot = build_season_snapshot(session, tenant_id, season_id, closure.confirmed_at, settings)
     rows = session.scalars(
         select(d.RecommendationRow).where(
             d.RecommendationRow.season_id == season_id,
@@ -198,12 +201,10 @@ async def compare(session: Session, tenant_id: str, farmer_id: str, request: c.P
     seasons = list(session.scalars(select(d.SeasonRow).where(
         d.SeasonRow.field_id == field.id, d.SeasonRow.tenant_id == tenant_id,
         d.SeasonRow.status != 'closed')))
-    soil = list(session.scalars(select(d.SoilRow).where(
-        d.SoilRow.field_id == field.id, d.SoilRow.tenant_id == tenant_id)))
     snapshot = c.PlanningSnapshot.model_validate({
         'as_of': as_of, 'field': field.payload, 'request': request.model_dump(mode='json'),
         'existing_seasons': [row.payload for row in seasons],
-        'soil_observations': [row.payload for row in soil]})
+        'soil_observations': soil_observations(session, tenant_id, field, settings)})
     climate = await climate_for(snapshot.field.centroid, request.proposed_season, as_of, settings)
     try:
         result = facade('compare_crops')(snapshot, references(), climate)
@@ -212,10 +213,45 @@ async def compare(session: Session, tenant_id: str, farmer_id: str, request: c.P
     return result if isinstance(result, c.CropComparison) else c.CropComparison.model_validate(result)
 
 
-async def evaluate(session: Session, tenant_id: str, season_id: str) -> tuple[c.EvaluationBundle, c.ForecastBundle, c.SeasonSnapshot]:
+def soil_observations(session: Session, tenant_id: str, field: Any,
+                      settings: Settings | None = None) -> list[dict[str, Any]]:
+    """The field's soil records, with a gridded estimate added when there are none.
+
+    The crop planner will not rank a crop without a soil pH, and a Soil Health
+    Card is the only soil input most farmers can supply — which most do not
+    have. Rather than decline every crop and tell them to find a lab report,
+    a modelled estimate is appended so the ranking can happen.
+
+    It is only ever *appended*, never substituted: a real sample is already in
+    this list and `select_soil` prefers it. And it is skipped entirely when the
+    field already has records, so a farmer with a card never pays for an
+    upstream call they do not need.
+    """
+    stored = list(session.scalars(select(d.SoilRow).where(
+        d.SoilRow.field_id == field.id, d.SoilRow.tenant_id == tenant_id)))
+    payloads = [row.payload for row in stored]
+    if payloads:
+        return payloads
+    # Absent settings means no fetch. A missing configuration must not be the
+    # thing that switches an upstream call *on* — two tests called the snapshot
+    # builder directly and silently gained fifty seconds of network I/O.
+    if settings is None or not settings.soilgrids_enabled:
+        return payloads
+    centroid = (field.payload or {}).get('centroid') or {}
+    latitude, longitude = centroid.get('latitude'), centroid.get('longitude')
+    if latitude is None or longitude is None:
+        return payloads
+    estimate = soilgrids.estimate(field.id, float(latitude), float(longitude))
+    # Not persisted. A model output is derived, not a record of the farm, and
+    # storing it would make it look like something the farmer supplied.
+    return [estimate.model_dump(mode='json')] if estimate is not None else payloads
+
+
+async def evaluate(session: Session, tenant_id: str, season_id: str,
+                   settings: Settings | None = None) -> tuple[c.EvaluationBundle, c.ForecastBundle, c.SeasonSnapshot]:
     """Run one evaluation over the farm facts and the weather that drove it."""
     as_of = d.utcnow()
-    snapshot = build_season_snapshot(session, tenant_id, season_id, as_of)
+    snapshot = build_season_snapshot(session, tenant_id, season_id, as_of, settings)
     try:
         forecast = await weather_for(snapshot.field.model_dump(mode='json'), as_of)
     except Exception as exc:

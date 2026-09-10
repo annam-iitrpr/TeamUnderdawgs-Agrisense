@@ -92,12 +92,16 @@ def test_production_reference_loader_is_fresh_and_isolated():
     process sees.
     """
     refs = reference_bundle()
-    assert {crop.id for crop in refs.crops} == {"rice", "wheat", "maize", "soybean", "cotton"}
+    assert len(refs.crops) == 15
+    # The catalogue must not exceed the reference set: a crop a farmer can pick
+    # but the engine can only decline is worse than a shorter list.
+    planned = {key.split(":", 1)[1] for key in refs.parameters if key.startswith("planning:")}
+    assert {crop.id for crop in refs.crops} == planned
     refs.crops.clear()
     refs.parameters.clear()
     refs.evidence.clear()
     fresh = reference_bundle()
-    assert len(fresh.crops) == 5
+    assert len(fresh.crops) == 15
     assert fresh.parameters
     assert fresh.evidence
 
@@ -134,7 +138,9 @@ def test_water_records_carry_the_published_available_water_difference():
     """
     refs = reference_bundle()
     water_keys = [key for key in refs.parameters if key.startswith("water:")]
-    assert len(water_keys) == 5
+    # One per catalogue crop: a crop with a sowing calendar but no water
+    # parameters would rank and then refuse to say what it needs to drink.
+    assert len(water_keys) == len(refs.crops) == 15
     for key in water_keys:
         record = refs.parameters[key]
         difference_mm_per_m = (record["field_capacity"] - record["wilting_point"]) * 1000
@@ -149,16 +155,63 @@ def test_water_records_carry_the_published_available_water_difference():
         assert 0 < record["depletion_fraction"] <= 1
 
 
-def test_crop_ranking_and_product_advice_remain_unavailable():
-    """The gaps that need a human are still gaps, and are still honest about it.
+def test_every_planning_record_carries_its_sources_and_a_quoted_window():
+    """Crop calendars now exist, and each one says where it came from.
 
-    Water parameters landing must not be mistaken for crop-calendar or product
-    label approval. If a later change adds `planning:` or `product:` records,
-    this test should be updated deliberately alongside the evidence for them —
-    not quietly deleted because it started failing.
+    This replaces an assertion that no `planning:` records existed. They were
+    added deliberately: fifteen Punjab crops with sowing windows quoted from the
+    PAU Package of Practices and durations and water needs from FAO. The test
+    that guarded the gap now guards the provenance instead, so a record can
+    never be added without one.
     """
     refs = reference_bundle()
-    assert not [key for key in refs.parameters if key.startswith("planning:")]
+    catalog = {row.id for row in refs.evidence}
+    records = {k: v for k, v in refs.parameters.items() if k.startswith("planning:")}
+    assert len(records) == 15
+    for key, record in records.items():
+        assert record["evidence_id"] in catalog, key
+        assert record["evidence_id_water"] in catalog, key
+        # A window without the sentence it came from cannot be checked by a
+        # human later, which is the whole point of holding it as evidence.
+        assert str(record["sowing_quote"]).strip(), key
+        assert str(record["sowing_source"]).startswith("pau:"), key
+        assert record["duration_min_days"] <= record["duration_max_days"], key
+        assert record["seasonal_irrigation_low_mm"] <= record["seasonal_irrigation_mm"]
+        assert record["seasonal_irrigation_mm"] <= record["seasonal_irrigation_high_mm"]
+        # Cost of cultivation is region- and year-specific and was not
+        # retrievable, so it is zero and names the gap rather than guessing.
+        assert record["planned_cost_inr_ha"] == 0
+        assert record["planned_cost_missing_reason"]
+
+
+def test_region_bounds_exclude_crops_that_do_not_belong_to_the_demo_district():
+    """Cotton is a south-west Punjab crop; IIT Ropar is not in that belt.
+
+    The bounds are what make a recommendation honest rather than flattering: a
+    ranking that offered cotton at Ropar would be wrong, and PAU does not
+    recommend it there. Pinned so nobody widens the bounds to make more crops
+    appear.
+    """
+    refs = reference_bundle()
+    ropar_lat, ropar_lon = 30.9686, 76.4730
+
+    def covers(crop: str) -> bool:
+        record = refs.parameters[f"planning:{crop}"]
+        return (record["latitude_min"] <= ropar_lat <= record["latitude_max"]
+                and record["longitude_min"] <= ropar_lon <= record["longitude_max"])
+
+    assert covers("wheat") and covers("rice") and covers("maize")
+    assert covers("potato") and covers("sugarcane")
+    assert not covers("cotton"), "cotton must not be offered outside the cotton belt"
+
+
+def test_product_advice_and_economics_remain_unavailable():
+    """Crop calendars landing must not be mistaken for product-label approval.
+
+    Product rules are regulatory and none is supplied, and economics needs real
+    paired yield/price/cost records. Both still report their own gap.
+    """
+    refs = reference_bundle()
     assert not [key for key in refs.parameters if key.startswith("economics:")]
     assert refs.products == []
     snap = snapshot()

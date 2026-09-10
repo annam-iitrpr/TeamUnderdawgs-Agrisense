@@ -218,7 +218,7 @@ class DomainService:
         if closure is None:
             return c.SeasonEvaluation(season_id=id,closure=None,warnings=['Season has not been closed.'])
         try:
-            return science.summarise(self.s,self.actor.tenant_id,id,closure)
+            return science.summarise(self.s,self.actor.tenant_id,id,closure,self.settings)
         except Exception:
             # Deliberately not "try again later": a scoring failure here is a
             # defect or a missing input, and retrying changes neither. The

@@ -21,6 +21,11 @@ class DataMode(StrEnum):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=os.environ.get('AGRISENSE_ENV_FILE',str(REPO_ROOT/'.env')),env_file_encoding='utf-8',extra='ignore',hide_input_in_errors=True)
     app_env: Literal['development','test','staging','production'] = 'development'
+    #: Fetch a modelled soil estimate for fields with no soil test, so the crop
+    #: planner is not blocked on a Soil Health Card the farmer does not have.
+    #: Off in tests: a suite must not depend on an upstream being reachable, and
+    #: leaving it on took the backend tests from eight seconds to four minutes.
+    soilgrids_enabled: bool = True
     agrisense_data_mode: DataMode = DataMode.AUTO
     database_url: str = 'sqlite://'
     firebase_project_id: str = 'demo-agrisense'
