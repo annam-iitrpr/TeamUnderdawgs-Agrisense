@@ -30,6 +30,9 @@ secrets/
 # ── Documentation held back until explicitly approved for commit ───────────
 # README publication requires explicit operator authorization.
 [Rr][Ee][Aa][Dd][Mm][Ee]*
+# The root README is published deliberately, on operator instruction. Every
+# other README in the tree stays held back.
+!/README.md
 # Local working status and agent handoff notes. Deliberately not published:
 # the per-phase ledgers in workstreams/ are the committed record.
 /progress.md

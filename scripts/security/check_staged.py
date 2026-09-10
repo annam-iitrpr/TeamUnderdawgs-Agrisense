@@ -34,6 +34,16 @@ def check(all_tracked=False, secret_files=()):
     for raw in names.split(b'\0'):
         if not raw: continue
         name=raw.decode();base=Path(name).name.lower()
+        # The root README is published on explicit operator instruction and is
+        # written to say what the product does and nothing about how. It is
+        # still scanned for secrets below like any other file; only the
+        # filename rule is waived, and only for this exact path.
+        if name=='README.md':
+            data=git('show',':'+name)
+            for reason,pattern in patterns.items():
+                if re.search(pattern,data):issues.append((name,reason))
+            if any(value in data for value in values):issues.append((name,'matches local secret value'))
+            continue
         if base.startswith(('readme','.env')) or re.search(r'\.env(?:\.|$)',base) or base.endswith(('.pem','.key','.p12','.pfx')) or re.search(r'(service[-_]account|credentials).*\.json$',base):
             issues.append((name,'forbidden private/README filename'));continue
         data=git('show',':'+name)
