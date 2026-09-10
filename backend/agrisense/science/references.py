@@ -167,3 +167,38 @@ def select_soil(
     priority = {"lab": 0, "farmer": 1, "gridded_estimate": 2}
     eligible.sort(key=lambda row: (priority[row.source], -row.sampled_on.toordinal(), row.id))
     return eligible[0] if eligible else None
+
+
+def select_soil_moisture(
+    observations: list[api.SoilObservation], field_id: str, as_of: date
+) -> api.SoilObservation | None:
+    """The reading a water balance can actually start from.
+
+    `select_soil` answers a different question — the best soil record for this
+    field — and for chemistry it is right to rank a lab result first and break
+    ties on `id`. Moisture is not chemistry. A photographed Soil Health Card
+    carries none at all, yet it is stored as an observation like any other, so
+    the balance could be handed a record with no moisture in it and report that
+    nothing was known. Both records are `source='farmer'` and both are dated the
+    day they were taken, which left a random `id` deciding whether a farmer's
+    water plan worked.
+
+    So this ranks by recency, and only over readings in the volumetric m³/m³
+    form the balance derives depletion from: a reading in another basis is kept
+    but cannot start a balance, and must not shadow one that can.
+    """
+    priority = {"lab": 0, "farmer": 1, "gridded_estimate": 2}
+    usable = [
+        row
+        for row in observations
+        if row.field_id == field_id
+        and row.confirmation_state == "confirmed"
+        and row.sampled_on is not None
+        and row.sampled_on <= as_of
+        and row.moisture_basis == "volumetric"
+        and row.moisture is not None
+        and row.moisture.unit == "m³/m³"
+        and row.moisture.value is not None
+    ]
+    usable.sort(key=lambda row: (-row.sampled_on.toordinal(), priority[row.source], row.id))
+    return usable[0] if usable else None

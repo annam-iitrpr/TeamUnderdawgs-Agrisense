@@ -376,3 +376,74 @@ def test_duplicate_parameter_key_is_refused(tmp_path, monkeypatch):
             module.reference_bundle()
     finally:
         module._load.cache_clear()
+
+
+def _card_and_probe(card_id: str, probe_id: str):
+    """A Soil Health Card and a probe reading on the same day, as a farmer has."""
+    snap = snapshot()
+    now = snap.as_of.date()
+    card = api.SoilObservation(
+        id=card_id, field_id=snap.field.id, sampled_on=now,
+        ph=measurement(7.2, "pH"), organic_carbon=measurement(0.45, "%"),
+        source="farmer", confirmation_state="confirmed", version=1,
+    )
+    probe = api.SoilObservation(
+        id=probe_id, field_id=snap.field.id, sampled_on=now,
+        moisture=measurement(0.20, "m³/m³"), moisture_basis="volumetric", depth_cm=30,
+        source="farmer", confirmation_state="confirmed", version=1,
+    )
+    return snap.field.id, now, [card, probe]
+
+
+@pytest.mark.parametrize(("card_id", "probe_id"), [("aaaa", "zzzz"), ("zzzz", "aaaa")])
+def test_a_soil_health_card_cannot_shadow_the_moisture_reading(card_id, probe_id):
+    """Whether the water plan worked came down to a random id.
+
+    A photographed card and a probe reading are both stored as
+    `source='farmer'` and both dated the day they were taken, so the only thing
+    separating them in `select_soil` was its tiebreak on `id`. The card carries
+    chemistry and no moisture, so when it won, the balance was handed a record
+    that could not start it and every day read "no soil moisture reading taken
+    today" — to a farmer looking at the reading they had just entered. Adding
+    another reading could not help: the card kept winning.
+
+    Both id orderings must select the reading with moisture in it.
+    """
+    from agrisense.science.references import select_soil_moisture
+
+    field_id, now, observations = _card_and_probe(card_id, probe_id)
+    chosen = select_soil_moisture(observations, field_id, now)
+    assert chosen is not None, "a usable reading was on record and was not found"
+    assert chosen.id == probe_id
+    assert chosen.moisture is not None and chosen.moisture.value == 0.20
+
+
+def test_a_reading_in_an_unusable_basis_never_displaces_one_that_works():
+    """Only a volumetric m³/m³ reading can start a balance.
+
+    The form accepts the other two bases so the reading is not lost, and says
+    they are not usable yet. A later gravimetric entry must not push aside the
+    volumetric one the balance can actually use, or entering more information
+    would leave the farmer with less.
+    """
+    from datetime import timedelta as _timedelta
+
+    from agrisense.science.references import select_soil_moisture
+
+    field_id, now, observations = _card_and_probe("card", "probe")
+    gravimetric = api.SoilObservation(
+        id="later-gravimetric", field_id=field_id, sampled_on=now + _timedelta(days=1),
+        moisture=measurement(0.18, "kg/kg"), moisture_basis="gravimetric",
+        source="farmer", confirmation_state="confirmed", version=1,
+    )
+    chosen = select_soil_moisture([*observations, gravimetric], field_id, now + _timedelta(days=1))
+    assert chosen is not None and chosen.id == "probe"
+
+
+def test_an_unconfirmed_draft_reading_is_never_used():
+    """An extraction awaiting the farmer's approval is a claim, not a fact."""
+    from agrisense.science.references import select_soil_moisture
+
+    field_id, now, observations = _card_and_probe("card", "probe")
+    draft = observations[1].model_copy(update={"id": "draft", "confirmation_state": "draft"})
+    assert select_soil_moisture([observations[0], draft], field_id, now) is None

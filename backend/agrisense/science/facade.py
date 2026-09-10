@@ -14,7 +14,7 @@ from agrisense.contracts_generated import models as api
 
 from .contract_bridge import estimate, from_contract, measurement, to_contract
 from .planning import compare_crops
-from .references import number, reviewed_parameters, select_soil
+from .references import number, reviewed_parameters, select_soil_moisture
 from .scenarios import economic_estimates
 from .stress import CARDINALS, heat_stress
 from .water import RootZone, root_zone_day
@@ -121,18 +121,15 @@ def _water(
     except (KeyError, ValueError, TypeError):
         result.missing_reason = "invalid_water_parameters"
         return result
-    soil = select_soil(snapshot.soil_observations, snapshot.field.id, now)
+    # The moisture reading specifically, not the best soil record overall: a
+    # Soil Health Card is an observation too and carries no moisture at all.
+    soil = select_soil_moisture(snapshot.soil_observations, snapshot.field.id, now)
     depletion = None
-    if (
-        soil
-        and soil.sampled_on == now
-        and soil.moisture_basis == "volumetric"
-        and soil.moisture
-        and soil.moisture.unit == "m³/m³"
-        and soil.moisture.value is not None
-    ):
+    # Today's, because root-zone water does not keep. `select_soil_moisture` has
+    # already guaranteed the basis, unit and presence of a value.
+    if soil and soil.sampled_on == now:
         theta = soil.moisture.value
-        if 0 <= theta <= 1:
+        if theta is not None and 0 <= theta <= 1:
             depletion = min(
                 zone.taw, max(0, 1000 * (zone.field_capacity - theta) * zone.root_depth_m)
             )
