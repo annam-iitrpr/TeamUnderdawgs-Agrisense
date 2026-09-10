@@ -34,6 +34,7 @@ WhatsApp relay `.env` now points back to the consolidated file.
 - Explicit commands such as `log watered 20 mm` and `log sprayed` create versioned `source: whatsapp` journal entries and can attach WhatsApp media.
 - Assistant proposals are sent with Confirm/Cancel quick replies, and replies call the existing version checked proposal endpoints.
 - `remind <ISO datetime>` creates a WhatsApp reminder through the existing reminder contract and worker.
+- `close` explains the required harvest format, and a structured `close ...` command calls the version checked season-close endpoint.
 - Meta image/audio IDs are downloaded by the worker, validated, stored through media custody, and attached to the assistant turn.
 - Assistant replies are queued for WhatsApp delivery and converted to WhatsApp formatting.
 - The scheduled worker drains WhatsApp outbox rows when live send mode is explicitly enabled.
@@ -42,7 +43,7 @@ WhatsApp relay `.env` now points back to the consolidated file.
 ### In progress
 
 - Local WhatsApp worker and media tests, including assistant and live outbox delivery.
-- Mapping season closure to a deterministic channel action where the API contract permits it.
+- Testing the complete WhatsApp command and worker flow against the local harness.
 - Authenticated browser/API E2E using Firebase fictional numbers.
 
 ### Remaining
@@ -278,7 +279,7 @@ Blocked on external or human input:
 
 - API and frontend production deployment.
 - Firebase Phone Auth activation and real SMS smoke test.
-- WhatsApp season-closure route mapping, plus Meta live verification and approved templates.
+- Meta live verification and approved templates.
 - Authenticated API/browser E2E against disposable accounts; the 30-test Chromium suite covers public layout, PWA, landing, and phone-form validation.
 - Regional crop calendar, economics, product-label, and agronomist inputs.
 - Replace the placeholder privacy policy before public use.

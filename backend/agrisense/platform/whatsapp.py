@@ -180,6 +180,10 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         command = 'proposal_cancel'
     elif lowered.startswith('remind '):
         command = 'reminder'
+    elif lowered in {'close', 'close season'}:
+        command = 'close_prompt'
+    elif lowered.startswith('close '):
+        command = 'close_execute'
     elif lowered.startswith('use '):
         requested = text[4:].strip().lower()
         fields = list(session.scalars(select(d.FieldRow).where(
@@ -263,6 +267,40 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         except (ValueError, PlatformError) as error:
             return getattr(error, 'message', 'Use: remind 2026-09-12T07:00:00+05:30')
         return f'Reminder set for {scheduled_at.isoformat()}.'
+    if command == 'close_prompt':
+        return ('To close the active season, reply exactly: '
+                'close <harvest_kg> <harvested_area_ha> <sales_inr> <costs_inr> <YYYY-MM-DD>. '
+                'Example: close 1200 1.5 90000 45000 2026-09-10')
+    if command == 'close_execute':
+        from agrisense.platform.auth import Actor
+        from agrisense.platform.service import DomainService
+        farmer = session.get(d.FarmerRow, farmer_id)
+        conversation = session.scalar(select(d.ConversationRow).where(
+            d.ConversationRow.id == request.get('conversation_id'),
+            d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
+        field_id = (conversation.payload or {}).get('field_id') if conversation else None
+        season = session.scalar(select(d.SeasonRow).where(
+            d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
+            d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+        if farmer is None or season is None:
+            return 'No open season is available for the active field.'
+        message = session.get(d.MessageRow, request.get('message_id'))
+        parts = ((message.payload if message else {}).get('text', '')).strip().split()
+        if len(parts) != 6:
+            return 'Use: close <harvest_kg> <harvested_area_ha> <sales_inr> <costs_inr> <YYYY-MM-DD>'
+        try:
+            close_request = c.SeasonCloseRequest(
+                expected_version=season.version, harvest_quantity_kg=float(parts[1]),
+                product_form='not provided', moisture_basis='not provided',
+                harvested_area_ha=float(parts[2]), realized_sales_inr=float(parts[3]),
+                realized_costs_inr=float(parts[4]), harvested_on=datetime.fromisoformat(parts[5]).date())
+            actor = Actor(farmer.user_id, tenant_id, farmer_id, 'farmer', True)
+            summary = DomainService(session, actor, 'whatsapp', settings=settings).execute(
+                'POST', '/seasons/{id}/close', season.id, close_request, {})
+        except (ValueError, PlatformError) as error:
+            return getattr(error, 'message', 'The close details could not be read. Check the numbers and date.')
+        warnings = getattr(summary, 'warnings', [])
+        return 'Season closed successfully.' + (f'\nNote: {warnings[0]}' if warnings else '')
     if command in {'proposal_confirm', 'proposal_cancel'}:
         proposal_id = request.get('proposal_id')
         proposal = session.scalar(select(d.ProposalRow).where(
