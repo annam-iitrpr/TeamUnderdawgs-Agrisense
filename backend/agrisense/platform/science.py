@@ -116,10 +116,18 @@ def summarise(session: Session, tenant_id: str, season_id: str,
             d.RecommendationRow.tenant_id == tenant_id,
         )
     )
+    # `RecommendationRow.payload` holds the whole EvaluationBundle, not a bare
+    # Recommendation: the row keeps the water and economics estimates that were
+    # issued alongside the advice. Only the recommendation itself belongs in a
+    # ClosureSnapshot, and passing the bundle raised twenty-one validation
+    # errors — invisible in tests because the fixture season has no evaluation.
+    recommendations = [
+        row.payload['recommendation'] for row in rows if 'recommendation' in row.payload
+    ]
     draft = c.ClosureSnapshot.model_validate({
         'season': snapshot.model_dump(mode='json'),
         'closure': closure.model_dump(mode='json'),
-        'recommendations': [row.payload for row in rows],
+        'recommendations': recommendations,
     })
     summarize = facade('summarize_season')
     return summarize(draft)

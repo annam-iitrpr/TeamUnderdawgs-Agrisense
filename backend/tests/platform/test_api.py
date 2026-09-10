@@ -165,6 +165,71 @@ def test_closing_a_season_scores_it_against_the_forecasts_on_record(asha, season
     assert again.json()['data']['metrics'] == body['metrics']
 
 
+def test_closure_scoring_survives_a_stored_evaluation_bundle(asha, season, harness):
+    """A season that was actually evaluated must still score.
+
+    `RecommendationRow.payload` holds the whole EvaluationBundle, not a bare
+    Recommendation. Handing the bundle to the science raised twenty-one
+    validation errors in production while every test passed, because the fixture
+    season has no evaluation at all. This inserts one so the shape is exercised.
+    """
+    from datetime import timedelta
+
+    from agrisense.contracts_generated import models as c
+    from agrisense.platform import db as d
+
+    now = d.utcnow()
+    recommendation = c.Recommendation(
+        id='rec_test_bundle_shape', field_id=season['field_id'], season_id=season['id'],
+        input_version=1, input_hash='hash', generated_at=now, expires_at=now + timedelta(hours=1),
+        rule_version='advisory_v1.0.0', status='insufficient_data',
+        readiness=None, need=None, timing_fit=None, viability=None,
+        selected_window=None, reasons=[],
+    )
+    bundle = c.EvaluationBundle(recommendation=recommendation, data_mode='live')
+
+    from sqlalchemy import select as sa_select
+
+    sessions = harness.app.state.sessions
+    with sessions() as session:
+        season_row = session.scalar(sa_select(d.SeasonRow).where(d.SeasonRow.id == season['id']))
+        field_row = session.scalar(sa_select(d.FieldRow).where(d.FieldRow.id == season_row.field_id))
+        session.add(d.RecommendationRow(
+            id=recommendation.id, tenant_id=season_row.tenant_id, farmer_id=field_row.farmer_id,
+            season_id=season['id'], input_hash='hash', input_version=1, superseded=False,
+            payload=bundle.model_dump(mode='json'), snapshot={},
+        ))
+        session.commit()
+
+    closed = asha.post(f'/seasons/{season["id"]}/close', {
+        'expected_version': 1, 'harvest_quantity_kg': 4200.0, 'product_form': 'grain',
+        'moisture_basis': 'dry_basis', 'harvested_area_ha': 1.0,
+        'realized_sales_inr': 92000.0, 'realized_costs_inr': 54000.0,
+        'harvested_on': '2026-08-20'})
+    assert closed.status_code == 200, closed.text
+    body = closed.json()['data']
+    assert body['closure']['forecast_snapshot_ids'] == [recommendation.id]
+    metrics = {row['name']: row['value'] for row in body['metrics']}
+    assert metrics['actual_margin'] == 38000.0, body['warnings']
+
+
+def test_a_future_harvest_date_is_refused_not_quietly_unscoreable(asha, season):
+    """A typo in the outcome record would corrupt every later forecast score."""
+    from datetime import timedelta
+
+    from agrisense.platform import db as d
+
+    tomorrow = (d.utcnow() + timedelta(days=2)).date().isoformat()
+    response = asha.post(f'/seasons/{season["id"]}/close', {
+        'expected_version': 1, 'harvest_quantity_kg': 100.0, 'product_form': 'grain',
+        'moisture_basis': 'dry_basis', 'harvested_area_ha': 1.0,
+        'realized_sales_inr': 1.0, 'realized_costs_inr': 1.0, 'harvested_on': tomorrow})
+    assert response.status_code == 422, response.text
+    assert response.json()['error']['code'] == 'INVALID_HARVEST_DATE'
+    # The season stays open, so the farmer can correct the date and try again.
+    assert asha.get(f'/seasons/{season["id"]}').json()['data']['status'] != 'closed'
+
+
 def test_summary_before_closing_says_so_rather_than_scoring_nothing(asha, season):
     response = asha.get(f'/seasons/{season["id"]}/summary')
     assert response.status_code == 200

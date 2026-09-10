@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -18,6 +19,8 @@ from agrisense.platform import db as d
 from agrisense.platform import locations, media, science
 from agrisense.platform.auth import Actor
 from agrisense.platform.errors import PlatformError, missing, unavailable
+
+log = logging.getLogger('agrisense.platform.service')
 
 # Harvest dates are farmer-local wall-clock dates, and India has one civil zone.
 IST = ZoneInfo("Asia/Kolkata")
@@ -216,9 +219,15 @@ class DomainService:
             return c.SeasonEvaluation(season_id=id,closure=None,warnings=['Season has not been closed.'])
         try:
             return science.summarise(self.s,self.actor.tenant_id,id,closure)
-        except Exception as exc:
-            reason=getattr(science.translate(exc,'Season summary'),'message','Season summary is unavailable.')
-            return c.SeasonEvaluation(season_id=id,closure=closure,metrics=[],warnings=[reason])
+        except Exception:
+            # Deliberately not "try again later": a scoring failure here is a
+            # defect or a missing input, and retrying changes neither. The
+            # traceback is logged for diagnosis; the farmer is told the truth,
+            # which is that their own figures are safe and the comparison is not
+            # available. Promising a retry that cannot help is worse than saying so.
+            log.exception('season summary failed',extra={'season_id':id})
+            return c.SeasonEvaluation(season_id=id,closure=closure,metrics=[],
+                warnings=['Your closing figures are saved. The comparison against forecasts could not be worked out for this season.'])
 
     def execute(self,method,path,id,body,query):
         if path=='/me':
