@@ -330,6 +330,30 @@ class CEHubProvider:
             return replace(bundle, warnings=bundle.warnings + ("daily_forecast_unavailable",))
 
 
+#: Air movement above which a surface temperature inversion cannot hold, km/h.
+#: Spray guidance conventionally treats still air below about this speed as the
+#: inversion risk condition.
+INVERSION_CLEARING_WIND_KMH = 5.0
+#: Sunlight on the ground drives the mixing that breaks a nocturnal inversion.
+INVERSION_CLEARING_RADIATION_WM2 = 50.0
+
+
+def inferred_inversion_clear(wind_kmh: float | None, radiation_wm2: float | None) -> bool | None:
+    """Whether a surface inversion is ruled out, derived rather than observed.
+
+    Returns None when neither reading is available, because "we cannot tell" and
+    "there is no inversion" are different answers and only one of them is safe
+    to spray on.
+    """
+    if wind_kmh is None and radiation_wm2 is None:
+        return None
+    if wind_kmh is not None and wind_kmh >= INVERSION_CLEARING_WIND_KMH:
+        return True
+    if radiation_wm2 is not None and radiation_wm2 >= INVERSION_CLEARING_RADIATION_WM2:
+        return True
+    return False
+
+
 OPEN_HOURLY = {
     "temperature_2m": ("temperature_c", "°C"),
     "relative_humidity_2m": ("rh_percent", "%"),
@@ -374,6 +398,18 @@ def parse_openmeteo(payload: Any, retrieved_at: datetime) -> WeatherBundle:
                 datetime.fromtimestamp(timestamp, UTC),
                 **values,
                 wind_height_m=10,
+                # No forecast product reports whether a surface inversion is
+                # present, and the ranker refuses any hour that cannot say -- so
+                # with this left null every hour was refused, for every farmer.
+                # It is derived instead, from the two conditions that prevent one:
+                # a surface inversion needs still air and no daytime mixing, so
+                # air moving at 5 km/h or more, or sunlight on the ground, rules
+                # it out. Both readings missing means it stays unknown rather
+                # than being assumed clear. The bundle carries a warning saying
+                # this is inferred and not observed at the field.
+                inversion_clear=inferred_inversion_clear(
+                    values.get("wind_kmh"), values.get("radiation_wm2")
+                ),
                 source="open-meteo:best_match",
             )
         )
@@ -406,7 +442,13 @@ def parse_openmeteo(payload: Any, retrieved_at: datetime) -> WeatherBundle:
         grid_latitude=payload.get("latitude"),
         grid_longitude=payload.get("longitude"),
         raw_payload_hash=payload_hash(payload),
-        warnings=("et0_is_modeled", "inversion_requires_field_verification"),
+        warnings=(
+            "et0_is_modeled",
+            # Derived from wind and sunlight, not observed at the field, and
+            # named so a farmer standing there can overrule it.
+            "inversion_inferred_from_wind_and_radiation",
+            "inversion_requires_field_verification",
+        ),
         variable_sources=tuple(
             (field, "open-meteo:best_match") for field, _ in OPEN_HOURLY.values()
         ),

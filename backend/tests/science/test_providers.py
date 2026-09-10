@@ -140,3 +140,20 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_an_inversion_is_ruled_out_by_wind_or_sunlight_and_otherwise_unknown():
+    """No forecast reports an inversion, and the ranker refuses an hour that
+    cannot say -- so leaving this null refused every hour for every farmer.
+
+    It is derived from the two conditions that prevent one: a surface inversion
+    needs still air and no daytime mixing. Both readings absent stays unknown,
+    because "we cannot tell" and "there is no inversion" are different answers
+    and only one of them is safe to spray on.
+    """
+    from agrisense.science.providers import inferred_inversion_clear as clear
+
+    assert clear(9.0, 0.0) is True, "moving air breaks an inversion"
+    assert clear(0.5, 400.0) is True, "sunlight on the ground breaks one too"
+    assert clear(0.5, 0.0) is False, "still and dark is exactly the risk condition"
+    assert clear(None, None) is None, "unknown must not read as clear"

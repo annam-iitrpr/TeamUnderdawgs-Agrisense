@@ -31,23 +31,37 @@
     {
       "id": "quantis",
       "name": "QUANTIS",
-      "crop_ids": ["wheat", "maize"],
+      "crop_ids": [
+        "wheat",
+        "maize"
+      ],
       "label_version": "positioning-2026-09",
-      "evidence_ids": ["syngenta:biostimulant-positioning", "agrisense:foliar-spray-safety-practice"]
+      "evidence_ids": [
+        "syngenta:biostimulant-positioning",
+        "agrisense:foliar-spray-safety-practice"
+      ]
     },
     {
       "id": "isabion",
       "name": "ISABION",
-      "crop_ids": ["rice", "cotton"],
+      "crop_ids": [
+        "rice",
+        "cotton"
+      ],
       "label_version": "positioning-2026-09",
-      "evidence_ids": ["syngenta:biostimulant-positioning", "agrisense:foliar-spray-safety-practice"]
+      "evidence_ids": [
+        "syngenta:biostimulant-positioning",
+        "agrisense:foliar-spray-safety-practice"
+      ]
     },
     {
       "id": "coucal",
       "name": "COUCAL",
       "crop_ids": [],
       "label_version": "positioning-2026-09",
-      "evidence_ids": ["syngenta:biostimulant-positioning"]
+      "evidence_ids": [
+        "syngenta:biostimulant-positioning"
+      ]
     }
   ],
   "parameters": {
@@ -60,14 +74,14 @@
       "purpose": "abiotic stress management, particularly heat and drought",
       "stress_types": "day_heat,night_heat",
       "stages": "tillering,jointing,booting,heading,flowering,grain_filling",
-      "lead_min_days": 1,
+      "lead_min_days": 0,
       "lead_max_days": 5,
       "lead_rationale": "applied ahead of a persistent stress onset rather than after it",
       "equipment_capacity_ha_hour": 0.6,
-      "wind_min_kmh": 3,
-      "wind_max_kmh": 15,
-      "gust_max_kmh": 20,
-      "wind_height_m": 2,
+      "wind_min_kmh": 4,
+      "wind_max_kmh": 20,
+      "gust_max_kmh": 26,
+      "wind_height_m": 10,
       "delta_t_min_c": 2,
       "delta_t_max_c": 8,
       "temperature_min_c": 10,
@@ -75,7 +89,8 @@
       "rain_max_mm": 0.2,
       "rain_probability_max": 0.3,
       "rainfast_hours": 4,
-      "spray_parameter_source": "agrisense:foliar-spray-safety-practice"
+      "spray_parameter_source": "agrisense:foliar-spray-safety-practice",
+      "wind_limit_note": "limits are at the 10 m measurement height forecasts report, equivalent to roughly 3-15 km/h at 2 m"
     },
     "product:isabion": {
       "reviewed": true,
@@ -90,10 +105,10 @@
       "lead_max_days": 5,
       "lead_rationale": "supports recovery as well as anticipation, so a same-day window is allowed",
       "equipment_capacity_ha_hour": 0.6,
-      "wind_min_kmh": 3,
-      "wind_max_kmh": 15,
-      "gust_max_kmh": 20,
-      "wind_height_m": 2,
+      "wind_min_kmh": 4,
+      "wind_max_kmh": 20,
+      "gust_max_kmh": 26,
+      "wind_height_m": 10,
       "delta_t_min_c": 2,
       "delta_t_max_c": 8,
       "temperature_min_c": 10,
@@ -101,7 +116,8 @@
       "rain_max_mm": 0.2,
       "rain_probability_max": 0.3,
       "rainfast_hours": 4,
-      "spray_parameter_source": "agrisense:foliar-spray-safety-practice"
+      "spray_parameter_source": "agrisense:foliar-spray-safety-practice",
+      "wind_limit_note": "limits are at the 10 m measurement height forecasts report, equivalent to roughly 3-15 km/h at 2 m"
     },
     "product:coucal": {
       "reviewed": true,
