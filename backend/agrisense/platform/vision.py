@@ -65,7 +65,33 @@ def preprocess(data: bytes, content_type: str) -> tuple[bytes, str]:
 
 
 def configured(settings: Settings) -> bool:
-    return bool(settings.vertex_vision_endpoint and settings.vision_project)
+    return bool(settings.vision_endpoint_url or (settings.vertex_vision_endpoint and settings.vision_project))
+
+
+def endpoint_url(settings: Settings) -> str:
+    if settings.vision_endpoint_url:
+        return settings.vision_endpoint_url.rstrip('/') + '/predict'
+    location = settings.vision_location or 'asia-south1'
+    return (f'https://{location}-aiplatform.googleapis.com/v1/projects/'
+            f'{settings.vision_project}/locations/{location}/endpoints/'
+            f'{settings.vertex_vision_endpoint}:predict')
+
+
+def authorisation(settings: Settings) -> dict[str, str]:
+    """A private Cloud Run service wants an identity token for its own audience;
+    Vertex wants an access token. Getting this wrong reads as a 403, not a bug."""
+    import google.auth
+    import google.auth.transport.requests
+
+    request = google.auth.transport.requests.Request()
+    if settings.vision_endpoint_url:
+        import google.oauth2.id_token
+        token = google.oauth2.id_token.fetch_id_token(request, settings.vision_endpoint_url)
+        return {'Authorization': f'Bearer {token}'}
+    credentials, _ = google.auth.default(
+        scopes=['https://www.googleapis.com/auth/cloud-platform'])
+    credentials.refresh(request)
+    return {'Authorization': f'Bearer {credentials.token}'}
 
 
 def classify(settings: Settings, data: bytes, content_type: str) -> list[dict[str, object]]:
@@ -73,22 +99,13 @@ def classify(settings: Settings, data: bytes, content_type: str) -> list[dict[st
     if not configured(settings):
         return []
     try:
-        import google.auth
-        import google.auth.transport.requests
         import httpx
     except ImportError:
         return []
     try:
-        credentials, _ = google.auth.default(
-            scopes=['https://www.googleapis.com/auth/cloud-platform'])
-        credentials.refresh(google.auth.transport.requests.Request())
-        location = settings.vision_location or 'asia-south1'
-        url = (f'https://{location}-aiplatform.googleapis.com/v1/projects/'
-               f'{settings.vision_project}/locations/{location}/endpoints/'
-               f'{settings.vertex_vision_endpoint}:predict')
         response = httpx.post(
-            url,
-            headers={'Authorization': f'Bearer {credentials.token}'},
+            endpoint_url(settings),
+            headers=authorisation(settings),
             json={'instances': [{'content': base64.b64encode(data).decode(),
                                  'mimeType': content_type}]},
             timeout=TIMEOUT_SECONDS)

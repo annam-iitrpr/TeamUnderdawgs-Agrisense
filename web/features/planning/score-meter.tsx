@@ -1,30 +1,59 @@
 "use client";
 
 /**
- * A 0-to-1 score with its reasons.
+ * A score shown as ten segments rather than a bar and a percentage.
  *
- * An unknown score is not a short bar. A bar at zero reads as "no suitability",
- * which is a claim the engine did not make, so an absent score renders as text
- * and no track at all. The number is shown alongside the bar because a bar on
- * its own cannot be read precisely.
+ * Ten filled-or-empty marks can be counted at a glance and read without
+ * numeracy, which a 0-100 figure cannot. The number is still shown for anyone
+ * who wants it, but the segments carry the meaning.
+ *
+ * Colour is never the only signal: the count of filled segments says the same
+ * thing, so the meaning survives colour blindness and a washed-out screen in
+ * bright sun. An unknown score draws no segments at all — ten empty marks would
+ * read as "nothing", which is a different claim from "not known".
  */
 import { UnknownValue } from "@/components/ui";
 import { cn } from "@/lib/utils";
+
+const SEGMENTS = 10;
+
+type Band = "strong" | "fair" | "weak";
+
+function bandFor(filled: number): Band {
+  if (filled >= 7) return "strong";
+  if (filled >= 4) return "fair";
+  return "weak";
+}
+
+const BAND_TEXT: Record<Band, string> = {
+  strong: "Good fit",
+  fair: "Workable",
+  weak: "Poor fit",
+};
+
+const BAND_FILL: Record<Band, string> = {
+  strong: "bg-forest",
+  fair: "bg-amber",
+  weak: "bg-clay",
+};
 
 export function ScoreMeter({
   score,
   label,
   missingReason,
+  invertMeaning,
 }: {
   score: number | null | undefined;
   label: string;
   missingReason?: string | null;
+  /** For scales where more filled is better news but the wording differs. */
+  invertMeaning?: { strong: string; fair: string; weak: string };
 }) {
   if (score == null) {
     return (
       <div>
         <p className="text-xs text-slate">{label}</p>
-        <div className="mt-0.5">
+        <div className="mt-1">
           <UnknownValue label="Not known" />
         </div>
         {missingReason ? (
@@ -34,30 +63,40 @@ export function ScoreMeter({
     );
   }
 
-  const percent = Math.round(Math.min(1, Math.max(0, score)) * 100);
-  const band = percent >= 70 ? "strong" : percent >= 40 ? "fair" : "weak";
+  const clamped = Math.min(1, Math.max(0, score));
+  // At least one segment for any score above zero, so a small-but-real value is
+  // never drawn as nothing at all.
+  const filled = clamped === 0 ? 0 : Math.max(1, Math.round(clamped * SEGMENTS));
+  const band = bandFor(filled);
+  const wording = invertMeaning ? invertMeaning[band] : BAND_TEXT[band];
 
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
         <p className="text-xs text-slate">{label}</p>
-        <p className="text-sm font-semibold tabular-nums text-ink">{percent}%</p>
+        <p className="text-xs font-semibold text-ink">
+          {wording} <span className="tabular-nums text-slate">{filled}/10</span>
+        </p>
       </div>
       <div
-        className="mt-1 h-2 w-full overflow-hidden rounded-full bg-mist"
+        className="mt-1 flex gap-[3px]"
         role="meter"
-        aria-valuenow={percent}
+        aria-valuenow={filled}
         aria-valuemin={0}
-        aria-valuemax={100}
+        aria-valuemax={SEGMENTS}
+        aria-valuetext={`${wording}, ${filled} out of ${SEGMENTS}`}
         aria-label={label}
       >
-        <div
-          className={cn(
-            "h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none",
-            band === "strong" ? "bg-forest" : band === "fair" ? "bg-amber" : "bg-clay",
-          )}
-          style={{ width: `${percent}%` }}
-        />
+        {Array.from({ length: SEGMENTS }, (_, index) => (
+          <span
+            key={index}
+            aria-hidden
+            className={cn(
+              "h-2.5 flex-1 rounded-full transition-colors duration-200 motion-reduce:transition-none",
+              index < filled ? BAND_FILL[band] : "bg-mist",
+            )}
+          />
+        ))}
       </div>
     </div>
   );

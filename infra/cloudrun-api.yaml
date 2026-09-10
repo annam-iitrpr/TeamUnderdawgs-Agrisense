@@ -102,6 +102,8 @@ spec:
               value: "${GEMINI_MODEL}"
             # Empty until a reviewed crop-vision model is deployed. Absent means no
             # labels, never a fallback guess.
+            - name: VISION_ENDPOINT_URL
+              value: "${VISION_ENDPOINT_URL}"
             - name: VERTEX_VISION_ENDPOINT
               value: "${VERTEX_VISION_ENDPOINT}"
             - name: VISION_LOCATION

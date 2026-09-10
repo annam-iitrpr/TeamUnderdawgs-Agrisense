@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # A reviewed crop-vision model, when one is deployed. Absent by default: no
     # fallback classifier is used, because an untrained guess about a farmer's crop
     # would be worse than no label at all.
+    # Either a Cloud Run service URL, or a Vertex endpoint id. Cloud Run scales to
+    # zero, so an idle model costs nothing.
+    vision_endpoint_url: str = ''
     vertex_vision_endpoint: str = ''
     vision_location: str = ''
     gcs_media_bucket: str = ''

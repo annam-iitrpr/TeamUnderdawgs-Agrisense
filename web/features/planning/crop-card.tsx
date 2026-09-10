@@ -99,7 +99,11 @@ export function CropCard({
           label="Suitability for this field"
           missingReason={plan.exclusions?.[0]?.code?.replace(/_/g, " ")}
         />
-        <ScoreMeter score={waterScore} label="Water need (least thirsty of these)" />
+        <ScoreMeter
+          score={waterScore}
+          label="Water need, against the other crops"
+          invertMeaning={{ strong: "Needs least", fair: "Middling", weak: "Needs most" }}
+        />
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

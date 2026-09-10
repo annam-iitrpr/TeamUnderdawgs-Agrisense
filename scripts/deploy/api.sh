@@ -27,6 +27,7 @@ export WHATSAPP_SEND_MODE="${WHATSAPP_SEND_MODE:-outbox}"
 export GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 export CEHUB_API_KEY_HEADER="${CEHUB_API_KEY_HEADER:-ApiKey}"
 # Set these only once a reviewed crop-vision model is actually deployed.
+export VISION_ENDPOINT_URL="${VISION_ENDPOINT_URL:-}"
 export VERTEX_VISION_ENDPOINT="${VERTEX_VISION_ENDPOINT:-}"
 export VISION_LOCATION="${VISION_LOCATION:-$GCP_REGION}"
 
