@@ -454,11 +454,28 @@ def test_water_is_answered_in_words_not_as_a_serialised_object():
     reply = whatsapp.water_reply({
         'irrigation_needed': True,
         'daily': [{'value': 1688112.0, 'unit': 'L'}, {'value': 1761120.0, 'unit': 'L'}],
-    }, '\n_North plot_')
+    }, 1.2, '\n_North plot_')
     assert '{' not in reply and 'None' not in reply
     assert 'Irrigation is needed now.' in reply
     assert '16,88,112 L' in reply
     assert '_North plot_' in reply
+
+
+def test_a_replenishment_volume_is_never_described_as_a_daily_rate():
+    """Each figure refills the root zone; the science layer says they do not sum.
+
+    Read as daily use, 16,88,112 L on 1.2 ha is 141 mm a day -- roughly twenty
+    times what any crop transpires. The number is right; calling it "a day"
+    would make it a wrong instruction.
+    """
+    reply = whatsapp.water_reply({
+        'irrigation_needed': True,
+        'daily': [{'value': 1688112.0, 'unit': 'L'}, {'value': 1761120.0, 'unit': 'L'}],
+    }, 1.2, '')
+    assert 'a day' not in reply
+    assert 'not a daily total' in reply
+    # The depth is what makes the volume checkable by anyone who knows the crop.
+    assert '141 mm' in reply
 
 
 def test_money_leads_with_the_price_rather_than_a_row_of_blanks():

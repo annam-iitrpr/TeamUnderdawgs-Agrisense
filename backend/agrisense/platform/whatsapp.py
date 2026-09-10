@@ -313,13 +313,20 @@ def stage_words(stage: str | None) -> str:
     return stage.replace('_', ' ').capitalize() if stage else 'not recorded yet'
 
 
-def water_reply(value: dict[str, Any], where: str) -> str:
-    """Today's water need in words, not a serialised object.
+def water_reply(value: dict[str, Any], area_ha: float | None, where: str) -> str:
+    """The irrigation volume in words, not a serialised object.
 
     This used to interpolate the payload dict straight into the message, so a
     farmer asking about water received `{'daily': [{'unit': 'L', 'value':
-    1688111.99...}]}`. Everything needed to answer them properly was already in
-    that dict.
+    1688111.99...}]}`.
+
+    Each figure is the volume that would refill the root zone *if the farmer
+    irrigated on that day*. The science layer says as much in its own
+    assumptions -- `daily_values_are_replenishment_alternatives_do_not_sum` --
+    so they are alternatives to choose between, never a daily rate and never a
+    series to add up. Calling one "a day" would turn a correct number into a
+    wrong instruction: read that way, 16,88,112 L on 1.2 ha says the crop
+    drinks 141 mm a day, about twenty times what any crop transpires.
     """
     daily = [row for row in value.get('daily') or [] if row.get('value') is not None]
     lines = ['*Water*']
@@ -329,13 +336,17 @@ def water_reply(value: dict[str, Any], where: str) -> str:
         lines.append('No irrigation needed right now.')
     if daily:
         today = daily[0]
-        lines.append(f'Today: {indian_number(today["value"])} {today.get("unit") or "L"}')
-        if len(daily) > 1:
-            low = min(row['value'] for row in daily)
-            high = max(row['value'] for row in daily)
-            unit = today.get('unit') or 'L'
-            lines.append(f'Next {len(daily)} days: {indian_number(low)} to '
-                         f'{indian_number(high)} {unit} a day')
+        unit = today.get('unit') or 'L'
+        # The depth is what makes the volume checkable by anyone who knows the crop.
+        depth = f' (about {round(today["value"] / (area_ha * 10000))} mm)' if area_ha else ''
+        lines.append(f'One watering refills the root zone with about '
+                     f'{indian_number(today["value"])} {unit}{depth}.')
+        low = min(row['value'] for row in daily)
+        high = max(row['value'] for row in daily)
+        if len(daily) > 1 and round(high) != round(low):
+            lines.append(f'Watering later this week instead: {indian_number(low)} to '
+                         f'{indian_number(high)} {unit}.')
+        lines.append('_These are alternatives for one watering, not a daily total._')
     return '\n'.join(lines) + where
 
 
@@ -583,7 +594,7 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         key = 'water' if command == 'water' else 'economics'
         value = recommendation.payload.get(key) or {}
         other = ('money', 'Money') if command == 'water' else ('water', 'Water')
-        body = (water_reply(value, where) if command == 'water'
+        body = (water_reply(value, season.allocated_area_ha, where) if command == 'water'
                 else money_reply(season.crop_id, value, where))
         return with_menu(body, ('readiness', 'Readiness'), other)
     if command == 'journal_help':
