@@ -12,6 +12,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -151,42 +152,82 @@ def translate(exc: Exception, capability: str) -> PlatformError:
     return error
 
 
-async def climate_for(location: c.Location, period: c.DateInterval, as_of: datetime, settings) -> c.ClimateBundle:
-    """Historical reanalysis for the planning window, taken from past years.
+ARCHIVE_ENDPOINT = 'https://archive-api.open-meteo.com/v1/archive'
 
-    A ten-day forecast is not a season's climate. Phase 2 is explicit that reanalysis must
-    never be presented as a forecast, so the bundle is labelled estimated and its provenance
-    names the source.
+
+async def climate_for(location: c.Location, period: c.DateInterval, as_of: datetime, settings) -> c.ClimateBundle:
+    """Historical reanalysis for the planning window, taken from the same window last year.
+
+    A ten-day forecast is not a season's climate. Phase 2 is explicit that
+    reanalysis must never be presented as a forecast, so the bundle is labelled
+    estimated and its provenance names the source.
+
+    Sourced from Open-Meteo's archive rather than the meteoblue history
+    provider, for one decisive reason: the planner requires minimum
+    temperature, maximum temperature, rainfall *and* reference ET0 on at least
+    thirty complete days, and the meteoblue reanalysis path carries no ET0 at
+    all. Every crop was therefore excluded with `climate_coverage_incomplete`,
+    which reads as "we have no climate for your area" when in fact three of the
+    four values were present. The archive publishes all four, including
+    `et0_fao_evapotranspiration`, which is the FAO-56 reference quantity by
+    name — 210 complete days for the demo window at Ropar.
     """
-    try:
-        from agrisense.science.contract_bridge import measurement
-        from agrisense.science.history import MeteoblueHistoryProvider
-        from agrisense.science.providers import JsonTransport
-    except ImportError as exc:
-        raise unavailable('Historical climate') from exc
-    if not settings.meteoblue_api_key:
+    if not settings.openmeteo_permitted_free_use:
         raise unavailable('Historical climate')
 
-    # The same calendar window in the previous complete year, which is available reanalysis.
+    # The same calendar window one year back, which is settled reanalysis
+    # rather than anything still being revised.
     start = period.start_date.replace(year=period.start_date.year - 1)
     end = period.end_date.replace(year=period.end_date.year - 1)
-    provider = MeteoblueHistoryProvider(JsonTransport(), api_key=settings.meteoblue_api_key)
-    try:
-        bundle = await provider.history((location.latitude, location.longitude), start, end, as_of)
-    except Exception as exc:
-        raise translate(exc, 'Historical climate') from exc
 
-    days = [c.ForecastDay(local_date=date.fromisoformat(row.date),
-                          minimum_temperature_c=measurement(row.tmin_c, '°C'),
-                          maximum_temperature_c=measurement(row.tmax_c, '°C'),
-                          rain_mm=measurement(row.rain_mm, 'mm'),
-                          et0_mm=measurement(row.et0_mm, 'mm'))
-            for row in bundle.daily]
+    fields = ('temperature_2m_min', 'temperature_2m_max', 'precipitation_sum',
+              'et0_fao_evapotranspiration')
+    try:
+        response = httpx.get(ARCHIVE_ENDPOINT, params={
+            'latitude': f'{location.latitude:.4f}', 'longitude': f'{location.longitude:.4f}',
+            'start_date': start.isoformat(), 'end_date': end.isoformat(),
+            'daily': ','.join(fields), 'timezone': 'Asia/Kolkata',
+        }, timeout=45, headers={'Accept': 'application/json',
+                                'User-Agent': 'AgriSense/1.0 (+https://agrisense.spacesdrive.cc)'})
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, OSError, ValueError) as exc:
+        raise unavailable('Historical climate') from exc
+
+    daily = (payload or {}).get('daily') or {}
+    stamps = daily.get('time') or []
+    units = (payload or {}).get('daily_units') or {}
+    for name, expected in zip(fields, ('°C', '°C', 'mm', 'mm'), strict=True):
+        if units.get(name) not in (expected, None):
+            # A silent unit change would corrupt every water figure downstream.
+            raise unavailable('Historical climate')
+
+    def measure(name: str, index: int, unit: str) -> c.Measurement:
+        series = daily.get(name) or []
+        value = series[index] if index < len(series) else None
+        return c.Measurement(value=value, unit=unit,
+                             missing_reason=None if value is not None else 'archive_gap')
+
+    days = [
+        c.ForecastDay(
+            local_date=date.fromisoformat(stamp),
+            minimum_temperature_c=measure('temperature_2m_min', index, '°C'),
+            maximum_temperature_c=measure('temperature_2m_max', index, '°C'),
+            rain_mm=measure('precipitation_sum', index, 'mm'),
+            et0_mm=measure('et0_fao_evapotranspiration', index, 'mm'),
+        )
+        for index, stamp in enumerate(stamps)
+    ]
+    if not days:
+        raise unavailable('Historical climate')
+
     return c.ClimateBundle(
         location=location, period=c.DateInterval(start_date=start, end_date=end), daily=days,
-        provenance=[c.Provenance(source=bundle.provider, retrieved_at=as_of, data_mode='estimated',
-                                 note='Historical reanalysis for the same window last year, not a forecast.')],
-        data_mode='estimated', warnings=list(bundle.warnings))
+        provenance=[c.Provenance(source='open-meteo:archive_era5', retrieved_at=as_of,
+                                 data_mode='estimated',
+                                 note='Reanalysis for the same window one year back, not a forecast.')],
+        data_mode='estimated',
+        warnings=[f'reanalysis_window_{start.isoformat()}_to_{end.isoformat()}'])
 
 
 async def compare(session: Session, tenant_id: str, farmer_id: str, request: c.PlanningRequest,

@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     #: Off in tests: a suite must not depend on an upstream being reachable, and
     #: leaving it on took the backend tests from eight seconds to four minutes.
     soilgrids_enabled: bool = True
+    #: Open-Meteo's free tier asks the caller to confirm the use is permitted.
+    #: It supplies the historical reanalysis the crop planner needs, including
+    #: the reference ET0 that no other configured source carries.
+    openmeteo_permitted_free_use: bool = False
     agrisense_data_mode: DataMode = DataMode.AUTO
     database_url: str = 'sqlite://'
     firebase_project_id: str = 'demo-agrisense'
