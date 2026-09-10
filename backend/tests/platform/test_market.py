@@ -210,3 +210,36 @@ def test_a_non_ok_payload_is_refused_rather_than_parsed(monkeypatch):
     with pytest.raises(PlatformError) as raised:
         market.prices('cotton')
     assert raised.value.status == 503
+
+
+def test_cached_soil_retrieval_applies_only_near_where_it_was_measured(monkeypatch):
+    """A soil estimate from a hundred kilometres away is not this field's soil.
+
+    SoilGrids is intermittently unavailable — 503s and sixty-second hangs
+    within one afternoon — so retrievals already made are kept and reused. The
+    box is deliberately strict: reusing one far from where it was queried would
+    be worse than reporting the gap, since the entire purpose is to open the
+    pH gate honestly.
+    """
+    from agrisense.platform import soilgrids
+
+    soilgrids.reset_cache_for_tests()
+
+    def unreachable(latitude, longitude):
+        raise TimeoutError('soilgrids hung')
+
+    monkeypatch.setattr(soilgrids, '_query', unreachable)
+
+    near = soilgrids.estimate('field-a', 30.9686, 76.4730)
+    assert near is not None, 'a recorded retrieval for Ropar was not used'
+    assert near.ph is not None and near.ph.value == 7.5
+    assert near.source == 'gridded_estimate'
+    # Never confirmed and never dated: a farmer confirms their own card, and a
+    # modelled long-term average is not a sample taken on a day.
+    assert near.confirmation_state == 'draft'
+    assert near.sampled_on is None
+    assert 'unreachable' in (near.ph.provenance[0].note or '')
+
+    soilgrids.reset_cache_for_tests()
+    far = soilgrids.estimate('field-b', 12.9716, 77.5946)
+    assert far is None, 'a Ropar retrieval must not answer for Bengaluru'

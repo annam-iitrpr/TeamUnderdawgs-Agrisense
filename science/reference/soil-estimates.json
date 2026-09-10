@@ -1,0 +1,26 @@
+{
+  "version": "soilgrids-cached-retrievals-v1",
+  "note": "Values actually retrieved from ISRIC SoilGrids, kept because that service is intermittently unavailable. These are cached retrievals with their query and date, not estimates invented here. Each entry applies only within a small box around the point it was measured at, so it can never be stretched to a district nobody sampled.",
+  "source": "https://rest.isric.org/soilgrids/v2.0/properties/query",
+  "retrievals": [
+    {
+      "id": "soilgrids-iit-ropar-2026-09-10",
+      "label": "IIT Ropar, Rupnagar district, Punjab",
+      "queried_at": "2026-09-10",
+      "query": "lon=76.4730&lat=30.9686&property=phh2o&property=clay&property=sand&property=soc&depth=0-5cm&depth=5-15cm&value=mean",
+      "measured_at": { "latitude": 30.9686, "longitude": 76.4730 },
+      "applies_within_degrees": 0.15,
+      "ph": 7.5,
+      "clay_pct": 24.2,
+      "sand_pct": 42.05,
+      "organic_carbon_pct": 1.6,
+      "depth_cm": 15,
+      "limitations": [
+        "SoilGrids is a 250 m modelled product; this is not a measurement of any particular field",
+        "the mean of the 0-5 cm and 5-15 cm layers, which is what a seed bed sees",
+        "applies only within 0.15 degrees of the point it was queried at, roughly a 15 km box",
+        "a real soil test for the field always supersedes this"
+      ]
+    }
+  ]
+}

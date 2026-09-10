@@ -22,22 +22,32 @@ while every screen keeps saying where the number came from.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
+from functools import lru_cache
 
 import httpx
 
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
+from agrisense.science.references import reference_dir
 
 log = logging.getLogger('agrisense.platform.soilgrids')
 
 ENDPOINT = 'https://rest.isric.org/soilgrids/v2.0/properties/query'
+#: Retrievals already made from SoilGrids, kept because the service is
+#: intermittently unavailable — it has returned both 503s and 60-second hangs
+#: within a single afternoon. Each entry is a real recorded response with its
+#: query and date, and applies only within a small box around the point it was
+#: queried at, so a cached value can never be stretched to a district nobody
+#: sampled. Loaded from the reference directory, not embedded here.
+CACHE_FILE = 'soil-estimates.json'
 #: The rooting layers that matter for a seed-bed decision. Deeper layers exist
 #: and are not asked for: they would drag a topsoil pH towards subsoil values.
 DEPTHS = ('0-5cm', '5-15cm')
 PROPERTIES = ('phh2o', 'clay', 'sand', 'soc')
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = 8
 CACHE_SECONDS = 60 * 60 * 24 * 30
 #: Rounded to about a kilometre. The product is 250 m gridded, so a finer key
 #: would just multiply cache misses for the same answer.
@@ -90,6 +100,54 @@ def texture_class(clay_pct: float, sand_pct: float) -> str:
     return 'loam'
 
 
+@lru_cache(maxsize=1)
+def _retrievals() -> tuple[dict, ...]:
+    directory = reference_dir()
+    if directory is None:
+        return ()
+    path = directory / CACHE_FILE
+    if not path.is_file():
+        return ()
+    try:
+        loaded = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return ()
+    rows = loaded.get('retrievals') or []
+    return tuple(row for row in rows if isinstance(row, dict))
+
+
+def _cached_for(latitude: float, longitude: float) -> dict[str, float] | None:
+    """A previously recorded retrieval, if one was made near this point.
+
+    Near is deliberately strict. A soil estimate a hundred kilometres away is
+    not this field's soil, and offering one would be worse than reporting the
+    gap: the whole reason this exists is to open a pH gate honestly.
+    """
+    for row in _retrievals():
+        at = row.get('measured_at') or {}
+        span = float(row.get('applies_within_degrees') or 0)
+        try:
+            near_lat = abs(float(at['latitude']) - latitude) <= span
+            near_lon = abs(float(at['longitude']) - longitude) <= span
+        except (KeyError, TypeError, ValueError):
+            continue
+        if span > 0 and near_lat and near_lon:
+            values: dict[str, float] = {}
+            if isinstance(row.get('ph'), (int, float)):
+                values['phh2o'] = float(row['ph'])
+            for source, target in (('clay_pct', 'clay'), ('sand_pct', 'sand')):
+                if isinstance(row.get(source), (int, float)):
+                    # Stored as percentages; the live path works in the API's
+                    # own g/kg-scaled units, so they are converted back.
+                    values[target] = float(row[source]) * 10
+            if isinstance(row.get('organic_carbon_pct'), (int, float)):
+                values['soc'] = float(row['organic_carbon_pct']) * 10
+            if 'phh2o' in values:
+                values['_cached'] = 1.0
+                return values
+    return None
+
+
 def estimate(field_id: str, latitude: float, longitude: float) -> c.SoilObservation | None:
     """A gridded soil observation, or None when the service cannot answer.
 
@@ -104,10 +162,17 @@ def estimate(field_id: str, latitude: float, longitude: float) -> c.SoilObservat
         try:
             values = _query(latitude, longitude)
         except (httpx.HTTPError, OSError, ValueError) as exc:
-            log.info('soilgrids unavailable for %s: %s', field_id, type(exc).__name__)
-            return None
+            log.info('soilgrids live query failed for %s: %s', field_id, type(exc).__name__)
+            values = {}
         if not values:
-            return None
+            # Fall back to a retrieval already recorded near this point. The
+            # service hangs or 503s often enough that depending on it in the
+            # request path meant the pH gate stayed shut and every crop was
+            # declined — which is the failure this whole path exists to avoid.
+            cached = _cached_for(latitude, longitude)
+            if cached is None:
+                return None
+            values = cached
         _cache[key] = (time.monotonic(), values)
 
     ph = values.get('phh2o')
@@ -116,9 +181,12 @@ def estimate(field_id: str, latitude: float, longitude: float) -> c.SoilObservat
         # gate this exists to open.
         return None
 
-    provenance = [c.Provenance(source='isric:soilgrids_v2.0', retrieved_at=d.utcnow(),
-                               data_mode='estimated',
-                               note='250 m modelled estimate, not a measurement of this field')]
+    from_cache = values.get('_cached') == 1.0
+    provenance = [c.Provenance(
+        source='isric:soilgrids_v2.0', retrieved_at=d.utcnow(), data_mode='estimated',
+        note=('250 m modelled estimate, not a measurement of this field'
+              + ('; a retrieval recorded earlier for this area, because the '
+                 'service was unreachable' if from_cache else '')))]
     clay, sand, soc = values.get('clay'), values.get('sand'), values.get('soc')
     measure = lambda value, unit, analyte: c.Measurement(  # noqa: E731
         value=round(value, 2), unit=unit, analyte=analyte, method='gridded_model',
