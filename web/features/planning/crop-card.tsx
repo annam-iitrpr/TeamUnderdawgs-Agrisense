@@ -126,17 +126,29 @@ export function CropCard({
               <p className="mt-0.5 text-h3 font-semibold tabular-nums text-ink">
                 {formatLitres(seasonalLitres)}
               </p>
+              {/* Two sentences, two elements. Run together, a translator read
+                  "whole season on 2 ha, about 550 mm. Rain covers part of
+                  this." as "about 550 mm of rain falls" -- turning the crop's
+                  requirement into the rainfall that meets it, which is the
+                  opposite claim. Kept apart, neither can absorb the other. */}
               <p className="text-xs text-slate">
-                whole season on {areaHa} ha
-                {areaHa > 0
-                  ? ` · about ${Math.round(seasonalLitres / (areaHa * 10000))} mm`
-                  : ""}
-                {/* This is the crop's water requirement for the season (FAO
-                    IWM 3, table 5), not what is left after rain. Saying rain
-                    was already counted would understate what a farmer has to
-                    find. Rain is subtracted day by day in the water plan, once
-                    there is a sown crop and a forecast to subtract. */}
-                . Rain during the season covers part of this.
+                whole season on <span translate="no">{areaHa} ha</span>
+                {areaHa > 0 ? (
+                  <>
+                    {" · depth "}
+                    <span translate="no">
+                      {Math.round(seasonalLitres / (areaHa * 10000))} mm
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              {/* The crop's water requirement for the season (FAO IWM 3, table
+                  5), not what is left after rain: saying rain was already
+                  deducted would understate what a farmer has to find. Rain is
+                  subtracted day by day in the water plan, where there is a sown
+                  crop and a forecast to subtract. */}
+              <p className="text-xs text-slate">
+                Rain during the season covers part of this.
               </p>
             </>
           ) : (
