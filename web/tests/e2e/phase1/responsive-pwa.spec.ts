@@ -137,7 +137,7 @@ test.describe("installable manifest", () => {
 test.describe("signed-out landing and phone auth", () => {
   test("landing page presents the product and both entry points", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /better day to spray/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /better decisions begin with a better read/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /sign in/i }).first()).toHaveAttribute("href", "/sign-in");
     await expect(page.getByRole("link", { name: /start with your field/i })).toHaveAttribute("href", "/sign-up");
   });
