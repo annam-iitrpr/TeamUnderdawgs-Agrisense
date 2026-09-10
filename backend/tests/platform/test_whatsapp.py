@@ -143,6 +143,40 @@ def test_explicit_journal_commands_have_contract_actions_and_units():
     assert whatsapp.journal_values('log sprayed')[0] == 'pesticide_applied'
 
 
+def test_journal_command_is_processed_by_worker_and_queued_for_delivery(harness, asha, field, season):
+    import asyncio
+
+    from agrisense.platform import worker
+
+    code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
+    signed(harness, message(f'LINK {code}', 'wamid.link'))
+    assert signed(harness, message('log watered 20 mm', 'wamid.journal')).status_code == 200
+
+    processed = asyncio.run(worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings))
+    assert processed == 1
+    with harness.app.state.sessions() as session:
+        journal = session.scalar(select(d.JournalRow).where(d.JournalRow.source == 'whatsapp'))
+        assert journal is not None
+        outbound = session.scalar(select(d.OutboxRow).where(d.OutboxRow.kind == 'whatsapp.outbound'))
+        assert outbound is not None
+        assert outbound.payload['body'].startswith('Recorded')
+
+
+def test_proposal_buttons_are_preserved_in_the_outbox_payload(harness, asha):
+    channel_id = linked_channel(harness, asha)
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        event = whatsapp.queue_outbound(
+            session, harness.app.state.settings, channel, 'Apply now?',
+            [('proposal_confirm:proposal-1', 'Confirm'), ('proposal_cancel:proposal-1', 'Cancel')],
+        )
+        session.commit()
+        assert event.payload['buttons'] == [
+            ['proposal_confirm:proposal-1', 'Confirm'],
+            ['proposal_cancel:proposal-1', 'Cancel'],
+        ]
+
+
 def test_commands_list_and_select_a_farmer_field(harness, asha, field):
     code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
     signed(harness, message(f'LINK {code}', 'wamid.link'))

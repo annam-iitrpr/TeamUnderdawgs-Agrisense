@@ -1,0 +1,102 @@
+{
+  "version": "candidate-unreviewed-v1",
+  "review_status": "pending_agronomist_review",
+  "production_use": false,
+  "note": "Research candidates only. This file is intentionally not loaded by the science reference loader. An agronomist must verify district, variety, establishment method, duration, irrigation, pH, and cost before any record is copied into crop-calendar.json.",
+  "sources": [
+    {
+      "id": "icar-kharif-advisories-2025",
+      "title": "ICAR Kharif Agro-Advisories for Farmers 2025",
+      "url": "https://www.icar.gov.in/sites/default/files/Circulars/ICAR%20En-Kharif%20Agro-Advisories%20for%20Farmers%202025.pdf",
+      "publisher": "Indian Council of Agricultural Research",
+      "retrieved_on": "2026-09-10",
+      "claim": "For Punjab rice, the advisory gives first-fortnight June nursery sowing for short and medium duration rice and first-fortnight July transplanting; it gives later windows for specified basmati varieties."
+    },
+    {
+      "id": "pau-wheat-2025",
+      "title": "Punjab Agricultural University wheat sowing advisory",
+      "url": "https://pau.edu/index.php?DO=viewEventDetail&_act=manageEvent&dataE=&intID=12018",
+      "publisher": "Punjab Agricultural University",
+      "retrieved_on": "2026-09-10",
+      "claim": "The advisory reports the optimum Punjab wheat sowing window as 25 October to 15 November."
+    },
+    {
+      "id": "icar-agricultural-calendar-2025",
+      "title": "India BRICS Agriculture Report, agricultural calendar section",
+      "url": "https://www.icar.gov.in/sites/default/files/Circulars/India_BRICS_Agriculture_Report.pdf",
+      "publisher": "Indian Council of Agricultural Research",
+      "retrieved_on": "2026-09-10",
+      "claim": "The national calendar places kharif sowing in June-July and lists rice, maize, soybean, and cotton among kharif crops; it is context only and does not establish a Vidarbha district calendar."
+    },
+    {
+      "id": "des-cost-studies",
+      "title": "Cost of Cultivation and Production related data",
+      "url": "https://desagri.gov.in/documents-reports/cost-of-cultivation-production-related-data/",
+      "publisher": "Directorate of Economics and Statistics, Department of Agriculture and Farmers Welfare",
+      "retrieved_on": "2026-09-10",
+      "claim": "This is the official index for cost-of-cultivation material. A per-quintal cost in the national statistics table is not substituted for the required district crop cost per hectare."
+    }
+  ],
+  "candidates": [
+    {
+      "key": "planning:rice",
+      "region": "Punjab pilot placeholder",
+      "crop_id": "rice",
+      "sowing_window_candidate": {"start": "06-01", "end": "06-15", "method": "nursery sowing; transplanting is later and variety-specific"},
+      "duration_min_days": null,
+      "duration_max_days": null,
+      "minimum_climate_days": 30,
+      "ph_min": null,
+      "ph_max": null,
+      "seasonal_irrigation_mm": null,
+      "planned_cost_inr_ha": null,
+      "evidence_ids": ["icar-kharif-advisories-2025"],
+      "review_notes": ["Confirm direct-seeded versus transplanted rice.", "Obtain district and variety duration, pH, seasonal water, and hectare cost."]
+    },
+    {
+      "key": "planning:wheat",
+      "region": "Punjab pilot placeholder",
+      "crop_id": "wheat",
+      "sowing_window_candidate": {"start": "10-25", "end": "11-15", "method": "timely-sown wheat"},
+      "duration_min_days": null,
+      "duration_max_days": null,
+      "minimum_climate_days": 30,
+      "ph_min": null,
+      "ph_max": null,
+      "seasonal_irrigation_mm": null,
+      "planned_cost_inr_ha": null,
+      "evidence_ids": ["pau-wheat-2025"],
+      "review_notes": ["Confirm variety and late-sown exception windows.", "Obtain reviewed soil and cost values."]
+    },
+    {
+      "key": "planning:cotton",
+      "region": "Vidarbha pilot placeholder",
+      "crop_id": "cotton",
+      "sowing_window_candidate": {"start": "06-01", "end": "07-31", "method": "national kharif context only"},
+      "duration_min_days": null,
+      "duration_max_days": null,
+      "minimum_climate_days": 30,
+      "ph_min": null,
+      "ph_max": null,
+      "seasonal_irrigation_mm": null,
+      "planned_cost_inr_ha": null,
+      "evidence_ids": ["icar-agricultural-calendar-2025"],
+      "review_notes": ["Do not use this broad national window as a Vidarbha recommendation; obtain Maharashtra district guidance."]
+    },
+    {
+      "key": "planning:soybean",
+      "region": "Vidarbha pilot placeholder",
+      "crop_id": "soybean",
+      "sowing_window_candidate": {"start": "06-01", "end": "07-31", "method": "national kharif context only"},
+      "duration_min_days": null,
+      "duration_max_days": null,
+      "minimum_climate_days": 30,
+      "ph_min": null,
+      "ph_max": null,
+      "seasonal_irrigation_mm": null,
+      "planned_cost_inr_ha": null,
+      "evidence_ids": ["icar-agricultural-calendar-2025"],
+      "review_notes": ["Do not use this broad national window as a Vidarbha recommendation; obtain Maharashtra district guidance."]
+    }
+  ]
+}

@@ -49,6 +49,12 @@ improvements that would most change these numbers.
 
 ## `crop-calendar.json` — crop ranking, deliberately empty
 
+`crop-calendar-research.json` is a separately tracked research artifact. It
+contains cited candidate windows and explicit gaps for the Punjab and Vidarbha
+pilot, with `review_status` set to `pending_agronomist_review` and
+`production_use` set to `false`. The loader does not read it, so candidates
+cannot change farmer-facing rankings.
+
 `/planning/compare` additionally needs, per crop and per region: a local sowing
 window, season duration bounds, a supported pH range, a reviewed seasonal
 irrigation requirement and a reviewed cost of cultivation.

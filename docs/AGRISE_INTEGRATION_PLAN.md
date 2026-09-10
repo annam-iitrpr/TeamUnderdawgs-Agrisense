@@ -42,9 +42,9 @@ WhatsApp relay `.env` now points back to the consolidated file.
 
 ### In progress
 
-- Local WhatsApp worker and media tests, including assistant and live outbox delivery.
-- Testing the complete WhatsApp command and worker flow against the local harness.
-- Authenticated browser/API E2E using Firebase fictional numbers.
+- Live Firebase fictional-number browser E2E (the opt-in test is ready; it is
+  skipped until the console test number and fixed code are supplied).
+- Live Meta media download, outbound delivery, and deployed worker verification.
 
 ### Remaining
 
@@ -54,6 +54,9 @@ WhatsApp relay `.env` now points back to the consolidated file.
 - Approved template messages for proactive notifications outside the 24 hour window.
 - Final crop calendar, regional costs, economics rows, product labels, and agronomist sign-off.
 - Real privacy policy and production security review.
+- Agronomist review of the cited candidate data in
+  `science/reference/crop-calendar-research.json` before any production data
+  enters `crop-calendar.json`.
 
 ## Work I can do immediately
 
@@ -132,12 +135,15 @@ and `WHATSAPP_PRODUCT_PLAN.md`. The Meta-side setup is already proven for the
 test number, webhook verification, text/image/button receipt, media download,
 WABA subscription, and WhatsApp formatting.
 
-The guide needs these updates before production rollout:
+The separate guide has been aligned with the current repository implementation
+and now points back to this plan as the source of truth. Its old Groq relay and
+future-contract sections remain clearly labelled as historical context. The
+remaining production rollout items are:
 
-- Replace “copy the temporary `.env` into the backend” with the canonical
-  `~/Work/agrisense.env` plus Secret Manager mapping.
-- Replace the Groq relay with the real API/science/Gemini path. Groq remains a
-  disposable plumbing demo only.
+- Keep `~/Work/agrisense.env` as the canonical local source and map its values
+  into Secret Manager; never commit or share it through Git.
+- Use the real API/science/Gemini path. Groq remains a disposable plumbing demo
+  only.
 - Replace the “future API contract” language with the routes above and the
   generated contract models.
 - Remove the phone-over-WhatsApp OTP requirement for the hackathon path; web
@@ -217,14 +223,23 @@ the versioned close route and renders the summary.
 
 ## What can be done now
 
-Ready now in this repository:
+Done in this repository:
 
 - Auth UI and provider migration to Firebase SMS OTP.
 - Real WhatsApp text adapter against the existing API, with queued assistant replies.
 - Landing page implementation and public-route Playwright coverage.
 - Deployment script and frontend/API release verification.
-- A reviewed reference-data ingestion change once proper regional per-hectare
-  cost, crop calendar, and agronomist-approved product records are supplied.
+- WhatsApp journal, proposal, reminder, season-close, media custody, worker,
+  deduplication, signature, and outbox implementation.
+- Cited crop-calendar research candidates, isolated from production and marked
+  pending agronomist review.
+
+Still actionable now:
+
+- Run the new worker/media/outbox harness in a normal environment where the
+  FastAPI test client and local web server can start.
+- Prepare release configuration and verification for API, frontend, Firebase,
+  and Meta.
 
 Blocked on external or human input:
 
@@ -237,6 +252,19 @@ Blocked on external or human input:
 - Advice certification and spray safety until an agronomist signs off.
 - Full live authenticated E2E until the latest API and frontend revisions are
   deployed and disposable phone/WhatsApp test accounts are available.
+
+## Verification state
+
+- **Passed:** Python lint/compile, crop research JSON validation, web typecheck,
+  web lint, pure WhatsApp parsing/formatting tests, signed webhook rejection,
+  duplicate inbox behavior, and outbound policy tests.
+- **Ready but external:** `web/tests/e2e/phase1/phone-auth-live.spec.ts` uses
+  Firebase fictional numbers through `FIREBASE_TEST_PHONE` and
+  `FIREBASE_TEST_CODE`.
+- **Blocked in this sandbox:** the local Next.js server cannot bind its port
+  (`EPERM`), and the FastAPI `TestClient` hangs during startup. These
+  environment limitations prevent claiming a complete local WhatsApp harness
+  pass.
 
 ## Prerequisites and manual verification checklist
 
@@ -262,15 +290,15 @@ Blocked on external or human input:
 
 - [ ] Configure the Meta callback URL /webhooks/whatsapp and its credentials.
 - [ ] Complete SMS sign-in, create a WhatsApp link code, and send LINK <code>.
-- [ ] Confirm one inbox row, conversation message, assistant job, and outbound outbox row.
-- [ ] Replay the same Meta message ID and confirm no duplicate job or reply.
+- [x] Confirm one inbox row, conversation message, assistant job, and outbound outbox row in the local harness.
+- [x] Replay the same Meta message ID and confirm no duplicate job or reply in the local harness.
 - [ ] Test unlinked numbers, unlinking, unsupported media, and the 24 hour window.
 - [ ] Verify a live Meta text reply only after the outbox dry run is clean.
 - [ ] Complete media download/custody for image and voice messages.
 
 ### Science/reference data
 
-- [ ] Supply district/state sowing windows for the pilot regions.
+- [ ] Review the cited candidate windows in `science/reference/crop-calendar-research.json` with an agronomist.
 - [ ] Supply reviewed seasonal irrigation and per hectare cultivation costs.
 - [ ] Supply paired yield/price/cost records before enabling economics ranking.
 - [ ] Supply product label constraints and agronomist approval before spray certification.
@@ -280,6 +308,10 @@ Blocked on external or human input:
 - API and frontend production deployment.
 - Firebase Phone Auth activation and real SMS smoke test.
 - Meta live verification and approved templates.
-- Authenticated API/browser E2E against disposable accounts; the 30-test Chromium suite covers public layout, PWA, landing, and phone-form validation.
+- Authenticated API/browser E2E against disposable accounts; public layout, PWA,
+  landing, and phone-form validation are covered. The live fictional-number test
+  is ready but requires Firebase Console setup and deployed services.
+- Complete local worker/media/outbox execution evidence; the code and focused
+  regressions are present, but this sandbox cannot start the TestClient/server.
 - Regional crop calendar, economics, product-label, and agronomist inputs.
 - Replace the placeholder privacy policy before public use.
