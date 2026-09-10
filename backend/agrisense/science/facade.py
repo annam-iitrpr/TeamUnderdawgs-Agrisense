@@ -203,7 +203,12 @@ def evaluate_season(
     status, readiness, need, timing_fit, viability = "insufficient_data", None, None, None, None
     selected, alternatives, fit = None, [], None
     product = None
-    if snapshot.season.crop_id not in ("rice", "wheat", "cotton"):
+    # Read from the catalogue, not a hardcoded tuple. `Crop` already carries
+    # `supported_for_biological_advice`, and a second list beside it meant
+    # adding a crop to the reference set left it silently out of scope here —
+    # the third place this same duplication had crept in.
+    supported = {row.id for row in references.crops if row.supported_for_biological_advice}
+    if snapshot.season.crop_id not in supported:
         status = "out_of_scope"
         reasons.append(api.Reason(code="india_biological_crop_not_supported"))
     elif snapshot.season.status == "closed":

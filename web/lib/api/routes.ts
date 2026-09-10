@@ -40,6 +40,7 @@ import type {
   SeasonCloseRequest,
   SeasonCreate,
   SeasonEvaluation,
+  MarketPrices,
   SeasonPatch,
   SoilReadingCreate,
   SoilObservation,
@@ -461,6 +462,23 @@ export const proposals = {
 };
 
 /* ── soil and jobs ───────────────────────────────────────────────────────── */
+
+export const market = {
+  /**
+   * Live mandi prices for a crop.
+   *
+   * `state` narrows the "nearest market" to one the farmer could actually sell
+   * at. It is passed rather than inferred: a field stores a centroid but no
+   * place name, and guessing the state from coordinates would risk presenting a
+   * mandi they cannot reach as their local price.
+   */
+  prices: (cropId: string, state?: string, o: Opts = {}): Promise<Result<MarketPrices>> =>
+    apiRequest(
+      `/market/prices/${encodeURIComponent(cropId)}` +
+        (state ? `?state=${encodeURIComponent(state)}` : ""),
+      { signal: o.signal },
+    ),
+};
 
 export const soil = {
   /**

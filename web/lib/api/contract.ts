@@ -74,6 +74,18 @@ export type Reason = Schema<"Reason">;
 export type Estimate = Schema<"Estimate">;
 export type WaterEstimate = Schema<"WaterEstimate">;
 export type Economics = Schema<"Economics">;
+
+/* ── market prices ───────────────────────────────────────────────────────── */
+
+/**
+ * What a crop is fetching, as a range across reporting mandis.
+ *
+ * A range rather than a number because prices differ by market, variety and
+ * grade on the same day, and a single figure would hide exactly the variation a
+ * farmer is exposed to. `msp` is nullable and carries its own reason.
+ */
+export type MarketPrices = Schema<"MarketPrices">;
+export type MarketQuote = Schema<"MarketQuote">;
 export type ForecastBundle = Schema<"ForecastBundle">;
 
 /** What one evaluation produced: advice plus the water and money that go with it. */

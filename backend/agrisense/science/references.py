@@ -132,6 +132,11 @@ def reference_bundle() -> api.ReferenceBundle:
                 # the product rules are *written* for, not that advice is ready.
                 supported_for_biological_advice=crop_id in {"rice", "wheat", "cotton", "maize"},
             )
+            # Ordered by regional suitability for the Punjab sub-montane
+            # zone, most suited first. A caller that can only compare five
+            # candidates at a time — which the engine's own limit is — then
+            # gets the five worth comparing by taking the first five, rather
+            # than an alphabetical accident.
             for crop_id, name in (
                 ("wheat", "Wheat"),
                 ("rice", "Rice (Paddy)"),

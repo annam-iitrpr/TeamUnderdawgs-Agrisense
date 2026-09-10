@@ -9,6 +9,7 @@
  * water requirement or a zero return would be a claim rather than a blank.
  */
 import { Button, Callout, Card } from "@/components/ui";
+import { MarketPricePanel } from "@/features/market/market-price-panel";
 import { EstimateBand } from "./estimate-band";
 import { ScoreMeter } from "./score-meter";
 import { formatLitres, litresFromMeasurement } from "./water-figures";
@@ -44,6 +45,7 @@ export function CropCard({
   areaHa,
   rank,
   waterScore,
+  state,
   selected,
   onToggleCompare,
   onChoose,
@@ -54,6 +56,8 @@ export function CropCard({
   areaHa: number;
   rank?: number;
   waterScore: number | null;
+  /** The farmer's state, so "nearest mandi" means one they could reach. */
+  state?: string | null;
   selected?: boolean;
   onToggleCompare?: () => void;
   onChoose?: () => void;
@@ -163,6 +167,19 @@ export function CropCard({
         <EstimateBand estimate={plan.economics?.profit} label="Net return" emphasis />
         <EstimateBand estimate={plan.economics?.roi} label="Return on spend" />
         <EstimateBand estimate={plan.economics?.cost} label="Expected cost" />
+      </div>
+
+      {/* What the crop is actually fetching right now. This is the one money
+          figure on the card that is real: the return estimates above need
+          reviewed yield and cost records that do not exist yet, while a mandi
+          price is an observation from this morning. */}
+      <div className="mt-3">
+        <MarketPricePanel
+          cropId={plan.crop_id}
+          cropName={crop?.name ?? plan.crop_id}
+          state={state}
+          harvestFrom={plan.harvest_interval?.start_date ?? null}
+        />
       </div>
 
       {plan.economics?.price?.value != null ? (

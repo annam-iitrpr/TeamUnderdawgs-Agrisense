@@ -20,17 +20,31 @@ import { relativeWaterScore } from "./water-figures";
 export const MAX_CANDIDATES = 5;
 
 /**
- * Sowing starts tomorrow, never today.
+ * The window crops are compared over: tomorrow, for the next 330 days.
  *
- * The engine refuses a window whose start has already passed, and "today" is
- * already partly gone wherever the farmer is standing. Sending today's date
- * produced a generic 503 that looked like an outage rather than a bad request.
+ * Two constraints meet here, and both were violated before.
+ *
+ * It starts *tomorrow*, never today: the engine refuses a window whose start
+ * has already passed, and today is already partly gone wherever the farmer is
+ * standing. Sending today's date produced a generic 503 that looked like an
+ * outage rather than a bad request.
+ *
+ * It runs 330 days, not six months. Sowing windows are seasonal — paddy sows
+ * in June, sugarcane in February, wheat in November — so a six-month window
+ * silently excluded every crop whose season fell outside it, reporting
+ * `outside_local_sowing_calendar` as though the crop were unsuitable rather
+ * than merely out of view. It stops short of a full year because the planner
+ * compares against reanalysis from the same window one year back, and that has
+ * to be settled: a 365-day window puts the reanalysis end date in the future
+ * and the whole comparison is refused with `historical_climate_required`.
  */
+const COMPARISON_DAYS = 330;
+
 export function defaultSowingWindow(): { start_date: string; end_date: string } {
   const start = new Date();
   start.setDate(start.getDate() + 1);
   const end = new Date(start);
-  end.setMonth(end.getMonth() + 6);
+  end.setDate(end.getDate() + COMPARISON_DAYS);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { start_date: iso(start), end_date: iso(end) };
 }
