@@ -16,6 +16,7 @@ import { useApiQuery } from "@/lib/api/query";
 import { me as meApi } from "@/lib/api/routes";
 import { AlertTriangle, Download, LogOut, Phone, Trash2, User } from "lucide-react";
 import { useState } from "react";
+import { LinkWhatsapp } from "@/features/channels/link-whatsapp";
 
 export function AccountScreen() {
   const { user, signOut } = useAuth();
@@ -60,6 +61,11 @@ export function AccountScreen() {
             <LanguageSwitcher />
           </div>
         </Card>
+
+        {/* WhatsApp linking. Until this existed, inbound messages were accepted
+            and silently ignored, because the server never guesses an unlinked
+            sender into an account and nothing in the app ever linked one. */}
+        <LinkWhatsapp linked={(profileQuery.data?.linked_channel_ids ?? []).length > 0} />
 
         <ExportCard verified={verified} />
         <DangerZone verified={verified} />

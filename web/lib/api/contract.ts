@@ -85,6 +85,11 @@ export type Economics = Schema<"Economics">;
  * farmer is exposed to. `msp` is nullable and carries its own reason.
  */
 export type MarketPrices = Schema<"MarketPrices">;
+
+/* ── channels ────────────────────────────────────────────────────────────── */
+
+/** A single-use code the farmer sends from WhatsApp to prove they own the number. */
+export type ChannelLinkChallenge = Schema<"ChannelLinkChallenge">;
 export type MarketQuote = Schema<"MarketQuote">;
 export type ForecastBundle = Schema<"ForecastBundle">;
 

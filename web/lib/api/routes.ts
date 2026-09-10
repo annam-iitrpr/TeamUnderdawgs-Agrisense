@@ -40,6 +40,7 @@ import type {
   SeasonCloseRequest,
   SeasonCreate,
   SeasonEvaluation,
+  ChannelLinkChallenge,
   MarketPrices,
   SeasonPatch,
   SoilReadingCreate,
@@ -462,6 +463,32 @@ export const proposals = {
 };
 
 /* ── soil and jobs ───────────────────────────────────────────────────────── */
+
+export const channels = {
+  /**
+   * Starts linking a WhatsApp number to this account.
+   *
+   * Returns a single-use code that expires in ten minutes. The farmer then
+   * sends `LINK <code>` from the WhatsApp number they want bound, which is what
+   * proves they control it — the server never guesses an unlinked sender into
+   * an account, so without this step an inbound message is silently ignored.
+   */
+  linkWhatsapp: (
+    consentVersion: string,
+    idempotencyKey: string,
+    o: Opts = {},
+  ): Promise<Result<ChannelLinkChallenge>> =>
+    apiRequest("/channels/whatsapp/link", {
+      method: "POST",
+      body: { consent_version: consentVersion },
+      idempotencyKey,
+      signal: o.signal,
+    }),
+
+  /** Unbinds the number. Records stay; only the channel goes. */
+  unlinkWhatsapp: (o: Opts = {}): Promise<Result<MutationReceipt>> =>
+    apiRequest("/channels/whatsapp/link", { method: "DELETE", signal: o.signal }),
+};
 
 export const market = {
   /**

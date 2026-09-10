@@ -241,7 +241,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             for event in whatsapp.extract(payload):
                 if whatsapp.record(session, event):
-                    whatsapp.ingest(session, event)
+                    # The outcome is logged, not discarded. `ingest` answers with
+                    # the reason a message produced nothing — `unlinked`,
+                    # `opted_out`, `unsupported_message`, `empty_message` — and
+                    # throwing that away is why a silent chatbot took several
+                    # rounds to diagnose: the webhook returned 200, the worker
+                    # ran clean, and nothing anywhere said the sender simply was
+                    # not linked to an account.
+                    outcome = whatsapp.ingest(session, event)
+                    log.info('whatsapp inbound outcome=%s request_id=%s', outcome, request_id)
             session.commit()
         except SQLAlchemyError:
             session.rollback()

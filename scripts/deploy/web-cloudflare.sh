@@ -38,6 +38,9 @@ export NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${FIREBASE_AUTH_DOMAIN:-${FIREBASE_PROJ
 export NEXT_PUBLIC_FIREBASE_APP_ID="${FIREBASE_APP_ID:-}"
 export NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="${FIREBASE_MESSAGING_SENDER_ID:-}"
 export NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="${FIREBASE_STORAGE_BUCKET:-}"
+# The number a farmer sends their link code to. Public by definition — it is
+# printed on screen for them to message.
+export NEXT_PUBLIC_WHATSAPP_NUMBER="${WHATSAPP_DISPLAY_NUMBER:-}"
 
 # A build missing the app id produces a bundle whose Firebase client cannot
 # initialise, which surfaces to a farmer as "sign-in is broken" rather than as
