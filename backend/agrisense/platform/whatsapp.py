@@ -294,6 +294,79 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
     return 'queued'
 
 
+def indian_number(value: float) -> str:
+    """Group digits the way the reader groups them: 16,88,112 and not 1,688,112."""
+    whole = f'{round(value)}'
+    if len(whole) <= 3:
+        return whole
+    head, tail = whole[:-3], whole[-3:]
+    parts = []
+    while len(head) > 2:
+        parts.insert(0, head[-2:])
+        head = head[:-2]
+    if head:
+        parts.insert(0, head)
+    return ','.join([*parts, tail])
+
+
+def stage_words(stage: str | None) -> str:
+    return stage.replace('_', ' ').capitalize() if stage else 'not recorded yet'
+
+
+def water_reply(value: dict[str, Any], where: str) -> str:
+    """Today's water need in words, not a serialised object.
+
+    This used to interpolate the payload dict straight into the message, so a
+    farmer asking about water received `{'daily': [{'unit': 'L', 'value':
+    1688111.99...}]}`. Everything needed to answer them properly was already in
+    that dict.
+    """
+    daily = [row for row in value.get('daily') or [] if row.get('value') is not None]
+    lines = ['*Water*']
+    if value.get('irrigation_needed'):
+        lines.append('Irrigation is needed now.')
+    elif daily:
+        lines.append('No irrigation needed right now.')
+    if daily:
+        today = daily[0]
+        lines.append(f'Today: {indian_number(today["value"])} {today.get("unit") or "L"}')
+        if len(daily) > 1:
+            low = min(row['value'] for row in daily)
+            high = max(row['value'] for row in daily)
+            unit = today.get('unit') or 'L'
+            lines.append(f'Next {len(daily)} days: {indian_number(low)} to '
+                         f'{indian_number(high)} {unit} a day')
+    return '\n'.join(lines) + where
+
+
+def money_reply(crop_id: str, value: dict[str, Any], where: str) -> str:
+    """What the crop is worth, and what the farmer has actually recorded.
+
+    Costs and returns stay empty until the farmer records what they spent and
+    sold -- that is their ledger, and nobody else can fill it in. But the price
+    the crop is fetching is knowable today, so the answer leads with that rather
+    than with a row of blanks.
+    """
+    lines = ['*Money*']
+    try:
+        from agrisense.platform import market
+        prices = market.prices(crop_id)
+    except Exception:  # a price is a bonus on this reply, never the answer itself
+        prices = None
+    if prices is not None and prices.modal.value is not None:
+        lines.append(f'{prices.commodity}: ₹{indian_number(prices.modal.value)} per quintal')
+        if prices.low.value is not None and prices.high.value is not None:
+            lines.append(f'Range ₹{indian_number(prices.low.value)}'
+                         f' to ₹{indian_number(prices.high.value)}')
+        if prices.msp is not None and prices.msp.value is not None:
+            lines.append(f'MSP 2025-26: ₹{indian_number(prices.msp.value)}')
+        if prices.data_mode == 'demo':
+            lines.append('_Indicative reference, not today\'s mandi quote._')
+    if (value.get('cost') or {}).get('p50') is None:
+        lines.append('Your own costs and sales appear here once you record them.')
+    return '\n'.join(lines) + where
+
+
 def open_season_for(session: Session, tenant_id: str, farmer_id: str,
                     field_id: str | None) -> d.SeasonRow | None:
     """The open season on a field.
@@ -492,23 +565,27 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         if command == 'readiness':
             value = recommendation.payload.get('recommendation', {})
             readiness = value.get('readiness')
-            status = value.get('status', 'unknown').replace('_', ' ')
-            return with_menu(
-                f'*Readiness: {readiness if readiness is not None else "not known"}*\n'
-                f'Status: {status}{where}',
-                ('water', 'Water'), ('money', 'Money'))
+            water_value = recommendation.payload.get('water') or {}
+            lines = ['*Readiness*']
+            if readiness is not None:
+                lines.append(f'Score: {readiness} out of 10')
+            # Lead with what is known. The crop stage and whether the field needs
+            # water are both real answers, and reporting only the score meant a
+            # farmer whose score was still pending was told nothing at all.
+            lines.append(f'Stage: {stage_words(value.get("stage"))}')
+            if water_value.get('irrigation_needed') is not None:
+                lines.append('Water: irrigation needed now'
+                             if water_value['irrigation_needed'] else 'Water: none needed now')
+            if readiness is None:
+                lines.append('A spray score for this crop needs agronomist-checked '
+                             'parameters, which are still in review.')
+            return with_menu('\n'.join(lines) + where, ('water', 'Water'), ('money', 'Money'))
         key = 'water' if command == 'water' else 'economics'
-        value = recommendation.payload.get(key)
+        value = recommendation.payload.get(key) or {}
         other = ('money', 'Money') if command == 'water' else ('water', 'Water')
-        if not value:
-            return with_menu(f'{command.title()} figures are not available for this evaluation.',
-                             ('readiness', 'Readiness'))
-        missing = value.get('missing_reason')
-        if missing:
-            # An unavailable figure says why. It is never replaced with a zero.
-            return with_menu(f'{command.title()} figures are not available yet: {missing.replace("_", " ")}',
-                             ('readiness', 'Readiness'))
-        return with_menu(f'*{command.title()}*\n{value}{where}', ('readiness', 'Readiness'), other)
+        body = (water_reply(value, where) if command == 'water'
+                else money_reply(season.crop_id, value, where))
+        return with_menu(body, ('readiness', 'Readiness'), other)
     if command == 'journal_help':
         return with_menu('*Record something*\nJust tell me what you did, in your own words — '
                          'for example "watered 2 acres today" or "sprayed for aphids". '

@@ -441,3 +441,29 @@ def test_a_chosen_field_is_never_overridden_by_the_default(harness):
     with harness.app.state.sessions() as session:
         chosen = whatsapp.active_field_id(session, conversation, 'no-such-tenant', 'no-such-farmer')
     assert chosen == 'chosen-by-the-farmer'
+
+
+def test_numbers_are_grouped_the_way_the_reader_groups_them():
+    assert whatsapp.indian_number(1688112) == '16,88,112'
+    assert whatsapp.indian_number(2425) == '2,425'
+    assert whatsapp.indian_number(401) == '401'
+
+
+def test_water_is_answered_in_words_not_as_a_serialised_object():
+    """A farmer asking about water was sent the payload dict itself."""
+    reply = whatsapp.water_reply({
+        'irrigation_needed': True,
+        'daily': [{'value': 1688112.0, 'unit': 'L'}, {'value': 1761120.0, 'unit': 'L'}],
+    }, '\n_North plot_')
+    assert '{' not in reply and 'None' not in reply
+    assert 'Irrigation is needed now.' in reply
+    assert '16,88,112 L' in reply
+    assert '_North plot_' in reply
+
+
+def test_money_leads_with_the_price_rather_than_a_row_of_blanks():
+    """Costs stay the farmer's own, but what the crop fetches is knowable today."""
+    reply = whatsapp.money_reply('wheat', {'cost': {'p50': None}}, '')
+    assert '{' not in reply
+    assert '₹' in reply
+    assert 'once you record them' in reply
