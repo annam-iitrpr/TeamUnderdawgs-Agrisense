@@ -456,6 +456,16 @@ async def build_weather_bundle(
     transport = JsonTransport()
     try:
         providers = []
+        # Open-Meteo is asked first because it carries the variables a spray
+        # decision actually needs. CE Hub answers, but with nulls for gust and
+        # rain probability, and the ranker refuses to read a missing value as a
+        # safe zero -- correctly, since an unknown gust is exactly the condition
+        # that drifts a spray onto a neighbour's field. The result was that every
+        # hour was rejected and no window could ever be named. Preferring the
+        # source that publishes the variable is the fix; relaxing the check
+        # would have been the same as guessing the gust.
+        if os.getenv("OPENMETEO_PERMITTED_FREE_USE") == "true":
+            providers.append(OpenMeteoProvider(transport, permitted_free_use=True))
         if os.getenv("CEHUB_API_KEY") or os.getenv("CEHUB_BEARER_TOKEN"):
             providers.append(
                 CEHubProvider(
@@ -465,8 +475,6 @@ async def build_weather_bundle(
                     api_key_header=os.getenv("CEHUB_API_KEY_HEADER", "ApiKey"),
                 )
             )
-        if os.getenv("OPENMETEO_PERMITTED_FREE_USE") == "true":
-            providers.append(OpenMeteoProvider(transport, permitted_free_use=True))
         bundle = await fetch(
             (location.latitude, location.longitude), horizon, as_of, providers=tuple(providers)
         )
