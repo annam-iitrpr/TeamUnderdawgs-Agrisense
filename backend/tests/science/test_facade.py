@@ -117,7 +117,9 @@ def test_every_shipped_parameter_record_passes_its_own_review_gate():
     refs = reference_bundle()
     catalog = {row.id for row in refs.evidence}
     assert refs.parameters, "the shipped reference files supply no parameters"
-    for key in refs.parameters:
+    # `ranking_weights` is configuration, not an agronomic claim about a crop:
+    # it decides display order and has no evidence to cite.
+    for key in (k for k in refs.parameters if k != "ranking_weights"):
         record = reviewed_parameters(refs, key, date(2026, 9, 10))
         assert record is not None, f"{key} does not pass reviewed_parameters"
         assert record["evidence_id"] in catalog
@@ -137,6 +139,7 @@ def test_water_records_carry_the_published_available_water_difference():
     figure, so the invariant is asserted rather than trusted.
     """
     refs = reference_bundle()
+    assert refs.parameters["ranking_weights"]["suitability"] > 0
     water_keys = [key for key in refs.parameters if key.startswith("water:")]
     # One per catalogue crop: a crop with a sowing calendar but no water
     # parameters would rank and then refuse to say what it needs to drink.
@@ -312,8 +315,15 @@ def test_planner_returns_only_locally_evidenced_candidates():
         provenance=[api.Provenance(source="synthetic", data_mode="demo")],
         data_mode="demo",
     )
+    # Ranking weights and a regional suitability are both required now: the
+    # planner reads them from the reference bundle rather than hardcoding a
+    # constant, so a record without them is correctly rejected as invalid.
+    refs.parameters["ranking_weights"] = {
+        "suitability": 0.45, "water_fit": 0.20, "budget_fit": 0.20, "duration_fit": 0.15,
+    }
     refs.parameters["planning:cotton"] = {
         **reviewed(),
+        "regional_suitability": 0.8,
         "latitude_min": 20,
         "latitude_max": 22,
         "longitude_min": 78,

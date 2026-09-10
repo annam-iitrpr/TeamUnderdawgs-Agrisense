@@ -145,7 +145,20 @@ def compare_crops(
             else min(1, (snapshot.request.budget_inr - cost) / max(snapshot.request.budget_inr, 1))
         )
         duration_fit = 1 - maximum_days / 730
-        score = 0.4 + 0.25 * water_fit + 0.25 * budget_fit + 0.1 * duration_fit
+        # Suitability comes from the reviewed record, not a constant. It used to
+        # be hardcoded to 1 for every crop, which meant the ranking was pure
+        # water-and-budget efficiency: a field pea outranked wheat in Punjab
+        # because it drinks less, which is not an answer to "what should I sow".
+        suitability = number(record, 'regional_suitability', low=0, high=1)
+        # Weights are data too, so the emphasis can be changed by an agronomist
+        # without touching this file. They are ranking weights and nothing more.
+        weights = references.parameters.get('ranking_weights') or {}
+        score = (
+            number(weights, 'suitability', low=0, high=1) * suitability
+            + number(weights, 'water_fit', low=0, high=1) * water_fit
+            + number(weights, 'budget_fit', low=0, high=1) * budget_fit
+            + number(weights, 'duration_fit', low=0, high=1) * duration_fit
+        )
         evidence = str(record["evidence_id"])
         candidates.append(
             api.CropPlan(
@@ -156,7 +169,7 @@ def compare_crops(
                     end_date=sowing.end_date + timedelta(days=maximum_days),
                 ),
                 compatibility={
-                    "suitability": 1,
+                    "suitability": suitability,
                     "water_fit": water_fit,
                     "budget_fit": budget_fit,
                     "duration_fit": duration_fit,

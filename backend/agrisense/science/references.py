@@ -84,6 +84,16 @@ def _load() -> tuple[dict, tuple[api.EvidenceRecord, ...]]:
             if record.id in evidence:
                 raise ValueError(f"duplicate evidence id {record.id} in {name}")
             evidence[record.id] = record
+        # Ranking weights sit beside the records as an ordinary parameter entry,
+        # so the planner reads them the same way it reads everything else and an
+        # agronomist can retune the emphasis without a code change.
+        weights = loaded.get("ranking_weights")
+        if isinstance(weights, dict):
+            if "ranking_weights" in parameters:
+                raise ValueError(f"duplicate ranking_weights in {name}")
+            parameters["ranking_weights"] = {
+                key: value for key, value in weights.items() if isinstance(value, (int, float))
+            }
         for key, record_body in (loaded.get("parameters") or {}).items():
             if key in parameters:
                 raise ValueError(f"duplicate parameter key {key} in {name}")

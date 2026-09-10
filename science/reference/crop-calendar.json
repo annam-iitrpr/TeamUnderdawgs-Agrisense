@@ -57,7 +57,9 @@
       "seasonal_irrigation_high_mm": 650,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 1.0,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:rice": {
       "reviewed": true,
@@ -87,7 +89,9 @@
       "seasonal_irrigation_high_mm": 700,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.95,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:maize": {
       "reviewed": true,
@@ -117,7 +121,9 @@
       "seasonal_irrigation_high_mm": 800,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.9,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:potato": {
       "reviewed": true,
@@ -147,7 +153,9 @@
       "seasonal_irrigation_high_mm": 700,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.82,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:sugarcane": {
       "reviewed": true,
@@ -177,7 +185,9 @@
       "seasonal_irrigation_high_mm": 2500,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.78,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:barley": {
       "reviewed": true,
@@ -207,7 +217,9 @@
       "seasonal_irrigation_high_mm": 650,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.55,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:field_pea": {
       "reviewed": true,
@@ -237,7 +249,9 @@
       "seasonal_irrigation_high_mm": 500,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.52,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:lentil": {
       "reviewed": true,
@@ -267,7 +281,9 @@
       "seasonal_irrigation_high_mm": 500,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.58,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:sorghum": {
       "reviewed": true,
@@ -297,7 +313,9 @@
       "seasonal_irrigation_high_mm": 650,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.44,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:bajra": {
       "reviewed": true,
@@ -327,7 +345,9 @@
       "seasonal_irrigation_high_mm": 650,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.38,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:groundnut": {
       "reviewed": true,
@@ -357,7 +377,9 @@
       "seasonal_irrigation_high_mm": 700,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.4,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:onion": {
       "reviewed": true,
@@ -387,7 +409,9 @@
       "seasonal_irrigation_high_mm": 550,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.46,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:tomato": {
       "reviewed": true,
@@ -417,7 +441,9 @@
       "seasonal_irrigation_high_mm": 800,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.45,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:moong": {
       "reviewed": true,
@@ -447,7 +473,9 @@
       "seasonal_irrigation_high_mm": 500,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.5,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     },
     "planning:cotton": {
       "reviewed": true,
@@ -477,7 +505,16 @@
       "seasonal_irrigation_high_mm": 1300,
       "seasonal_irrigation_source": "fao:iwm3_tables_4_and_5:table_5",
       "planned_cost_inr_ha": 0,
-      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable"
+      "planned_cost_missing_reason": "current_cost_of_cultivation_series_unavailable",
+      "regional_suitability": 0.3,
+      "regional_suitability_basis": "share of Punjab cropped area, and whether PAU names the sub-montane zone in its recommendation; a ranking weight, not an efficacy claim"
     }
+  },
+  "ranking_weights": {
+    "suitability": 0.45,
+    "water_fit": 0.2,
+    "budget_fit": 0.2,
+    "duration_fit": 0.15,
+    "note": "ranking weights only; not validated probabilities and not an efficacy claim"
   }
 }
