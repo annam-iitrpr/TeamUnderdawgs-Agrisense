@@ -1,0 +1,144 @@
+{
+  "version": "fao56-water-v1",
+  "generated_note": "Values transcribed from retrieved FAO publications. See PARAMETERS.md for what is sourced, what is assumed, and what is still missing.",
+  "evidence": [
+    {
+      "id": "fao56-table12-kc",
+      "kind": "published_reference_table",
+      "title": "FAO Irrigation and Drainage Paper 56, Table 12: single crop coefficients Kc",
+      "source": "https://www.fao.org/4/x0490e/x0490e0b.htm",
+      "limitations": [
+        "retrieved 2026-09-10; transcribed, not independently re-derived",
+        "Kc_mid is used as the whole-season coefficient; a single seasonal Kc cannot represent the initial and late stages",
+        "where the table prints a range, the midpoint is used and both bounds are recorded alongside it",
+        "the lower bound applies to sub-humid, low-wind conditions and the upper to arid, windy ones; the midpoint is not tuned to any district",
+        "not an agronomist review for any Indian district"
+      ]
+    },
+    {
+      "id": "fao56-table22-rootzone",
+      "kind": "published_reference_table",
+      "title": "FAO Irrigation and Drainage Paper 56, Table 22: maximum rooting depth and soil water depletion fraction p",
+      "source": "https://www.fao.org/4/x0490e/x0490e0e.htm",
+      "limitations": [
+        "retrieved 2026-09-10; transcribed, not independently re-derived",
+        "rooting depth is the midpoint of the printed range; actual depth is limited by hardpan, water table and tillage depth, none of which is known per field",
+        "p is the no-stress depletion fraction for a standard crop under standard management",
+        "rice p=0.20 describes a saturated root zone; it is not a model of flooded-paddy or alternate-wetting-and-drying management"
+      ]
+    },
+    {
+      "id": "fao-iwm1-available-water",
+      "kind": "published_reference_table",
+      "title": "FAO Irrigation Water Management Training Manual 1, section 2.4: available water content by soil type",
+      "source": "https://www.fao.org/4/r4082e/r4082e03.htm",
+      "limitations": [
+        "retrieved 2026-09-10; the manual publishes available water content only (sand 25-100, loam 100-175, clay 175-250 mm/m)",
+        "a medium-textured loam is assumed for every field, because no per-field texture is collected anywhere in the product",
+        "field_capacity and wilting_point below are a texture-typical split whose DIFFERENCE equals the published loam midpoint of 137.5 mm/m; only that difference is sourced",
+        "total available water, which drives the soil water balance, depends only on the difference and is therefore sourced; the absolute field_capacity value is not, and it is used only on the rarer path where a same-day volumetric soil moisture reading exists",
+        "a confirmed soil observation for the field should supersede these values once soil texture is captured"
+      ]
+    }
+  ],
+  "parameters": {
+    "water:cotton": {
+      "reviewed": true,
+      "evidence_id": "fao56-table12-kc",
+      "evidence_id_root_zone": "fao56-table22-rootzone",
+      "evidence_id_soil_water": "fao-iwm1-available-water",
+      "valid_from": "2026-01-01",
+      "valid_until": "2036-12-31",
+      "kc": 1.175,
+      "kc_source": "FAO-56 Table 12 Kc_mid 1.15-1.20, midpoint",
+      "kc_mid_low": 1.15,
+      "kc_mid_high": 1.2,
+      "root_depth_m": 1.35,
+      "root_depth_source": "FAO-56 Table 22 Zr 1.0-1.7 m, midpoint",
+      "depletion_fraction": 0.65,
+      "field_capacity": 0.29,
+      "wilting_point": 0.1525,
+      "available_water_mm_per_m": 137.5,
+      "soil_texture_assumed": "medium_loam",
+      "efficiency": 1.0,
+      "efficiency_meaning": "net irrigation requirement; no conveyance or application loss is assumed because irrigation efficiency is not known per field"
+    },
+    "water:maize": {
+      "reviewed": true,
+      "evidence_id": "fao56-table12-kc",
+      "evidence_id_root_zone": "fao56-table22-rootzone",
+      "evidence_id_soil_water": "fao-iwm1-available-water",
+      "valid_from": "2026-01-01",
+      "valid_until": "2036-12-31",
+      "kc": 1.2,
+      "kc_source": "FAO-56 Table 12 Kc_mid 1.20, field (grain) maize",
+      "root_depth_m": 1.35,
+      "root_depth_source": "FAO-56 Table 22 Zr 1.0-1.7 m, midpoint",
+      "depletion_fraction": 0.55,
+      "field_capacity": 0.29,
+      "wilting_point": 0.1525,
+      "available_water_mm_per_m": 137.5,
+      "soil_texture_assumed": "medium_loam",
+      "efficiency": 1.0,
+      "efficiency_meaning": "net irrigation requirement; no conveyance or application loss is assumed because irrigation efficiency is not known per field"
+    },
+    "water:rice": {
+      "reviewed": true,
+      "evidence_id": "fao56-table12-kc",
+      "evidence_id_root_zone": "fao56-table22-rootzone",
+      "evidence_id_soil_water": "fao-iwm1-available-water",
+      "valid_from": "2026-01-01",
+      "valid_until": "2036-12-31",
+      "kc": 1.2,
+      "kc_source": "FAO-56 Table 12 Kc_mid 1.20, paddy rice",
+      "root_depth_m": 0.75,
+      "root_depth_source": "FAO-56 Table 22 Zr 0.5-1.0 m, midpoint",
+      "depletion_fraction": 0.2,
+      "field_capacity": 0.29,
+      "wilting_point": 0.1525,
+      "available_water_mm_per_m": 137.5,
+      "soil_texture_assumed": "medium_loam",
+      "efficiency": 1.0,
+      "efficiency_meaning": "net irrigation requirement; no conveyance or application loss is assumed because irrigation efficiency is not known per field",
+      "not_a_paddy_model": "this is an upland soil water balance; standing-water depth, percolation and puddling losses are not represented, so a flooded-paddy total will be understated"
+    },
+    "water:soybean": {
+      "reviewed": true,
+      "evidence_id": "fao56-table12-kc",
+      "evidence_id_root_zone": "fao56-table22-rootzone",
+      "evidence_id_soil_water": "fao-iwm1-available-water",
+      "valid_from": "2026-01-01",
+      "valid_until": "2036-12-31",
+      "kc": 1.15,
+      "kc_source": "FAO-56 Table 12 Kc_mid 1.15",
+      "root_depth_m": 0.95,
+      "root_depth_source": "FAO-56 Table 22 Zr 0.6-1.3 m, midpoint",
+      "depletion_fraction": 0.5,
+      "field_capacity": 0.29,
+      "wilting_point": 0.1525,
+      "available_water_mm_per_m": 137.5,
+      "soil_texture_assumed": "medium_loam",
+      "efficiency": 1.0,
+      "efficiency_meaning": "net irrigation requirement; no conveyance or application loss is assumed because irrigation efficiency is not known per field"
+    },
+    "water:wheat": {
+      "reviewed": true,
+      "evidence_id": "fao56-table12-kc",
+      "evidence_id_root_zone": "fao56-table22-rootzone",
+      "evidence_id_soil_water": "fao-iwm1-available-water",
+      "valid_from": "2026-01-01",
+      "valid_until": "2036-12-31",
+      "kc": 1.15,
+      "kc_source": "FAO-56 Table 12 Kc_mid 1.15, winter wheat",
+      "root_depth_m": 1.65,
+      "root_depth_source": "FAO-56 Table 22 Zr 1.5-1.8 m, winter wheat, midpoint",
+      "depletion_fraction": 0.55,
+      "field_capacity": 0.29,
+      "wilting_point": 0.1525,
+      "available_water_mm_per_m": 137.5,
+      "soil_texture_assumed": "medium_loam",
+      "efficiency": 1.0,
+      "efficiency_meaning": "net irrigation requirement; no conveyance or application loss is assumed because irrigation efficiency is not known per field"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "version": "unreviewed-empty-v1",
+  "note": "Intentionally empty. See PARAMETERS.md. Populating this with anything other than a reviewed, citable regional calendar would make AgriSense rank crops on a guess, which every other part of the system is built to refuse.",
+  "required_record_shape": {
+    "key": "planning:<crop_id>",
+    "reviewed": "must be true",
+    "evidence_id": "must match an id in this file's evidence list",
+    "valid_from": "ISO date",
+    "valid_until": "ISO date",
+    "latitude_min": "number, -90..90, the region this calendar is valid for",
+    "latitude_max": "number, -90..90",
+    "longitude_min": "number, -180..180",
+    "longitude_max": "number, -180..180",
+    "sowing_start_month_day": "MM-DD, start of the local sowing window",
+    "sowing_end_month_day": "MM-DD, end of the local sowing window",
+    "duration_min_days": "integer, 1..730",
+    "duration_max_days": "integer, >= duration_min_days, <= 730",
+    "minimum_climate_days": "integer, >= 30, complete historical days required before ranking",
+    "ph_min": "number, 0..14",
+    "ph_max": "number, 0..14",
+    "seasonal_irrigation_mm": "number, >= 0, reviewed regional seasonal irrigation requirement",
+    "planned_cost_inr_ha": "number, >= 0, reviewed regional cost of cultivation"
+  },
+  "evidence": [],
+  "parameters": {}
+}

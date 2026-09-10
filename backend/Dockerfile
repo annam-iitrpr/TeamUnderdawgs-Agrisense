@@ -9,6 +9,12 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/agrisense ./agrisense
 COPY backend/migrations ./migrations
 COPY backend/alembic.ini ./alembic.ini
+# Reviewed science reference records. These must ship with the image: without
+# them every reviewed-parameter lookup fails and the API reports water and crop
+# figures as unavailable — correct behaviour for missing data, and badly wrong
+# as the result of a packaging omission. `test_reference_files_are_discoverable`
+# fails if this copy is dropped.
+COPY science/reference ./science/reference
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim
