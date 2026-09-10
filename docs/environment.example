@@ -1,0 +1,86 @@
+# AgriSense shared environment template
+#
+# Canonical local values live in ~/Work/agrisense.env and must never be
+# committed or pasted into team chat. Copy this file to a private env file and
+# fill values through the team's password manager or Secret Manager.
+
+# Runtime selection
+APP_ENV=development
+AGRISENSE_DATA_MODE=live
+AGRISENSE_ENV_FILE=/absolute/path/to/agrisense.env
+AGRISENSE_REFERENCE_DIR=
+
+# Public web/API configuration
+PUBLIC_API_BASE_URL=https://agrisense-api-788265611154.asia-south1.run.app
+PUBLIC_WEB_BASE_URL=https://agrisense.spacesdrive.cc
+CLOUD_RUN_API_URL=https://agrisense-api-788265611154.asia-south1.run.app
+CLOUD_RUN_WEB_URL=https://agrisense.spacesdrive.cc
+CORS_ALLOWED_ORIGINS=https://agrisense.spacesdrive.cc,http://localhost:3000,http://127.0.0.1:3000
+
+# GCP / Cloud Run
+GCP_PROJECT_ID=iitm02
+GCP_REGION=asia-south1
+API_SERVICE_ACCOUNT=
+CLOUD_BUILD_SERVICE_ACCOUNT=
+GCS_MEDIA_BUCKET=agrisense-media-iitm02
+SIGNING_SERVICE_ACCOUNT=
+VISION_LOCATION=asia-south1
+VISION_ENDPOINT_URL=
+VERTEX_VISION_ENDPOINT=
+
+# Cloud SQL
+CLOUDSQL_INSTANCE_CONNECTION_NAME=iitm02:asia-south1:agrisense-db
+CLOUDSQL_DB_NAME=agrisense
+CLOUDSQL_APP_USER=
+CLOUDSQL_APP_PASSWORD=
+DATABASE_URL=
+
+# Firebase browser configuration (public client values)
+FIREBASE_API_KEY=
+FIREBASE_AUTH_DOMAIN=iitm02.firebaseapp.com
+FIREBASE_PROJECT_ID=iitm02
+FIREBASE_STORAGE_BUCKET=
+FIREBASE_MESSAGING_SENDER_ID=
+FIREBASE_APP_ID=
+FIREBASE_MEASUREMENT_ID=
+
+# Frontend build names
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=iitm02.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=iitm02
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL=
+NEXT_PUBLIC_API_BASE_URL=https://agrisense-api-788265611154.asia-south1.run.app
+
+# Scientific providers
+CEHUB_BASE_URL=https://services.cehub.syngenta-ais.com
+CEHUB_API_KEY=
+CEHUB_API_KEY_HEADER=ApiKey
+CEHUB_BEARER_TOKEN=
+METEOBLUE_BASE_URL=https://my.meteoblue.com
+METEOBLUE_API_KEY=
+OPENMETEO_PERMITTED_FREE_USE=true
+DATA_GOV_IN_API_KEY=
+
+# AI / media
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.8-flash
+MEDIA_SIGNING_SECRET=
+
+# WhatsApp Cloud API and identity linking
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=1221254671082324
+WHATSAPP_BUSINESS_ACCOUNT_ID=2539740886498303
+WHATSAPP_BUSINESS_API_TOKEN=
+WHATSAPP_BUSINESS_PHONE_ID=
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=
+META_APP_ID=1625765012462159
+META_APP_SECRET=
+WHATSAPP_SEND_MODE=outbox
+
+# Temporary stub only; remove when the real WhatsApp adapter is live.
+GROQ_API_KEY=
+GROQ_MODEL=openai/gpt-oss-120b
+GROQ_VISION_MODEL=qwen/qwen3.8-27b
