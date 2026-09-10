@@ -199,7 +199,14 @@ def evaluate_season(
         else 2
     )
     onsets = _onsets(curve, threshold, persistence)
-    reasons = [api.Reason(code="rule_parameters_require_field_validation")]
+    # A note about the rules, not a reason to withhold an answer. This was listed
+    # among the farmer's reasons, so a screen that had worked out the stress, the
+    # window and the water still led with "the advice rules have not been checked
+    # against real fields yet" -- which reads as "we cannot help you". An
+    # agronomist reviews and corrects what the engine says; a farmer standing in a
+    # field at six in the morning is not the person who should be waiting on that.
+    # It travels on the bundle's warnings instead, where an agronomist sees it.
+    reasons: list[api.Reason] = []
     status, readiness, need, timing_fit, viability = "insufficient_data", None, None, None, None
     selected, alternatives, fit = None, [], None
     product = None
@@ -394,10 +401,18 @@ def evaluate_season(
             references,
             now,
             has_actual_ledger=bool(snapshot.cost_ledger),
+            actual_cost_inr=sum(
+                float(line.amount) for line in snapshot.cost_ledger if line.kind == "cost"
+            )
+            or None,
         ),
         proposed_tasks=tasks,
         data_mode="demo" if forecast.data_mode == "demo" else "mixed" if curve else "unavailable",
-        warnings=["scenario_not_field_validated", "v1_safety_and_economics_extensions_pending"],
+        warnings=[
+            "scenario_not_field_validated",
+            "rule_parameters_require_field_validation",
+            "v1_safety_and_economics_extensions_pending",
+        ],
     )
 
 

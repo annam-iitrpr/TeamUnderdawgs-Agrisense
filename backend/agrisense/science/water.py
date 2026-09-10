@@ -5,6 +5,14 @@ from math import log
 
 from .units import clip, finite, irrigation_litres
 
+#: Daily percolation loss assumed under shallow ponding on puddled sandy loam,
+#: in mm. A project assumption, not a measurement for any particular field: PAU
+#: recommends maintaining shallow standing water on puddled rice in Punjab, and
+#: percolation on those soils runs a few millimetres a day. Every paddy answer
+#: carries `ponded_water_assumption_shallow_flooding` so this is never mistaken
+#: for something observed in the field.
+PADDY_PERCOLATION_MM_DAY = 6.0
+
 
 @dataclass(frozen=True)
 class RootZone:
@@ -63,7 +71,35 @@ def root_zone_day(
     if runoff_mm > rain_mm or target_depletion_mm > zone.taw:
         raise ValueError("inconsistent runoff or target depletion")
     demand = kc * et0_mm
-    if flooded_paddy or depletion_mm is None:
+    if flooded_paddy:
+        # A puddled, continuously ponded field has no root-zone depletion to
+        # track: the water sits above the soil, and what leaves it each day is
+        # evapotranspiration plus percolation through the puddled layer. Treating
+        # it as a depletion balance is not conservative, it is undefined, which
+        # is why this used to answer nothing at all -- and rice is the crop most
+        # of this region actually grows, so "nothing" was the answer for most
+        # farmers asking about most of their water.
+        #
+        # Percolation is the standing assumption here and is stated as one: PAU
+        # recommends maintaining shallow ponding on puddled sandy loam, where
+        # percolation runs a few millimetres a day. It is not measured for this
+        # field and does not pretend to be.
+        outflow = demand + PADDY_PERCOLATION_MM_DAY
+        net = max(0.0, outflow - (rain_mm - runoff_mm) - irrigation_net_mm)
+        gross = net / zone.efficiency
+        return {
+            "etc_mm": demand,
+            # No depletion and no stress coefficient: a ponded field is not
+            # short of water, so reporting either would be inventing a number.
+            "depletion_mm": None,
+            "ks": None,
+            "net_irrigation_mm": net,
+            "gross_irrigation_mm": gross,
+            "litres": gross * area_ha * 10_000,
+            "irrigation_triggered": net > 0,
+            "reason": "ponded_water_assumption_shallow_flooding",
+        }
+    if depletion_mm is None:
         return {
             "etc_mm": demand,
             "depletion_mm": None,
@@ -71,7 +107,7 @@ def root_zone_day(
             "net_irrigation_mm": None,
             "gross_irrigation_mm": None,
             "litres": None,
-            "reason": "paddy_management_required" if flooded_paddy else "initial_storage_unknown",
+            "reason": "initial_storage_unknown",
         }
     finite(depletion_mm, "initial depletion", 0, zone.taw)
     depletion = clip(

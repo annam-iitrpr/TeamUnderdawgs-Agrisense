@@ -65,15 +65,34 @@ class WaterTests(unittest.TestCase):
         self.assertAlmostEqual(result["depletion_mm"], 55)
         self.assertAlmostEqual(result["ks"], 0.9)
         self.assertAlmostEqual(result["gross_irrigation_mm"], 68.75)
-        for paddy, reason in (
-            (False, "initial_storage_unknown"),
-            (True, "paddy_management_required"),
-        ):
-            result = root_zone_day(
-                zone, depletion_mm=None, et0_mm=5, kc=1, rain_mm=0, area_ha=1, flooded_paddy=paddy
-            )
-            self.assertIsNone(result["litres"])
-            self.assertEqual(result["reason"], reason)
+        # Without a starting soil moisture there is no depletion to carry, so a
+        # dryland balance cannot answer and says so.
+        dry = root_zone_day(
+            zone, depletion_mm=None, et0_mm=5, kc=1, rain_mm=0, area_ha=1, flooded_paddy=False
+        )
+        self.assertIsNone(dry["litres"])
+        self.assertEqual(dry["reason"], "initial_storage_unknown")
+
+        # A ponded field is a different balance, not an unanswerable one: what
+        # leaves it is evapotranspiration plus percolation, and it needs no
+        # starting depletion. Answering nothing here meant answering nothing for
+        # rice, which is most of what this region grows.
+        paddy = root_zone_day(
+            zone, depletion_mm=None, et0_mm=5, kc=1, rain_mm=0, area_ha=1, flooded_paddy=True
+        )
+        self.assertEqual(paddy["reason"], "ponded_water_assumption_shallow_flooding")
+        self.assertAlmostEqual(paddy["net_irrigation_mm"], 11.0)
+        self.assertIsNotNone(paddy["litres"])
+        # No depletion and no stress coefficient: a ponded field is not short of
+        # water, and reporting either would be inventing a number.
+        self.assertIsNone(paddy["depletion_mm"])
+        self.assertIsNone(paddy["ks"])
+        # Rain offsets the outflow rather than being ignored.
+        wet = root_zone_day(
+            zone, depletion_mm=None, et0_mm=5, kc=1, rain_mm=20, area_ha=1, flooded_paddy=True
+        )
+        self.assertEqual(wet["net_irrigation_mm"], 0)
+        self.assertFalse(wet["irrigation_triggered"])
 
     def test_et0_independent_fao_example_18(self):
         # FAO-56 example 18, rounded supplied intermediates, expected about 3.9 mm/day.

@@ -17,6 +17,7 @@ def economic_estimates(
     as_of: date,
     *,
     has_actual_ledger: bool = False,
+    actual_cost_inr: float | None = None,
     draws: int = 2000,
     seed: int = 2026,
 ) -> api.Economics:
@@ -30,7 +31,13 @@ def economic_estimates(
         roi=estimate(None, "%", "whole_season_roi", reason),
         price=measurement(None, "INR/kg", "dated_product_form_price_required"),
     )
-    if has_actual_ledger:
+    # A farmer who has started recording is the farmer with the most to lose from
+    # a blank screen, and that is exactly who used to get one: any ledger line at
+    # all suppressed cost, revenue, profit and return together. Their own spend is
+    # better than a scenario cost, so it replaces it, and the rest of the estimate
+    # continues on the reviewed scenarios. What is observed and what is modelled
+    # stay distinguishable in `basis`, which is the part that must not blur.
+    if has_actual_ledger and actual_cost_inr is None:
         missing.roi.missing_reason = "planned_actual_line_reconciliation_contract_required"
         return missing
     config = reviewed_parameters(references, f"economics:{crop_id}", as_of)
@@ -71,7 +78,14 @@ def economic_estimates(
     rng = np.random.default_rng(seed)
     paired = data[rng.integers(0, len(data), draws)]
     revenue = paired[:, 0] * paired[:, 1] * area_ha
-    cost = paired[:, 2] * area_ha
+    # What the farmer actually spent, where they have recorded it. It carries no
+    # spread because it is not an estimate: it is the sum of what they entered.
+    observed_cost = actual_cost_inr is not None
+    cost = (
+        np.full(draws, float(actual_cost_inr))
+        if observed_cost
+        else paired[:, 2] * area_ha
+    )
     profit = revenue - cost
     if (
         not np.isfinite(revenue).all()
@@ -89,14 +103,17 @@ def economic_estimates(
         f"source_samples:{len(samples)}",
     ]
 
-    def distribution(values: np.ndarray, unit: str, target: str) -> api.Estimate:
+    if observed_cost:
+        assumptions = [*assumptions, "cost_is_the_farmers_own_recorded_spend"]
+
+    def distribution(values: np.ndarray, unit: str, target: str, *, basis: str = "scenario") -> api.Estimate:
         low, middle, high = np.quantile(values, [0.1, 0.5, 0.9])
         return api.Estimate(
             p10=float(low),
             p50=float(middle),
             p90=float(high),
             unit=unit,
-            basis="scenario",
+            basis=basis,
             target=target,
             assumptions=assumptions,
             evidence_ids=sorted(evidence_ids),
@@ -109,7 +126,11 @@ def economic_estimates(
         else distribution(100 * profit / cost, "%", "whole_season_roi")
     )
     return api.Economics(
-        cost=distribution(cost, "INR", "whole_season_cost"),
+        # Observed when it is the farmer's own ledger, scenario when it is ours.
+        # Blurring the two would be the one thing this whole module exists to avoid.
+        cost=distribution(
+            cost, "INR", "whole_season_cost", basis="observed" if observed_cost else "scenario"
+        ),
         revenue=distribution(revenue, "INR", "whole_season_revenue"),
         profit=distribution(profit, "INR", "whole_season_profit"),
         roi=roi,
