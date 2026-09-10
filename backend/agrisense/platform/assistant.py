@@ -45,6 +45,14 @@ yield, weather, price or profit, and never state a number that is not present in
 Those judgements belong to a separate validated engine, not to you. If asked for one, say
 that the app calculates it separately and offer to record what the farmer did instead.
 
+`current_evaluation` is that engine's own output for this farmer's open season. Reading a
+figure out of it is reporting, not advising, so you may quote what is there -- the stage,
+whether irrigation is needed, the volume of one watering, the season's return -- and say
+where it came from. Do not extrapolate from it, do not convert a figure into an instruction
+the engine did not give, and if a field is null say it has not been worked out yet. The
+litres are one watering's worth and alternatives across days: never call them a daily total.
+Declining to read out a number the app already shows on screen is unhelpful and wrong.
+
 If `attachment_unreadable` is set, a photo or recording was attached but could not be read.
 Say so in one short sentence and answer what you can from the records; do not guess at what
 it might have contained.
@@ -102,9 +110,39 @@ def grounding(session: Session, tenant_id: str, farmer_id: str, conversation: d.
     tasks = list(session.scalars(select(d.TaskRow).where(
         d.TaskRow.tenant_id == tenant_id, d.TaskRow.season_id.in_(season_ids),
         d.TaskRow.status == 'pending').limit(20))) if season_ids else []
+    # The current evaluation, so a question about water or readiness is answered
+    # from this farmer's own figures instead of declined. Without it the
+    # assistant had fields and a journal but none of the numbers the rest of the
+    # app shows, so "how much water does my maize need" -- a question the app
+    # answers on screen -- came back as "I cannot provide agronomic advice".
+    latest = session.scalar(select(d.RecommendationRow).where(
+        d.RecommendationRow.tenant_id == tenant_id,
+        d.RecommendationRow.season_id.in_(season_ids),
+        d.RecommendationRow.superseded.is_(False))
+        .order_by(d.RecommendationRow.created_at.desc()).limit(1)) if season_ids else None
+    evaluation = None
+    if latest is not None:
+        payload = latest.payload or {}
+        water = payload.get('water') or {}
+        recommendation = payload.get('recommendation') or {}
+        economics = payload.get('economics') or {}
+        evaluation = {
+            'season_id': latest.season_id,
+            'stage': recommendation.get('stage'),
+            'readiness': recommendation.get('readiness'),
+            'status': recommendation.get('status'),
+            'irrigation_needed': water.get('irrigation_needed'),
+            # One watering's worth, not a daily rate: these are alternatives.
+            'one_watering_litres': next(
+                (row.get('value') for row in water.get('daily') or []
+                 if row.get('value') is not None), None),
+            'season_profit_inr_p50': (economics.get('profit') or {}).get('p50'),
+            'season_roi_percent_p50': (economics.get('roi') or {}).get('p50'),
+        }
     return {
         'today': d.utcnow().date().isoformat(),
         'language': scope.get('language', 'en'),
+        'current_evaluation': evaluation,
         'fields': [{'id': r.id, 'name': r.name, 'area_ha': r.area_ha, 'version': r.version} for r in fields],
         'seasons': [{'id': r.id, 'field_id': r.field_id, 'crop_id': r.crop_id, 'status': r.status,
                      'allocated_area_ha': r.allocated_area_ha, 'version': r.version} for r in seasons],
