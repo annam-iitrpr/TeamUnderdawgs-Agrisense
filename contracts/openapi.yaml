@@ -234,6 +234,17 @@
           },
           "season": {
             "$ref": "#/components/schemas/SeasonSnapshot"
+          },
+          "vintage_economics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Economics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [

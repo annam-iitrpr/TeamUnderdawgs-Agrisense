@@ -430,11 +430,55 @@ def summarize_season(snapshot: api.ClosureSnapshot) -> api.SeasonEvaluation:
             missing_reason="zero_cost" if cost <= 0 else None,
         )
     )
+    # Scored against the forecast that was on record while the season ran, when
+    # there was one. Without a vintage forecast there is nothing to be right or
+    # wrong about, and the review says so rather than inventing a baseline out
+    # of what actually happened -- which would score the season against itself.
+    warnings: list[str] = []
+    forecast_margin = None
+    vintage = snapshot.vintage_economics
+    if vintage is not None and vintage.profit is not None:
+        forecast_margin = vintage.profit.p50
+    if forecast_margin is None:
+        warnings.append("vintage_economics_forecasts_missing_no_error_claim")
+    else:
+        metrics.append(
+            api.ErrorMetric(
+                name="forecast_margin",
+                value=float(forecast_margin),
+                unit="INR",
+                denominator_policy="none",
+            )
+        )
+        metrics.append(
+            api.ErrorMetric(
+                name="margin_error",
+                value=margin - float(forecast_margin),
+                unit="INR",
+                denominator_policy="none",
+            )
+        )
+        metrics.append(
+            api.ErrorMetric(
+                name="margin_error_percent",
+                # Against the forecast, which is the quantity being judged. A
+                # zero forecast has no percentage error to state, so it is null
+                # with the reason rather than a division that would blow up.
+                value=(
+                    None
+                    if forecast_margin == 0
+                    else 100 * (margin - float(forecast_margin)) / abs(float(forecast_margin))
+                ),
+                unit="%",
+                denominator_policy="against_forecast_margin",
+                missing_reason="zero_forecast_margin" if forecast_margin == 0 else None,
+            )
+        )
     return api.SeasonEvaluation(
         season_id=closure.season_id,
         closure=closure,
         metrics=metrics,
-        warnings=["vintage_economics_forecasts_missing_no_error_claim"],
+        warnings=warnings,
     )
 
 

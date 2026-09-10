@@ -172,11 +172,16 @@ function MetricRow({ metric }: { metric: ErrorMetric }) {
     <li className="flex items-baseline justify-between gap-3 py-2.5">
       <span className="min-w-0">
         <span className="text-sm text-ink">{explainCode(metric.name)}</span>
-        {/* Never omitted: two metrics with different denominator policies are
-            not comparable, and the reader cannot tell without being told. */}
-        <span className="block text-xs text-slate">
-          counted over {metric.denominator_policy.replace(/_/g, " ")}
-        </span>
+        {/* A denominator is stated whenever there is one, because two metrics
+            measured over different bases are not comparable and the reader
+            cannot tell without being told. "none" is not a denominator though,
+            and printing "counted over none" was internal vocabulary reaching a
+            farmer as if it meant something. */}
+        {metric.denominator_policy && metric.denominator_policy !== "none" ? (
+          <span className="block text-xs text-slate">
+            {explainCode(metric.denominator_policy)}
+          </span>
+        ) : null}
       </span>
       <span className="shrink-0 text-right">
         {metric.value != null ? (

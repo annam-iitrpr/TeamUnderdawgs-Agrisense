@@ -114,24 +114,35 @@ def summarise(session: Session, tenant_id: str, season_id: str,
     rejects a foreign one outright, and it is right to.
     """
     snapshot = build_season_snapshot(session, tenant_id, season_id, closure.confirmed_at, settings)
-    rows = session.scalars(
+    stored = list(session.scalars(
         select(d.RecommendationRow).where(
             d.RecommendationRow.season_id == season_id,
             d.RecommendationRow.tenant_id == tenant_id,
         )
-    )
+    ))
     # `RecommendationRow.payload` holds the whole EvaluationBundle, not a bare
     # Recommendation: the row keeps the water and economics estimates that were
     # issued alongside the advice. Only the recommendation itself belongs in a
     # ClosureSnapshot, and passing the bundle raised twenty-one validation
     # errors — invisible in tests because the fixture season has no evaluation.
     recommendations = [
-        row.payload['recommendation'] for row in rows if 'recommendation' in row.payload
+        row.payload['recommendation'] for row in stored if 'recommendation' in row.payload
     ]
+    # The economics issued alongside the advice, taken from the same stored
+    # bundle. This is what the outcome is scored against; a `Recommendation`
+    # alone carries no money forecast, so without it the review could only
+    # restate the actuals.
+    vintage_economics = None
+    for row in sorted(stored, key=lambda row: row.created_at):
+        economics = (row.payload or {}).get('economics')
+        if economics and (economics.get('profit') or {}).get('p50') is not None:
+            vintage_economics = economics
+            break
     draft = c.ClosureSnapshot.model_validate({
         'season': snapshot.model_dump(mode='json'),
         'closure': closure.model_dump(mode='json'),
         'recommendations': recommendations,
+        'vintage_economics': vintage_economics,
     })
     summarize = facade('summarize_season')
     return summarize(draft)

@@ -7,7 +7,7 @@ export interface components { schemas: {
   "ChannelLinkChallenge": { "challenge_id": string; "code": string; "expires_at": string; "instructions": string; };
   "ChannelLinkRequest": { "consent_version": string; };
   "ClimateBundle": { "location": components["schemas"]["Location"]; "period": components["schemas"]["DateInterval"]; "daily"?: Array<components["schemas"]["ForecastDay"]>; "provenance": Array<components["schemas"]["Provenance"]>; "data_mode": "live" | "estimated" | "demo" | "mixed" | "unavailable"; "warnings"?: Array<string>; };
-  "ClosureSnapshot": { "schema_version"?: "1.0"; "season": components["schemas"]["SeasonSnapshot"]; "closure": components["schemas"]["SeasonClosure"]; "recommendations"?: Array<components["schemas"]["Recommendation"]>; };
+  "ClosureSnapshot": { "schema_version"?: "1.0"; "season": components["schemas"]["SeasonSnapshot"]; "closure": components["schemas"]["SeasonClosure"]; "recommendations"?: Array<components["schemas"]["Recommendation"]>; "vintage_economics"?: (components["schemas"]["Economics"]) | (null); };
   "Consent": { "purpose": "terms" | "privacy" | "whatsapp" | "push" | "analytics" | "training"; "version": string; "granted": boolean; "recorded_at": string; };
   "Conversation": { "field_id"?: (string) | (null); "season_id"?: (string) | (null); "language"?: "en" | "hi" | "mr" | "pa" | "te"; "id": string; "created_at": string; "version": number; };
   "ConversationCreate": { "field_id"?: (string) | (null); "season_id"?: (string) | (null); "language"?: "en" | "hi" | "mr" | "pa" | "te"; };

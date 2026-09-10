@@ -55,6 +55,15 @@ const PHRASES: Record<string, string> = {
   vintage_economics_forecasts_missing_no_error_claim:
     "the money forecasts issued at the time were not kept, so no accuracy claim is made",
 
+  // Closure review metrics and their bases.
+  actual_margin: "What you actually made",
+  actual_roi: "Return on what you actually spent",
+  forecast_margin: "What AgriSense forecast you would make",
+  margin_error: "Difference between forecast and actual",
+  margin_error_percent: "Difference, as a share of the forecast",
+  against_forecast_margin: "measured against the forecast",
+  zero_forecast_margin: "the forecast was zero, so there is no share to state",
+
   // Providers.
   provider_value_invalid: "the weather service returned a value that cannot be true",
   no_forecast_provider_available: "no weather service could be reached",

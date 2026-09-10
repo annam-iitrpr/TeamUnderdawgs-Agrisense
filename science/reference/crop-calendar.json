@@ -673,8 +673,8 @@
       "product_form": "fresh_tuber",
       "cost_basis": "cash",
       "yield_kg_ha": 20000,
-      "price_inr_kg": 8.0,
-      "cost_inr_ha": 138000
+      "price_inr_kg": 9.0,
+      "cost_inr_ha": 165500
     },
     "scenario:potato:mid": {
       "reviewed": true,
@@ -684,7 +684,7 @@
       "product_form": "fresh_tuber",
       "cost_basis": "cash",
       "yield_kg_ha": 25000,
-      "price_inr_kg": 12.0,
+      "price_inr_kg": 10.5,
       "cost_inr_ha": 165500
     },
     "scenario:potato:high": {
@@ -695,8 +695,8 @@
       "product_form": "fresh_tuber",
       "cost_basis": "cash",
       "yield_kg_ha": 31000,
-      "price_inr_kg": 19.0,
-      "cost_inr_ha": 200000
+      "price_inr_kg": 15.0,
+      "cost_inr_ha": 165500
     },
     "economics:sugarcane": {
       "reviewed": true,
@@ -1024,9 +1024,9 @@
       "valid_until": "2027-12-31",
       "product_form": "cured_bulb",
       "cost_basis": "cash",
-      "yield_kg_ha": 20000,
-      "price_inr_kg": 8.5,
-      "cost_inr_ha": 127000
+      "yield_kg_ha": 22000,
+      "price_inr_kg": 8.0,
+      "cost_inr_ha": 152000
     },
     "scenario:onion:mid": {
       "reviewed": true,
@@ -1036,7 +1036,7 @@
       "product_form": "cured_bulb",
       "cost_basis": "cash",
       "yield_kg_ha": 25000,
-      "price_inr_kg": 15.0,
+      "price_inr_kg": 10.0,
       "cost_inr_ha": 152000
     },
     "scenario:onion:high": {
@@ -1046,9 +1046,9 @@
       "valid_until": "2027-12-31",
       "product_form": "cured_bulb",
       "cost_basis": "cash",
-      "yield_kg_ha": 31000,
-      "price_inr_kg": 26.0,
-      "cost_inr_ha": 179500
+      "yield_kg_ha": 29000,
+      "price_inr_kg": 15.0,
+      "cost_inr_ha": 152000
     },
     "economics:tomato": {
       "reviewed": true,
@@ -1068,9 +1068,9 @@
       "valid_until": "2027-12-31",
       "product_form": "fresh_fruit",
       "cost_basis": "cash",
-      "yield_kg_ha": 24000,
-      "price_inr_kg": 6.0,
-      "cost_inr_ha": 138000
+      "yield_kg_ha": 26000,
+      "price_inr_kg": 7.5,
+      "cost_inr_ha": 165500
     },
     "scenario:tomato:mid": {
       "reviewed": true,
@@ -1080,7 +1080,7 @@
       "product_form": "fresh_fruit",
       "cost_basis": "cash",
       "yield_kg_ha": 30000,
-      "price_inr_kg": 15.0,
+      "price_inr_kg": 9.0,
       "cost_inr_ha": 165500
     },
     "scenario:tomato:high": {
@@ -1090,9 +1090,9 @@
       "valid_until": "2027-12-31",
       "product_form": "fresh_fruit",
       "cost_basis": "cash",
-      "yield_kg_ha": 38000,
-      "price_inr_kg": 31.0,
-      "cost_inr_ha": 200000
+      "yield_kg_ha": 35000,
+      "price_inr_kg": 14.0,
+      "cost_inr_ha": 165500
     },
     "economics:moong": {
       "reviewed": true,

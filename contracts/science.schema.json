@@ -75,6 +75,17 @@
         },
         "season": {
           "$ref": "#/$defs/SeasonSnapshot"
+        },
+        "vintage_economics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Economics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [

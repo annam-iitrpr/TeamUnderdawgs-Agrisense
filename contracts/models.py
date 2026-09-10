@@ -880,6 +880,11 @@ class ClosureSnapshot(ContractModel):
     season: SeasonSnapshot
     closure: SeasonClosure
     recommendations: list[Recommendation] = []
+    #: The money forecast that was on record while the season ran, if one was.
+    #: A `Recommendation` carries the advice and not the economics issued beside
+    #: it, so without this there was nothing to score the outcome against and
+    #: the review could only report the actuals and say so.
+    vintage_economics: Economics | None = None
 
 
 class DomainEvent(ContractModel):
