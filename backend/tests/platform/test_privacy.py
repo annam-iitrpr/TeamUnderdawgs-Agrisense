@@ -130,3 +130,55 @@ async def test_the_erasure_removes_its_own_job_record_along_with_the_account(har
         # A surviving row here would have failed the foreign key on commit.
         assert session.scalars(select(d.JobRow)).all() == []
         assert session.scalars(select(d.FarmerRow)).all() == []
+
+
+async def test_a_phone_only_account_can_export_and_delete(harness, asha):
+    """Export and deletion are data rights, not features.
+
+    Phone accounts carry no email at all, so gating these on a verified *email*
+    would lock a farmer who signed in by SMS out of their own records. An SMS
+    sign-in only completes after the account has received a code at that number,
+    so possession is already proved.
+    """
+    from agrisense.platform.auth import Identity
+
+    asha.get('/me')
+    # What the verifier produces for a phone sign-in: verified, but with no
+    # email anywhere in the token.
+    harness.app.state.verifier.identities['token-asha'] = Identity('uid-asha', True, 'Asha')
+
+    exported = asha.post('/me/export', None)
+    assert exported.status_code == 202, exported.text
+    assert exported.json()['data']['kind'] == 'privacy.export'
+
+    deleted = asha.delete('/me')
+    assert deleted.status_code == 202, deleted.text
+    assert deleted.json()['data']['kind'] == 'privacy.delete'
+
+
+def test_a_phone_claim_alone_verifies_an_identity_but_an_empty_one_does_not(monkeypatch):
+    """The claim mapping, which is where the phone/email equivalence is decided.
+
+    A phone sign-in sets `phone_number` and leaves `email_verified` false. An
+    empty string is not proof of anything and must not pass.
+    """
+    from agrisense.config import Settings
+    from agrisense.platform import auth as module
+
+    verifier = module.FirebaseVerifier(Settings(app_env='test', database_url='sqlite://',
+                                                firebase_project_id='demo-agrisense'))
+
+    def claims_for(payload):
+        monkeypatch.setattr(module.auth, 'verify_id_token', lambda *a, **k: payload)
+        monkeypatch.setattr(module.firebase_admin, 'get_app', lambda name=None: object())
+        return verifier.verify('token')
+
+    # Phone only: no email claim at all, yet the number was proved by SMS.
+    assert claims_for({'sub': 'u1', 'phone_number': '+919620577459'}).identity_verified is True
+    # Email only, the historical path.
+    assert claims_for({'sub': 'u1', 'email_verified': True}).identity_verified is True
+    # Neither.
+    assert claims_for({'sub': 'u1'}).identity_verified is False
+    assert claims_for({'sub': 'u1', 'email_verified': False}).identity_verified is False
+    # An empty number is not a number.
+    assert claims_for({'sub': 'u1', 'phone_number': ''}).identity_verified is False

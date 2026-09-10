@@ -17,8 +17,10 @@
 import { setTokenProvider } from "@/lib/api/client";
 import { authErrorKey, configState, firebaseAuth, type AuthErrorKey } from "@/lib/firebase";
 import {
+  createUserWithEmailAndPassword,
   onIdTokenChanged,
   RecaptchaVerifier,
+  signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut as firebaseSignOut,
   type ConfirmationResult,
@@ -45,6 +47,14 @@ export type AuthContextValue = {
   usingEmulator: boolean;
   requestPhoneOtp: (phone: string) => Promise<void>;
   verifyPhoneOtp: (code: string) => Promise<void>;
+  /** Email and password, kept alongside the phone flow.
+   *
+   *  Not every account has a phone: staff, agronomists and any account created
+   *  before phone sign-in existed sign in this way, and removing it locked them
+   *  out entirely. Firebase has no numeric email OTP — only a clickable link —
+   *  so email keeps a password rather than pretending to offer a code. */
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -170,6 +180,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const signIn = useCallback(async (email: string, password: string) => {
+    const auth = firebaseAuth();
+    if (!auth) throw new AuthError("errorTitle");
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error) {
+      throw wrap(error);
+    }
+  }, []);
+
+  const signUp = useCallback(async (email: string, password: string) => {
+    const auth = firebaseAuth();
+    if (!auth) throw new AuthError("errorTitle");
+    try {
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error) {
+      throw wrap(error);
+    }
+  }, []);
+
   const verifyPhoneOtp = useCallback(async (code: string) => {
     const auth = firebaseAuth();
     if (!auth || !confirmation) throw new AuthError("authCodeExpired");
@@ -200,6 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       usingEmulator,
       requestPhoneOtp,
       verifyPhoneOtp,
+      signIn,
+      signUp,
       signOut,
     }),
     [
@@ -209,6 +241,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       usingEmulator,
       requestPhoneOtp,
       verifyPhoneOtp,
+      signIn,
+      signUp,
       signOut,
     ],
   );
