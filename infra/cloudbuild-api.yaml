@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "--platform", "linux/amd64", "-f", "backend/Dockerfile", "-t", "${_API_IMAGE}", "."]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_API_IMAGE}"]
+images:
+  - "${_API_IMAGE}"
+substitutions:
+  _API_IMAGE: ""
+options:
+  logging: CLOUD_LOGGING_ONLY

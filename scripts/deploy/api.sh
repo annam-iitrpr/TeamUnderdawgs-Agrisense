@@ -49,9 +49,17 @@ fi
 gcloud artifacts repositories describe "$REPOSITORY" --location "$GCP_REGION" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 ||
   gcloud artifacts repositories create "$REPOSITORY" --repository-format=docker --location "$GCP_REGION" --project "$GCP_PROJECT_ID"
 
-gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
-docker build --platform linux/amd64 -f "$ROOT/backend/Dockerfile" -t "$API_IMAGE" "$ROOT"
-docker push "$API_IMAGE"
+if docker info >/dev/null 2>&1; then
+  gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+  docker build --platform linux/amd64 -f "$ROOT/backend/Dockerfile" -t "$API_IMAGE" "$ROOT"
+  docker push "$API_IMAGE"
+else
+  echo "Docker is unavailable; building the pinned image with Cloud Build."
+  gcloud builds submit "$ROOT" \
+    --project "$GCP_PROJECT_ID" \
+    --config "$ROOT/infra/cloudbuild-api.yaml" \
+    --substitutions="_API_IMAGE=$API_IMAGE"
+fi
 
 # Migrations run before the new revision serves, so no request meets a schema it predates.
 echo "Run migrations against the target database before continuing (scripts/dev/cloudsql_proxy.sh + alembic upgrade head)."
