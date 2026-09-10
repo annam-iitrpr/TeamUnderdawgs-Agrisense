@@ -113,6 +113,11 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       <div
         role="group"
         aria-labelledby="language-label"
+        // Never machine-translated. Each language is already written in its own
+        // script, and translating them defeats the control: a farmer who lands
+        // in a language they cannot read needs to find "English" still saying
+        // English to get back out of it.
+        translate="no"
         // Never wraps: a rounded pill that breaks onto two rows loses its shape and
         // the row stops reading as one control. Five scripts of differing width do not
         // fit a narrow phone header, so it scrolls sideways there instead.
