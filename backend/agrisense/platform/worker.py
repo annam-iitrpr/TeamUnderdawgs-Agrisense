@@ -186,11 +186,19 @@ async def drain_jobs(sessions: sessionmaker, settings: Settings, limit: int = 10
     return processed
 
 
-def drain_outbox(sessions: sessionmaker, consumer: str, handler, limit: int = 50) -> int:
+def drain_outbox(sessions: sessionmaker, consumer: str, handler, limit: int = 50,
+                 kinds: tuple[str, ...] | None = None) -> int:
     """At-least-once delivery per consumer.
 
     Progress belongs to the consumer's own receipt, so each subscriber advances, retries and
     dead-letters independently, and a replay of an already-processed event is a no-op.
+
+    `kinds` is what a consumer actually subscribes to. Without it every consumer
+    was handed every event in the outbox: the WhatsApp consumer picked up
+    `season.updated`, `job.requested` and `field.updated`, raised on each one
+    because they are not messages, and spent its whole batch and its retry
+    budget on events it should never have seen — so real outbound replies sat
+    unsent behind a backing-off queue of things that could never succeed.
     """
     session = sessions()
     delivered = 0
@@ -202,13 +210,15 @@ def drain_outbox(sessions: sessionmaker, consumer: str, handler, limit: int = 50
         due = select(d.ConsumerReceipt.event_id).where(
             d.ConsumerReceipt.consumer == consumer, d.ConsumerReceipt.status == 'pending',
             d.ConsumerReceipt.available_at > now)
-        rows = list(session.scalars(
+        query = (
             select(d.OutboxRow)
             .where(d.OutboxRow.id.not_in(settled), d.OutboxRow.id.not_in(due),
                    d.OutboxRow.available_at <= now)
-            .order_by(d.OutboxRow.created_at)
-            .limit(limit)
-            .with_for_update(skip_locked=True)))
+        )
+        if kinds is not None:
+            query = query.where(d.OutboxRow.kind.in_(kinds))
+        rows = list(session.scalars(
+            query.order_by(d.OutboxRow.created_at).limit(limit).with_for_update(skip_locked=True)))
         for row in rows:
             receipt = session.get(d.ConsumerReceipt, (row.id, consumer))
             if receipt is None:
@@ -252,7 +262,8 @@ def drain_whatsapp_outbox(sessions: sessionmaker, settings: Settings, limit: int
         finally:
             session.close()
 
-    return drain_outbox(sessions, WHATSAPP_CONSUMER, deliver, limit=limit)
+    return drain_outbox(sessions, WHATSAPP_CONSUMER, deliver, limit=limit,
+                        kinds=('whatsapp.outbound',))
 
 
 async def worker_loop(settings: Settings, interval: float = 5.0, iterations: int | None = None) -> None:

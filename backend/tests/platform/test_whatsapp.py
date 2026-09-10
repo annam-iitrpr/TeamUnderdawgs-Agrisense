@@ -310,3 +310,36 @@ def test_linking_records_the_channel_on_the_farmers_own_profile(harness, asha):
     # Linking twice must not accumulate duplicates of the same channel.
     again = asha.get('/me').json()['data']
     assert again['linked_channel_ids'] == after['linked_channel_ids']
+
+
+def test_the_whatsapp_consumer_only_sees_its_own_events(harness, asha):
+    """A consumer must not be handed the whole outbox.
+
+    `drain_outbox` returned every unsettled event to every consumer, so the
+    WhatsApp consumer picked up `season.updated`, `job.requested` and
+    `field.updated`, raised on each because they are not messages, and spent
+    its batch limit and its retry budget on events that could never succeed.
+    Real replies sat unsent behind them.
+    """
+    from agrisense.platform import db as d
+    from agrisense.platform import worker
+
+    channel_id = linked_channel(harness, asha)
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        # One real message, and some ordinary domain events beside it.
+        from agrisense.platform import whatsapp
+        whatsapp.queue_outbound(session, harness.app.state.settings, channel, 'A real reply')
+        for kind in ('season.updated', 'job.requested', 'field.updated'):
+            session.add(d.OutboxRow(tenant_id=channel.tenant_id, kind=kind,
+                                    aggregate_id=channel.id, payload={'noise': True}))
+        session.commit()
+
+    seen: list[str] = []
+
+    def record(row):
+        seen.append(row.kind)
+
+    worker.drain_outbox(harness.app.state.sessions, 'whatsapp', record,
+                        kinds=('whatsapp.outbound',))
+    assert seen == ['whatsapp.outbound'], f'the consumer was handed {seen}'
