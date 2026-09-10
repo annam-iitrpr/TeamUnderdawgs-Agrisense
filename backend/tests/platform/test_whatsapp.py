@@ -397,3 +397,47 @@ def test_tapping_a_field_row_selects_it_without_matching_on_the_name(harness, as
         job = session.scalar(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')
                              .order_by(d.JobRow.created_at.desc()))
         assert job.payload['request']['command'] == 'field_selected'
+
+
+def test_readiness_answers_before_the_farmer_has_chosen_a_field(harness, asha, field, season):
+    """The first question a farmer asks must not dead-end on an unset field.
+
+    A channel conversation starts with no field selected, so readiness, water and
+    money each replied "no open season is available for the active field" until
+    the farmer happened to run `fields` and pick one -- the exact command
+    knowledge that tappable navigation exists to remove.
+
+    It also guards the bug hiding behind that one: those queries filtered on
+    `SeasonRow.farmer_id`, which does not exist, and never raised only because
+    the unset field short-circuited them away. Selecting a field by default
+    without fixing the join would have turned this answer into a 500.
+    """
+    import asyncio
+
+    from agrisense.platform import worker
+
+    linked_channel(harness, asha)
+    assert signed(harness, message('readiness', 'wamid.readiness')).status_code == 200
+    asyncio.run(worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings))
+
+    with harness.app.state.sessions() as session:
+        replies = [row.payload['body'] for row in session.scalars(
+            select(d.OutboxRow).where(d.OutboxRow.kind == 'whatsapp.outbound'))]
+    # An empty list means the job raised rather than answering.
+    assert replies, 'readiness queued no reply at all'
+    assert not any('No open season is available' in body for body in replies), replies
+
+
+def test_a_chosen_field_is_never_overridden_by_the_default(harness):
+    """The fallback fills an empty choice; it does not overrule the farmer's.
+
+    No query should run at all here, so the tenant and farmer given are ones that
+    own nothing: if the chosen field were ignored, there is nothing to fall back
+    to and the assertion fails rather than passing by accident.
+    """
+    conversation = d.ConversationRow(
+        id=d.new_id(), tenant_id='t', farmer_id='f', version=1,
+        payload={'field_id': 'chosen-by-the-farmer'})
+    with harness.app.state.sessions() as session:
+        chosen = whatsapp.active_field_id(session, conversation, 'no-such-tenant', 'no-such-farmer')
+    assert chosen == 'chosen-by-the-farmer'

@@ -294,6 +294,58 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
     return 'queued'
 
 
+def open_season_for(session: Session, tenant_id: str, farmer_id: str,
+                    field_id: str | None) -> d.SeasonRow | None:
+    """The open season on a field.
+
+    Seasons carry no farmer_id -- they belong to a field, and the field carries the
+    farmer -- so ownership is proven by the join, never by a column that does not
+    exist. Three call sites here read `SeasonRow.farmer_id` anyway. They never
+    raised only because each was guarded by a field the channel never set, so the
+    query was never built: fixing that guard alone would have turned every one of
+    these answers into a 500.
+    """
+    if not field_id:
+        return None
+    return session.scalar(
+        select(d.SeasonRow)
+        .join(d.FieldRow, (d.FieldRow.id == d.SeasonRow.field_id)
+              & (d.FieldRow.tenant_id == d.SeasonRow.tenant_id))
+        .where(d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.field_id == field_id,
+               d.SeasonRow.status != 'closed', d.FieldRow.farmer_id == farmer_id)
+        .order_by(d.SeasonRow.id))
+
+
+def active_field_id(session: Session, conversation: d.ConversationRow | None,
+                    tenant_id: str, farmer_id: str) -> str | None:
+    """The field an answer is about, chosen for the farmer when they have not chosen.
+
+    A WhatsApp conversation begins with no field selected, so readiness, water and
+    money each dead-ended on "no open season is available for the active field"
+    until the farmer happened to run `fields` and pick one -- which is exactly the
+    knowledge of the command surface that tappable navigation exists to remove.
+    Falling back to their one open season means the first thing a farmer asks gets
+    a real answer. The choice is remembered so it stays put, and it is only ever a
+    field of their own with a season still open.
+    """
+    if conversation is None:
+        return None
+    chosen = (conversation.payload or {}).get('field_id')
+    if chosen:
+        return chosen
+    season = session.scalar(
+        select(d.SeasonRow)
+        .join(d.FieldRow, (d.FieldRow.id == d.SeasonRow.field_id)
+              & (d.FieldRow.tenant_id == d.SeasonRow.tenant_id))
+        .where(d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.status != 'closed',
+               d.FieldRow.farmer_id == farmer_id, d.FieldRow.archived.is_(False))
+        .order_by(d.SeasonRow.id))
+    if season is None:
+        return None
+    conversation.payload = {**(conversation.payload or {}), 'field_id': season.field_id}
+    return season.field_id
+
+
 def command_reply(session: Session, settings: Settings, request: dict[str, Any], tenant_id: str,
                   farmer_id: str) -> ChannelReply | None:
     """Small deterministic channel commands; all agronomic answers stay in the assistant."""
@@ -335,10 +387,8 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         conversation = session.scalar(select(d.ConversationRow).where(
             d.ConversationRow.id == request.get('conversation_id'),
             d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
-        field_id = (conversation.payload or {}).get('field_id') if conversation else None
-        season = session.scalar(select(d.SeasonRow).where(
-            d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
-            d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+        field_id = active_field_id(session, conversation, tenant_id, farmer_id)
+        season = open_season_for(session, tenant_id, farmer_id, field_id)
         if season is None:
             return with_menu('No open season is available for the active field.',
                              ('fields', 'Switch field'))
@@ -367,10 +417,8 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         conversation = session.scalar(select(d.ConversationRow).where(
             d.ConversationRow.id == request.get('conversation_id'),
             d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
-        field_id = (conversation.payload or {}).get('field_id') if conversation else None
-        season = session.scalar(select(d.SeasonRow).where(
-            d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
-            d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+        field_id = active_field_id(session, conversation, tenant_id, farmer_id)
+        season = open_season_for(session, tenant_id, farmer_id, field_id)
         if farmer is None or season is None:
             return with_menu('No open season is available for the active field.',
                              ('fields', 'Switch field'))
@@ -416,7 +464,7 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
     conversation = session.scalar(select(d.ConversationRow).where(
         d.ConversationRow.id == request.get('conversation_id'),
         d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
-    field_id = (conversation.payload or {}).get('field_id') if conversation else None
+    field_id = active_field_id(session, conversation, tenant_id, farmer_id)
     if command == 'history':
         rows = list(session.scalars(select(d.JournalRow).where(
             d.JournalRow.tenant_id == tenant_id, d.JournalRow.farmer_id == farmer_id)
@@ -428,9 +476,11 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             f'- {row.occurred_at.date().isoformat()}: {row.payload.get("action", "observation")}'
             for row in rows), ('journal_help', 'Record something'))
     if command in {'readiness', 'water', 'money'}:
-        season = session.scalar(select(d.SeasonRow).where(
-            d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
-            d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+        season = open_season_for(session, tenant_id, farmer_id, field_id)
+        # Named, because the farmer no longer picks the field themselves. A figure
+        # about one of several plots is misleading unless it says which plot.
+        field = session.get(d.FieldRow, field_id) if field_id else None
+        where = f'\n_{field.name}_' if field is not None else ''
         if season is None:
             return with_menu('No open season is available for the active field. Set up a season in the web app first.',
                              ('fields', 'Switch field'))
@@ -444,7 +494,8 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             readiness = value.get('readiness')
             status = value.get('status', 'unknown').replace('_', ' ')
             return with_menu(
-                f'*Readiness: {readiness if readiness is not None else "not known"}*\nStatus: {status}',
+                f'*Readiness: {readiness if readiness is not None else "not known"}*\n'
+                f'Status: {status}{where}',
                 ('water', 'Water'), ('money', 'Money'))
         key = 'water' if command == 'water' else 'economics'
         value = recommendation.payload.get(key)
@@ -457,7 +508,7 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             # An unavailable figure says why. It is never replaced with a zero.
             return with_menu(f'{command.title()} figures are not available yet: {missing.replace("_", " ")}',
                              ('readiness', 'Readiness'))
-        return with_menu(f'*{command.title()}*\n{value}', ('readiness', 'Readiness'), other)
+        return with_menu(f'*{command.title()}*\n{value}{where}', ('readiness', 'Readiness'), other)
     if command == 'journal_help':
         return with_menu('*Record something*\nJust tell me what you did, in your own words — '
                          'for example "watered 2 acres today" or "sprayed for aphids". '
