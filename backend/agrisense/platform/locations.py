@@ -8,6 +8,7 @@ calls, and an upstream failure reports itself instead of returning a plausible g
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -19,6 +20,14 @@ from agrisense.platform.errors import PlatformError, unavailable
 
 log = logging.getLogger('agrisense.platform.locations')
 ENDPOINT = 'https://geocoding-api.open-meteo.com/v1/search'
+#: India Post's own directory, which is the only free source that maps a postal
+#: code to a place. It carries no coordinates, so a pincode is resolved to a
+#: place name here and then geocoded like any other name.
+PINCODE_ENDPOINT = 'https://api.postalpincode.in/pincode'
+PINCODE = re.compile(r'^[1-9][0-9]{5}$')
+#: data.gov.in blackholes the default urllib agent, and India Post is no more
+#: welcoming to an unnamed client, so both are given a real one.
+USER_AGENT = 'AgriSense/1.0 (+https://agrisense.spacesdrive.cc)'
 COUNTRY = 'IN'
 CACHE_TTL_SECONDS = 3600
 CACHE_MAX_ENTRIES = 512
@@ -55,6 +64,62 @@ def to_result(record: dict[str, Any]) -> c.LocationResult | None:
         centroid=c.Location(latitude=float(latitude), longitude=float(longitude), source='village'))
 
 
+def place_for_pincode(code: str) -> str | None:
+    """The place a postal code names, or None.
+
+    The gazetteer searches by name and matches nothing against six digits, so a
+    farmer who typed their pincode -- the one piece of location they always know
+    by heart -- got an empty list and no reason for it.
+
+    India Post returns several post offices per code. The delivery head office
+    is the one a farmer would recognise as "their" town, so it is preferred over
+    a sub office, and the district is the fallback when neither is usable.
+    """
+    import httpx
+
+    try:
+        response = httpx.get(f'{PINCODE_ENDPOINT}/{code}', timeout=TIMEOUT_SECONDS,
+                             headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning('pincode lookup failed: %s', type(exc).__name__)
+        return None
+    entries = payload[0] if isinstance(payload, list) and payload else {}
+    if str(entries.get('Status')) != 'Success':
+        return None
+    offices = [row for row in entries.get('PostOffice') or [] if row.get('Name')]
+    if not offices:
+        return None
+    offices.sort(key=lambda row: (
+        0 if row.get('BranchType') == 'Head Post Office' else
+        1 if row.get('DeliveryStatus') == 'Delivery' else 2,
+        str(row.get('Name')),
+    ))
+    chosen = offices[0]
+    # The office name often carries the town plus a qualifier ("Minisectt
+    # Ropar"), and the gazetteer will not match that. The district is the more
+    # reliable handle, so it is the second thing tried by the caller.
+    return str(chosen.get('Name')).strip() or None
+
+
+def district_for_pincode(code: str) -> str | None:
+    import httpx
+
+    try:
+        response = httpx.get(f'{PINCODE_ENDPOINT}/{code}', timeout=TIMEOUT_SECONDS,
+                             headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        entries = (response.json() or [{}])[0]
+    except (httpx.HTTPError, ValueError, IndexError):
+        return None
+    for row in entries.get('PostOffice') or []:
+        district = row.get('District')
+        if district:
+            return str(district).strip()
+    return None
+
+
 def fetch(query: str, limit: int, settings: Settings) -> list[dict[str, Any]]:
     now = time.time()
     key = f'{query.casefold()}|{limit}'
@@ -80,6 +145,19 @@ def fetch(query: str, limit: int, settings: Settings) -> list[dict[str, Any]]:
 def search(query: str, limit: int, settings: Settings) -> dict[str, Any]:
     """A page of real places. No cursor: the upstream ranks by relevance, not by a stable key."""
     cleaned = normalise(query)
+    # Six digits is a pincode, not a place name. It is turned into one first,
+    # trying the post office and then its district, because either may be the
+    # name the gazetteer actually holds.
+    if PINCODE.match(cleaned):
+        for candidate in (place_for_pincode(cleaned), district_for_pincode(cleaned)):
+            if not candidate:
+                continue
+            found = [row for row in (to_result(record) for record in fetch(candidate, limit, settings))
+                     if row is not None]
+            if found:
+                return {'items': [row.model_dump(mode='json') for row in found[:limit]],
+                        'next_cursor': None}
+        return {'items': [], 'next_cursor': None}
     results = []
     for record in fetch(cleaned, limit, settings):
         result = to_result(record)

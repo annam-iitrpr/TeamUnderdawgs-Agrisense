@@ -98,3 +98,67 @@ def test_the_route_requires_authentication_and_bounds_its_limit(asha, harness, m
     assert ok.json()['data']['items'][0]['state'] == 'Maharashtra'
     assert asha.get('/catalog/locations', params={'q': 'nagpur', 'limit': 500}).status_code == 422
     assert asha.get('/catalog/locations', params={'q': 'n'}).status_code == 422
+
+
+def test_a_pincode_resolves_to_a_place_rather_than_nothing(monkeypatch):
+    """The gazetteer searches by name and matches nothing against six digits.
+
+    A farmer's pincode is the one piece of location they know by heart, and it
+    returned an empty list with no reason given. It is turned into a place name
+    first, through India Post's directory, and then geocoded like any other name.
+    """
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        if 'postalpincode' in url:
+            return FakeResponse([{'Status': 'Success', 'PostOffice': [
+                {'Name': 'Minisectt Ropar', 'BranchType': 'Sub Post Office',
+                 'DeliveryStatus': 'Non-Delivery', 'District': 'Rupnagar', 'State': 'Punjab'},
+                {'Name': 'Ropar', 'BranchType': 'Head Post Office',
+                 'DeliveryStatus': 'Delivery', 'District': 'Rupnagar', 'State': 'Punjab'},
+            ]}])
+        return FakeResponse({'results': [{
+            'id': 1, 'name': 'Ropar', 'latitude': 30.97, 'longitude': 76.53,
+            'country_code': 'IN', 'feature_code': 'PPL', 'admin1': 'Punjab',
+            'admin2': 'Rupnagar'}]})
+
+    monkeypatch.setattr(locations.httpx, 'get', fake_get)
+    locations._cache.clear()
+    result = locations.search('140001', 5, None)
+
+    assert [row['name'] for row in result['items']] == ['Ropar']
+    # The delivery head office is what a farmer calls their town, so it is
+    # preferred over a sub office with a qualifier the gazetteer cannot match.
+    assert any('postalpincode' in url for url in calls)
+
+
+def test_a_place_name_is_not_sent_to_the_pincode_directory(monkeypatch):
+    """Only six digits is a pincode. A name goes straight to the gazetteer."""
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {'results': []}
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return FakeResponse()
+
+    monkeypatch.setattr(locations.httpx, 'get', fake_get)
+    locations._cache.clear()
+    locations.search('Rupnagar', 5, None)
+    assert not any('postalpincode' in url for url in calls)
