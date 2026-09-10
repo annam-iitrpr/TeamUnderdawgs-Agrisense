@@ -161,7 +161,12 @@ def test_journal_command_is_processed_by_worker_and_queued_for_delivery(harness,
         assert journal is not None
         outbound = session.scalar(select(d.OutboxRow).where(d.OutboxRow.kind == 'whatsapp.outbound'))
         assert outbound is not None
-        assert outbound.payload['body'].startswith('Recorded')
+        # The reply has to name what was recorded, so a farmer can see the
+        # command was understood as the action they meant.
+        assert 'watered' in outbound.payload['body']
+        assert journal.payload['action'] == 'watered'
+        quantity = journal.payload['quantities'][0]
+        assert (quantity['value'], quantity['unit']) == (20.0, 'mm')
 
 
 def test_proposal_buttons_are_preserved_in_the_outbox_payload(harness, asha):

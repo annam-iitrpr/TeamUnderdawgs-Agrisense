@@ -389,11 +389,38 @@ def create_journal(session: Session, settings: Settings, request: dict[str, Any]
         d.ConversationRow.id == request.get('conversation_id'),
         d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
     field_id = (conversation.payload or {}).get('field_id') if conversation else None
-    season = session.scalar(select(d.SeasonRow).where(
-        d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
-        d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+    # Seasons carry no farmer_id — they belong to a field, and the field carries
+    # the farmer. The previous query read `SeasonRow.farmer_id`, which does not
+    # exist, so every WhatsApp journal command raised AttributeError, was
+    # retried by the worker, and silently recorded nothing.
+    open_seasons = (
+        select(d.SeasonRow)
+        .join(d.FieldRow, (d.FieldRow.id == d.SeasonRow.field_id)
+              & (d.FieldRow.tenant_id == d.SeasonRow.tenant_id))
+        .where(d.SeasonRow.tenant_id == tenant_id,
+               d.FieldRow.farmer_id == farmer_id,
+               d.SeasonRow.status != 'closed')
+    )
+    if field_id:
+        season = session.scalar(open_seasons.where(
+            d.SeasonRow.field_id == field_id).order_by(d.SeasonRow.id))
+    else:
+        # An inbound WhatsApp conversation carries no field until the farmer
+        # picks one with `use <field name>`, so requiring one meant a plain
+        # "log watered 20 mm" was silently dropped — the handler returned a
+        # message and wrote nothing.
+        #
+        # With exactly one open season there is nothing to disambiguate and the
+        # farmer plainly means that one. With several, the entry is NOT guessed:
+        # attributing water or spend to the wrong field corrupts the record that
+        # adherence and closure are later scored against, so they are asked.
+        candidates = list(session.scalars(open_seasons.order_by(d.SeasonRow.id)))
+        if len(candidates) > 1:
+            return ('You have more than one season open, so tell me which field first: '
+                    'reply `use <field name>`, then log it again.')
+        season = candidates[0] if candidates else None
     if season is None:
-        return 'No open season is available for the active field. Set up a season in the web app first.'
+        return 'No open season is available. Set up a season in the web app first.'
     source = session.get(d.MessageRow, request.get('message_id'))
     text = (source.payload or {}).get('text', '') if source else ''
     action, journal_text, quantities = journal_values(text)
