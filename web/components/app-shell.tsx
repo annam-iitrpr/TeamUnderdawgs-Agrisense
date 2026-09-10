@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { OfflineBanner } from "@/features/pwa/pwa-controls";
 import { BookOpen, Home, MessageCircleQuestion, Sprout, type LucideIcon , User } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -62,7 +63,7 @@ export function AppShell({
       {/* Desktop sidebar. Hidden below lg, where bottom nav takes over. */}
       <aside className="hidden border-r border-mist bg-card lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col">
         <div className="border-b border-mist px-5 py-4">
-          <p className="text-h3 font-semibold text-forest">{t("appName")}</p>
+          <div className="flex items-center gap-2.5"><Image src="/agrisense-logo.svg" alt="" width={32} height={32} className="rounded-lg" /><p className="text-h3 font-semibold text-forest">{t("appName")}</p></div>
           <p className="mt-0.5 text-xs text-slate">{t("tagline")}</p>
         </div>
         <nav aria-label={t("navHome")} className="flex-1 p-3">
@@ -118,9 +119,7 @@ export function AppShell({
         <header className="sticky top-0 z-30 border-b border-mist bg-card/95 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
-              <p className="truncate text-h3 font-semibold text-forest">
-                {title ?? t("appName")}
-              </p>
+              <div className="flex min-w-0 items-center gap-2"><Image src="/agrisense-logo.svg" alt="" width={28} height={28} className="rounded-lg" /><p className="truncate text-h3 font-semibold text-forest">{title ?? t("appName")}</p></div>
             </div>
             {/* Must be allowed to shrink: shrink-0 here pushed the phone header past the
                 viewport, and the language row inside scrolls on its own. */}
