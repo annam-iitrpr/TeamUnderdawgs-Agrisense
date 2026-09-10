@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CropCard } from "./crop-card";
 import { NoCandidates } from "./no-candidates";
+import { defaultSowingWindow, MAX_CANDIDATES } from "./use-comparison";
 import { CropComparisonTable } from "./crop-comparison-table";
 import { relativeWaterScore } from "./water-figures";
 
@@ -106,19 +107,20 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
         setField(fieldData);
         setSeasons(seasonPage.items ?? []);
 
-        // Sowing starts tomorrow: the engine refuses a window that has already begun,
-        // and today is already partly gone wherever the farmer is.
-        const start = new Date();
-        start.setDate(start.getDate() + 1);
-        const end = new Date(start);
-        end.setMonth(end.getMonth() + 6);
-        const iso = (d: Date) => d.toISOString().slice(0, 10);
-
         const { data } = await planningApi.compare(
           {
             field_id: fieldId,
-            proposed_season: { start_date: iso(start), end_date: iso(end) },
-            candidate_crop_ids: candidateIds.slice(0, 5),
+            proposed_season: defaultSowingWindow(),
+            candidate_crop_ids: candidateIds.slice(0, MAX_CANDIDATES),
+            // The field carries what the farmer can spend. Without both, the
+            // engine excludes every candidate for a missing budget — which
+            // reads as "no crops suit your field" and is a different claim.
+            ...(fieldData.available_water_m3 == null
+              ? {}
+              : { available_water_m3: fieldData.available_water_m3 }),
+            ...(fieldData.water_budget_inr == null
+              ? {}
+              : { budget_inr: fieldData.water_budget_inr }),
           },
           newIdempotencyKey(),
         );

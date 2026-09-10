@@ -22,7 +22,14 @@ function complete(): OnboardingDraft {
     precisionM: 12,
     label: "Nagpur",
   };
-  draft.land = { name: "North field", enteredArea: "2.5", unit: "acre", irrigationMethod: "drip" };
+  draft.land = {
+    name: "North field",
+    enteredArea: "2.5",
+    unit: "acre",
+    irrigationMethod: "drip",
+    availableWater: "4000",
+    waterBudget: "60000",
+  };
   return draft;
 }
 

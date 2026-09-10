@@ -44,6 +44,21 @@ export function defaultSowingWindow(): { start_date: string; end_date: string } 
  * crop is best, so callers that want suitability order use the array as given.
  */
 
+/**
+ * What the farmer has to spend on the season, in water and in cash.
+ *
+ * The engine requires both to be *stated*, not merely plausible: it excludes a
+ * crop for `irrigation_budget_missing_or_insufficient` or
+ * `cash_budget_missing_or_insufficient` when either is absent, because
+ * recommending a crop that needs more water than the farmer can lift is worse
+ * than recommending nothing. `null` is therefore a real answer that will be
+ * refused, not a value to be quietly defaulted to zero or to infinity.
+ */
+export type SeasonBudget = {
+  availableWaterM3: number | null;
+  budgetInr: number | null;
+};
+
 export function useComparison(fieldId: string | null) {
   const [comparison, setComparison] = useState<CropComparison | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,7 +69,7 @@ export function useComparison(fieldId: string | null) {
   const latest = useRef(0);
 
   const run = useCallback(
-    async (candidateIds: readonly string[]) => {
+    async (candidateIds: readonly string[], budget?: SeasonBudget) => {
       if (!fieldId || candidateIds.length === 0) return;
       const ticket = ++latest.current;
       setLoading(true);
@@ -65,6 +80,13 @@ export function useComparison(fieldId: string | null) {
             field_id: fieldId,
             proposed_season: defaultSowingWindow(),
             candidate_crop_ids: [...candidateIds].slice(0, MAX_CANDIDATES),
+            // Sent only when known. An omitted budget is refused by the engine
+            // with a stated reason, which is the correct outcome; inventing one
+            // would make the refusal disappear and the advice unsafe.
+            ...(budget?.availableWaterM3 == null
+              ? {}
+              : { available_water_m3: budget.availableWaterM3 }),
+            ...(budget?.budgetInr == null ? {} : { budget_inr: budget.budgetInr }),
           },
           newIdempotencyKey(),
         );
@@ -100,14 +122,21 @@ export function waterScores(plans: readonly CropPlan[]): Map<string, number | nu
   );
 }
 
-/** Re-runs the comparison whenever the candidate set changes. */
-export function useAutoComparison(fieldId: string | null, candidateIds: readonly string[]) {
+/** Re-runs the comparison whenever the candidate set or the budget changes. */
+export function useAutoComparison(
+  fieldId: string | null,
+  candidateIds: readonly string[],
+  budget?: SeasonBudget,
+) {
   const state = useComparison(fieldId);
   const { run } = state;
   const key = candidateIds.join(",");
+  // Primitives, so the effect does not re-fire on a fresh object each render.
+  const water = budget?.availableWaterM3 ?? null;
+  const cash = budget?.budgetInr ?? null;
   useEffect(() => {
     if (!fieldId || key === "") return;
-    void run(key.split(","));
-  }, [fieldId, key, run]);
+    void run(key.split(","), { availableWaterM3: water, budgetInr: cash });
+  }, [fieldId, key, run, water, cash]);
   return state;
 }

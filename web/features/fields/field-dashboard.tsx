@@ -20,6 +20,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
 import { AddSeasonForm } from "@/features/crops/add-season-form";
 import { SoilCardUpload } from "@/features/soil/soil-card-upload";
+import { FieldInputsForm } from "./field-inputs-form";
 import { RemoveField } from "./remove-field";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
@@ -251,6 +252,7 @@ function FieldPanel({
   onFieldChanged: () => void;
 }) {
   const { t } = useLanguage();
+  const [editingInputs, setEditingInputs] = useState(false);
 
   const seasonsQuery = useApiQuery(
     // field id in the key: this is the Field A / Field B isolation guarantee.
@@ -284,7 +286,21 @@ function FieldPanel({
       </div>
 
       <div className="space-y-4">
-        <DataRequests field={field} seasonCount={activeSeasons.length} />
+        <DataRequests
+          field={field}
+          seasonCount={activeSeasons.length}
+          onEditInputs={() => setEditingInputs(true)}
+        />
+        {editingInputs ? (
+          <FieldInputsForm
+            field={field}
+            onSaved={() => {
+              setEditingInputs(false);
+              onFieldChanged();
+            }}
+            onCancel={() => setEditingInputs(false)}
+          />
+        ) : null}
         {field.soil_summary == null ? (
           <SoilCardUpload field={field} onSaved={onFieldChanged} />
         ) : null}
@@ -534,8 +550,22 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
  * the value is confirmed as persisted. Each one below either links somewhere
  * real or states why it cannot yet — none is a decorative badge.
  */
-function DataRequests({ field, seasonCount }: { field: Field; seasonCount: number }) {
-  const requests: Array<{ label: string; href?: string; blocked?: string }> = [];
+function DataRequests({
+  field,
+  seasonCount,
+  onEditInputs,
+}: {
+  field: Field;
+  seasonCount: number;
+  onEditInputs: () => void;
+}) {
+  const requests: Array<{
+    label: string;
+    detail?: string;
+    href?: string;
+    onClick?: () => void;
+    blocked?: string;
+  }> = [];
 
   if (seasonCount === 0) {
     requests.push({
@@ -543,12 +573,27 @@ function DataRequests({ field, seasonCount }: { field: Field; seasonCount: numbe
       href: `/plan-crop?field=${encodeURIComponent(field.id)}`,
     });
   }
-  // Soil is handled inline by its own card below, not as a link to somewhere else.
-  if (field.irrigation_method == null) {
-    requests.push({ label: "Say how you water this field", href: "/onboarding" });
+
+  // These three are edited in place against this field. They used to link to
+  // /onboarding, which starts a *new* field — so tapping the request could
+  // never satisfy it, and the pill stayed forever.
+  if (field.available_water_m3 == null || field.water_budget_inr == null) {
+    requests.push({
+      label: "Say what you can spend on a season",
+      detail: "Water and money. Crops cannot be compared without both.",
+      onClick: onEditInputs,
+    });
   }
+  if (field.irrigation_method == null) {
+    requests.push({ label: "Say how you water this field", onClick: onEditInputs });
+  }
+  // Soil is handled inline by its own card below, not as a link to somewhere else.
   if (field.centroid.source !== "gps") {
-    requests.push({ label: "Set an exact field location", href: "/onboarding" });
+    requests.push({
+      label: "Set an exact field location",
+      blocked:
+        "This field was placed from a village or pincode. An exact position needs to be set from the field itself, on a phone with location switched on.",
+    });
   }
 
   if (requests.length === 0) {
@@ -579,6 +624,22 @@ function DataRequests({ field, seasonCount }: { field: Field; seasonCount: numbe
                 <span>{request.label}</span>
                 <Plus aria-hidden className="size-4 shrink-0 text-forest" />
               </Link>
+            ) : request.onClick ? (
+              <button
+                type="button"
+                onClick={request.onClick}
+                className="flex min-h-[48px] w-full items-center justify-between gap-2 rounded-control border border-mist bg-card px-3 text-left text-sm font-semibold"
+              >
+                <span>
+                  {request.label}
+                  {request.detail ? (
+                    <span className="mt-0.5 block text-xs font-normal text-slate">
+                      {request.detail}
+                    </span>
+                  ) : null}
+                </span>
+                <Plus aria-hidden className="size-4 shrink-0 text-forest" />
+              </button>
             ) : (
               <div className="rounded-control border border-dashed border-mist px-3 py-2.5">
                 <p className="text-sm font-semibold text-slate">{request.label}</p>

@@ -59,6 +59,14 @@ const STEP_TITLE: Record<StepId, string> = {
   review: "Check and save",
 };
 
+/** A typed figure, or null when it is blank, not a number, or not positive. */
+function positiveNumber(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  const value = Number(trimmed.replace(",", "."));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export function OnboardingFlow() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -172,6 +180,15 @@ export function OnboardingFlow() {
             source: (draft.location.source ?? "manual") as LocationSource,
           },
           irrigation_method: draft.land.irrigationMethod,
+          // Omitted rather than zeroed when unanswered: zero water and zero
+          // budget are claims, and both would exclude every crop for the wrong
+          // reason ("you cannot afford it" instead of "you did not say").
+          ...(positiveNumber(draft.land.availableWater) == null
+            ? {}
+            : { available_water_m3: positiveNumber(draft.land.availableWater) }),
+          ...(positiveNumber(draft.land.waterBudget) == null
+            ? {}
+            : { water_budget_inr: positiveNumber(draft.land.waterBudget) }),
         },
         // The draft's key, not a fresh one: this is what makes a retry safe.
         draft.idempotencyKey,
@@ -692,6 +709,41 @@ function LandStep({
         </div>
         <p className="mt-1.5 text-xs text-slate">Optional. You can add this later.</p>
       </fieldset>
+
+      {/*
+        Water and cash available for one season.
+        These are not idle detail: AgriSense cannot compare crops without them.
+        The engine refuses a candidate whose water or cost it cannot check
+        against what the farmer actually has, rather than assuming they can
+        afford it — so the next step is empty until these are answered. That is
+        said here, at the point of asking, instead of surfacing later as an
+        unexplained "no crops available".
+      */}
+      <fieldset>
+        <legend className="text-sm font-semibold text-ink">
+          What can you spend on one season?
+        </legend>
+        <p className="mt-1 text-xs text-slate">
+          Needed to compare crops. AgriSense will not suggest a crop that needs more water or
+          money than you have, so it does not guess these.
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <TextField
+            label="Water you can use"
+            inputMode="decimal"
+            hint="Cubic metres for the whole season. 1 m³ is 1000 litres."
+            value={draft.land.availableWater}
+            onChange={(e) => update((d) => void (d.land.availableWater = e.target.value))}
+          />
+          <TextField
+            label="Money you can spend"
+            inputMode="decimal"
+            hint="Rupees for the whole season."
+            value={draft.land.waterBudget}
+            onChange={(e) => update((d) => void (d.land.waterBudget = e.target.value))}
+          />
+        </div>
+      </fieldset>
     </div>
   );
 }
@@ -714,7 +766,10 @@ function CropStep({
     return [];
   }, [draft.crop.mode, draft.crop.cropId, crops]);
 
-  const { comparison, loading, error } = useAutoComparison(fieldId, candidates);
+  const { comparison, loading, error } = useAutoComparison(fieldId, candidates, {
+    availableWaterM3: positiveNumber(draft.land.availableWater),
+    budgetInr: positiveNumber(draft.land.waterBudget),
+  });
 
   // Server order, not a local re-sort: the engine already ranked these.
   const ranked = useMemo(() => comparison?.candidates ?? [], [comparison]);

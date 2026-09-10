@@ -23,8 +23,8 @@ import type { AreaUnit, LocationSource } from "@/lib/api/contract";
 const KEY_PREFIX = "agrisense.draft.onboarding";
 // Bumped when the shape changes: loadDraft discards rather than migrates an
 // older draft by design, so resuming never half-understands a stale structure.
-// v2 added `fieldId`, v3 added `crop.seasonId`.
-const DRAFT_VERSION = 3;
+// v2 added `fieldId`, v3 added `crop.seasonId`, v4 added the land budgets.
+const DRAFT_VERSION = 4;
 
 export type CropChoiceMode = "known" | "help_me_choose" | "undecided";
 
@@ -64,6 +64,16 @@ export type OnboardingDraft = {
     enteredArea: string;
     unit: AreaUnit;
     irrigationMethod: string | null;
+    /**
+     * How much water and cash are available for one season.
+     *
+     * Both are needed to compare crops at all: the engine refuses a candidate
+     * when either is unstated rather than assuming the farmer can afford it.
+     * Kept as typed strings for the same reason as the area — the echo-back has
+     * to show the farmer their own number.
+     */
+    availableWater: string;
+    waterBudget: string;
   };
 
   crop: {
@@ -96,7 +106,14 @@ export function newDraft(idempotencyKey: string): OnboardingDraft {
     fieldId: null,
     consents: { service: false, modelLearning: false, notifications: false },
     location: { latitude: null, longitude: null, source: null, precisionM: null, label: null },
-    land: { name: "", enteredArea: "", unit: "acre", irrigationMethod: null },
+    land: {
+      name: "",
+      enteredArea: "",
+      unit: "acre",
+      irrigationMethod: null,
+      availableWater: "",
+      waterBudget: "",
+    },
     crop: {
       mode: "undecided",
       cropId: null,
