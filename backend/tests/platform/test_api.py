@@ -563,3 +563,25 @@ def test_advice_retired_by_the_farmers_own_reading_says_so(asha, field, season, 
     assert stale.json()['error']['code'] == 'RECOMMENDATION_SUPERSEDED'
     # Retryable: asking again is exactly what fixes it.
     assert stale.json()['error']['retryable'] is True
+
+
+def test_the_crop_catalogue_keeps_its_suitability_order(asha):
+    """The first five must be the five worth comparing, not an alphabetical accident.
+
+    The planner compares at most five candidates, and callers take the first
+    five. Paging used to sort by id, so every caller compared bajra, barley,
+    cotton, field pea and groundnut -- and never wheat, the crop this region
+    actually sows.
+    """
+    items = asha.get('/catalog/crops', params={'limit': 100}).json()['data']['items']
+    ids = [crop['id'] for crop in items]
+    assert ids[:5] == ['wheat', 'rice', 'maize', 'potato', 'sugarcane']
+    assert ids != sorted(ids)
+    assert len(ids) == 15
+
+
+def test_paging_the_catalogue_walks_it_in_order_without_repeating(asha):
+    first = asha.get('/catalog/crops', params={'limit': 5}).json()['data']
+    assert [crop['id'] for crop in first['items']] == ['wheat', 'rice', 'maize', 'potato', 'sugarcane']
+    second = asha.get('/catalog/crops', params={'limit': 5, 'cursor': first['next_cursor']}).json()['data']
+    assert [crop['id'] for crop in second['items']] == ['barley', 'field_pea', 'lentil', 'sorghum', 'bajra']

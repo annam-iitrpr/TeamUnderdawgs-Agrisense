@@ -495,14 +495,22 @@ class DomainService:
             if not 1<=limit<=100:raise ValueError()
         except ValueError as exc:
             raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.') from exc
-        after=''
+        # The bundle's own order is the answer, so paging walks positions rather
+        # than sorting by id. Sorting here threw that order away: the crop list is
+        # ordered by regional suitability precisely so a caller that can compare
+        # only five candidates gets the five worth comparing, and re-sorting it
+        # alphabetically meant every such caller compared bajra, barley, cotton,
+        # field pea and groundnut -- and never wheat, which is the crop this
+        # region actually sows.
+        after=0
         if query.get('cursor'):
-            try:after=base64.urlsafe_b64decode(query['cursor'].encode()).decode()
+            try:after=int(base64.urlsafe_b64decode(query['cursor'].encode()).decode())
             except (ValueError,UnicodeError) as exc:
                 raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.') from exc
-        ordered=sorted((dump(item) for item in items),key=lambda item:item['id'])
-        page=[item for item in ordered if item['id']>after][:limit+1]
-        next_cursor=base64.urlsafe_b64encode(page[limit-1]['id'].encode()).decode() if len(page)>limit else None
+            if after<0:raise PlatformError('INVALID_PAGINATION','Use a valid cursor and limit from 1 to 100.')
+        ordered=[dump(item) for item in items]
+        page=ordered[after:after+limit+1]
+        next_cursor=base64.urlsafe_b64encode(str(after+limit).encode()).decode() if len(page)>limit else None
         return {'items':page[:limit],'next_cursor':next_cursor}
 
     def agronomist(self,path,body,query):

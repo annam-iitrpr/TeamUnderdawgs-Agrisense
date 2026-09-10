@@ -92,8 +92,13 @@ export function MarketPricePanel({
             <span className="ml-1 text-sm font-normal text-slate">per quintal</span>
           </p>
           <p className="mt-0.5 text-xs text-slate">
-            Across {quotes.length} mandis
-            {reported ? ` reporting on ${reportedOn(reported)}` : ""}
+            {/* A reference price is not reported by any mandi, so counting them
+                said "Across 0 mandis" -- which reads as a failure rather than as
+                the deliberate fallback it is. It names itself instead. */}
+            {quotes.length > 0
+              ? `Across ${quotes.length} mandi${quotes.length === 1 ? "" : "s"}`
+              : "Indicative reference price for this season"}
+            {quotes.length > 0 && reported ? ` reporting on ${reportedOn(reported)}` : ""}
             {modal != null ? `. Most common price ${rupees(modal)}.` : "."}
           </p>
         </>
