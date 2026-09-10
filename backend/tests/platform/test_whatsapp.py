@@ -284,3 +284,29 @@ def test_a_linked_channel_sends_to_the_number_the_farmer_supplied(harness, asha,
         session.commit()
         assert whatsapp.deliver_outbound(session, settings, event) == 'sent'
     assert len(calls) == 1 and calls[0][1] == NUMBER
+
+
+def test_linking_records_the_channel_on_the_farmers_own_profile(harness, asha):
+    """`/me` has to report the link, not just the database.
+
+    `Farmer.linked_channel_ids` existed and nothing ever populated it, so a
+    farmer who had successfully linked still saw an empty list. The account
+    screen keys its "Connect WhatsApp" button off exactly that field, so it
+    would have offered to connect an account that already was — and the only
+    way to know better was to read the database directly.
+    """
+    before = asha.get('/me').json()['data']
+    assert before['linked_channel_ids'] == []
+
+    code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
+    assert signed(harness, message(f'LINK {code}', 'wamid.profilelink')).status_code == 200
+
+    after = asha.get('/me').json()['data']
+    assert len(after['linked_channel_ids']) == 1, 'the link is invisible on the profile'
+    # The version moves, so a client holding the old profile cannot silently
+    # overwrite the new channel list on its next patch.
+    assert after['version'] > before['version']
+
+    # Linking twice must not accumulate duplicates of the same channel.
+    again = asha.get('/me').json()['data']
+    assert again['linked_channel_ids'] == after['linked_channel_ids']

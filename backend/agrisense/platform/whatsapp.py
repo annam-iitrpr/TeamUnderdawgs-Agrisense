@@ -122,6 +122,21 @@ def redeem_link(session: Session, external_id: str, code: str) -> d.ChannelRow |
                        payload={'id': d.new_id(), 'msisdn': external_id,
                                 'consent_version': challenge.payload.get('consent_version')})
     session.add(row)
+    session.flush()
+
+    # The farmer's own record has to say the channel exists. `Farmer` carries
+    # `linked_channel_ids` and nothing ever populated it, so a linked account
+    # still reported an empty list — the account screen would have shown
+    # "Connect WhatsApp" forever to somebody already connected, and the only way
+    # to tell would have been to read the database.
+    farmer = session.get(d.FarmerRow, challenge.farmer_id)
+    if farmer is not None:
+        payload = dict(farmer.payload or {})
+        linked = [value for value in (payload.get('linked_channel_ids') or []) if value != row.id]
+        farmer.version += 1
+        payload['linked_channel_ids'] = [*linked, row.id]
+        payload['version'] = farmer.version
+        farmer.payload = payload
     return row
 
 
