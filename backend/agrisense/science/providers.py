@@ -466,6 +466,84 @@ class OpenMeteoProvider:
             raise ProviderUnavailable(self.name, "invalid_forecast_schema") from None
 
 
+async def fill_reference_et0(
+    bundle: WeatherBundle,
+    location: tuple[float, float],
+    horizon: int,
+    as_of: datetime,
+    *,
+    providers: tuple[WeatherProvider, ...],
+    exclude: WeatherProvider | None = None,
+) -> WeatherBundle:
+    """Fill missing daily reference ET0 from a provider that publishes it.
+
+    CE Hub's daily series carries no reference ET0 — its
+    `Evapotranspiration_DailySum` is deliberately not treated as one, since it is
+    not verified to be the FAO-56 reference quantity. Without ET0 the soil water
+    balance cannot run at all, so every water figure in the product was blank
+    even though temperature, rain, humidity, wind and radiation were all present.
+
+    Deriving ET0 here was the alternative and was rejected: FAO-56 Penman-Monteith
+    needs a net-radiation chain and an atmospheric pressure from field elevation,
+    and elevation is collected nowhere in the product. A published reference ET0
+    is better evidence than a derivation resting on an assumed altitude.
+
+    Rules this follows:
+      - Only *missing* values are filled. A primary ET0 is never overwritten.
+      - Only matching dates are used, never positional alignment: the two
+        providers can return different horizons and different start days.
+      - The substitution is recorded in `warnings`, and the affected rows carry
+        the donor's name in `source`, so a mixed-provider day is visible rather
+        than passing as one coherent observation.
+    """
+    missing = tuple(row for row in bundle.daily if row.et0_mm is None)
+    if not missing:
+        return bundle
+
+    # Excluded by identity, not by name: the provider that produced the bundle
+    # labels it `cehub:Meteoblue` while its own `name` is `cehub`, so a string
+    # comparison let CE Hub re-fetch itself — a duplicate round trip that could
+    # not supply the missing value anyway.
+    donors = tuple(
+        provider
+        for provider in providers
+        if provider is not exclude and "forecast_daily" in provider.capabilities
+    )
+    for donor in donors:
+        try:
+            supplement = await donor.forecast(location, horizon, as_of)
+        except ProviderUnavailable:
+            continue
+        available = {
+            row.date: row.et0_mm for row in supplement.daily if row.et0_mm is not None
+        }
+        if not available:
+            continue
+        filled = 0
+        rows = []
+        for row in bundle.daily:
+            value = available.get(row.date)
+            if row.et0_mm is None and value is not None:
+                filled += 1
+                rows.append(
+                    replace(row, et0_mm=value, source=f"{row.source}+{donor.name}:et0")
+                )
+            else:
+                rows.append(row)
+        if filled == 0:
+            continue
+        return replace(
+            bundle,
+            daily=tuple(rows),
+            warnings=bundle.warnings
+            + (f"{donor.name}:reference_et0_substituted_for_{filled}_days",),
+        )
+    return replace(
+        bundle,
+        warnings=bundle.warnings + ("reference_et0_unavailable_for_daily_water_balance",),
+    )
+
+
 async def build_weather_bundle(
     location: tuple[float, float],
     horizon: int,
@@ -481,7 +559,13 @@ async def build_weather_bundle(
             continue
         try:
             bundle = await provider.forecast(location, horizon, as_of)
-            return replace(bundle, warnings=bundle.warnings + tuple(warnings))
+            bundle = replace(bundle, warnings=bundle.warnings + tuple(warnings))
+            # The primary provider wins on every quantity it supplies. Reference
+            # ET0 is the one gap worth filling from elsewhere, because nothing in
+            # the water balance works without it.
+            return await fill_reference_et0(
+                bundle, location, horizon, as_of, providers=providers, exclude=provider
+            )
         except ProviderUnavailable as exc:
             warnings.append(f"{exc.provider}:{exc.code}")
     return WeatherBundle(

@@ -26,6 +26,11 @@ export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-$CLOUD_RUN_WEB_URL}"
 export WHATSAPP_SEND_MODE="${WHATSAPP_SEND_MODE:-outbox}"
 export GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 export CEHUB_API_KEY_HEADER="${CEHUB_API_KEY_HEADER:-ApiKey}"
+# Open-Meteo is the fallback forecast provider and the only configured source of
+# FAO-56 reference ET0: CE Hub's daily series has none, and without ET0 the soil
+# water balance cannot run at all. Its free tier requires the caller to confirm
+# the use is permitted, so it is opt-in rather than assumed.
+export OPENMETEO_PERMITTED_FREE_USE="${OPENMETEO_PERMITTED_FREE_USE:-true}"
 # Set these only once a reviewed crop-vision model is actually deployed.
 export VISION_ENDPOINT_URL="${VISION_ENDPOINT_URL:-}"
 export VERTEX_VISION_ENDPOINT="${VERTEX_VISION_ENDPOINT:-}"
