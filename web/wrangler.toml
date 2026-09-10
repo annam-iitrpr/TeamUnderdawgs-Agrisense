@@ -1,8 +1,15 @@
-# Static frontend only. The API, worker, database, media and scheduling all stay
-# on GCP; this serves prebuilt files and holds no secrets and no state.
+# The static frontend, plus one narrow edge proxy.
+#
+# The API, worker, database, media and scheduling all stay on GCP. This serves
+# prebuilt files and holds exactly one secret, for one reason: data.gov.in
+# refuses connections from Cloud Run's egress, so the mandi price route cannot
+# reach its upstream from GCP. Proxying from here uses Cloudflare's egress and
+# keeps the key out of the browser bundle. See worker/index.ts.
 name = "agrisense-web"
+main = "worker/index.ts"
 compatibility_date = "2026-09-01"
 
 [assets]
 directory = "./out"
+binding = "ASSETS"
 not_found_handling = "404-page"
