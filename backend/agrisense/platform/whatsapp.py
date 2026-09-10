@@ -10,7 +10,7 @@ import hashlib
 import hmac
 import logging
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -174,6 +174,12 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         command = {'status': 'readiness', 'economics': 'money', 'log': 'history'}.get(lowered, lowered)
     elif lowered.startswith('log '):
         command = 'journal'
+    elif lowered.startswith('proposal_confirm:'):
+        command = 'proposal_confirm'
+    elif lowered.startswith('proposal_cancel:'):
+        command = 'proposal_cancel'
+    elif lowered.startswith('remind '):
+        command = 'reminder'
     elif lowered.startswith('use '):
         requested = text[4:].strip().lower()
         fields = list(session.scalars(select(d.FieldRow).where(
@@ -203,11 +209,12 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
                              'external_message_id': event['external_message_id'],
                              'conversation_id': conversation_id, 'message_id': message_id,
                              'media_id': event.get('media_id'), 'media_type': event.get('type'),
-                             'command': command}}))
+                             'command': command,
+                             'proposal_id': text.split(':', 1)[1].strip() if command in {'proposal_confirm', 'proposal_cancel'} else None}}))
     return 'queued'
 
 
-def command_reply(session: Session, request: dict[str, Any], tenant_id: str,
+def command_reply(session: Session, settings: Settings, request: dict[str, Any], tenant_id: str,
                   farmer_id: str) -> str | None:
     """Small deterministic channel commands; all agronomic answers stay in the assistant."""
     command = request.get('command')
@@ -229,6 +236,53 @@ def command_reply(session: Session, request: dict[str, Any], tenant_id: str,
             d.FieldRow.id == field_id, d.FieldRow.tenant_id == tenant_id,
             d.FieldRow.farmer_id == farmer_id)) if field_id else None
         return f'Active field: {field.name}.' if field else 'That field is no longer available.'
+    if command == 'reminder':
+        from agrisense.platform.auth import Actor
+        from agrisense.platform.service import DomainService
+        farmer = session.get(d.FarmerRow, farmer_id)
+        if farmer is None:
+            return 'Your farmer account could not be found.'
+        conversation = session.scalar(select(d.ConversationRow).where(
+            d.ConversationRow.id == request.get('conversation_id'),
+            d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
+        field_id = (conversation.payload or {}).get('field_id') if conversation else None
+        season = session.scalar(select(d.SeasonRow).where(
+            d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
+            d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+        if season is None:
+            return 'No open season is available for the active field.'
+        message = session.get(d.MessageRow, request.get('message_id'))
+        raw = ((message.payload if message else {}).get('text', '')).strip()[6:].strip()
+        try:
+            scheduled_at = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+            reminder = c.ReminderCreate(season_id=season.id, scheduled_at=scheduled_at,
+                                        channel='whatsapp', opted_in=True)
+            actor = Actor(farmer.user_id, tenant_id, farmer_id, 'farmer', True)
+            DomainService(session, actor, 'whatsapp', settings=settings).execute(
+                'POST', '/reminders', '', reminder, {})
+        except (ValueError, PlatformError) as error:
+            return getattr(error, 'message', 'Use: remind 2026-09-12T07:00:00+05:30')
+        return f'Reminder set for {scheduled_at.isoformat()}.'
+    if command in {'proposal_confirm', 'proposal_cancel'}:
+        proposal_id = request.get('proposal_id')
+        proposal = session.scalar(select(d.ProposalRow).where(
+            d.ProposalRow.id == proposal_id, d.ProposalRow.tenant_id == tenant_id,
+            d.ProposalRow.farmer_id == farmer_id))
+        if proposal is None:
+            return 'That proposed action could not be found.'
+        from agrisense.platform.auth import Actor
+        from agrisense.platform.service import DomainService
+        farmer = session.get(d.FarmerRow, farmer_id)
+        if farmer is None:
+            return 'Your farmer account could not be found.'
+        actor = Actor(farmer.user_id, tenant_id, farmer_id, 'farmer', True)
+        path = '/proposals/{id}/confirm' if command == 'proposal_confirm' else '/proposals/{id}/cancel'
+        try:
+            DomainService(session, actor, 'whatsapp', settings=settings).execute(
+                'POST', path, proposal.id, c.VersionedPatch(expected_version=proposal.version), {})
+        except PlatformError as error:
+            return error.message
+        return 'The proposed action was confirmed.' if command == 'proposal_confirm' else 'The proposed action was cancelled.'
     conversation = session.scalar(select(d.ConversationRow).where(
         d.ConversationRow.id == request.get('conversation_id'),
         d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
@@ -400,6 +454,27 @@ def send(settings: Settings, recipient: str, body: str) -> str:
     return (payload.get('messages') or [{}])[0].get('id', '')
 
 
+def send_buttons(settings: Settings, recipient: str, body: str,
+                 buttons: list[tuple[str, str]]) -> str:
+    """Send up to three quick replies while the customer-service window is open."""
+    import httpx
+    if not (settings.whatsapp_access_token and settings.whatsapp_phone_number_id):
+        raise PlatformError('WHATSAPP_NOT_CONFIGURED', 'Outbound messaging is not configured.', 503, True)
+    payload = {'messaging_product': 'whatsapp', 'to': recipient, 'type': 'interactive',
+               'interactive': {'type': 'button', 'body': {'text': whatsapp_text(body)},
+                               'action': {'buttons': [
+                                   {'type': 'reply', 'reply': {'id': button_id[:256], 'title': title[:20]}}
+                                   for button_id, title in buttons[:3]]}}}
+    try:
+        response = httpx.post(graph_url(settings), headers={'Authorization': f'Bearer {settings.whatsapp_access_token}'},
+                              json=payload, timeout=10.0)
+        response.raise_for_status()
+        return (response.json().get('messages') or [{}])[0].get('id', '')
+    except httpx.HTTPError as exc:
+        log.warning('whatsapp button send failed: %s', type(exc).__name__)
+        raise PlatformError('WHATSAPP_SEND_FAILED', 'The message could not be sent.', 503, True) from exc
+
+
 def deliver_outbound(session: Session, settings: Settings, event: d.OutboxRow) -> str:
     """Outbox consumer for queued messages. Refuses to send what policy says it may not."""
     payload = event.payload or {}
@@ -415,11 +490,16 @@ def deliver_outbound(session: Session, settings: Settings, event: d.OutboxRow) -
     if not recipient:
         # Only a digest is stored, so a send needs a number the farmer supplied for this purpose.
         return 'recipient_unknown'
-    send(settings, recipient, whatsapp_text(str(payload.get('body', ''))))
+    buttons = [tuple(item) for item in payload.get('buttons', []) if isinstance(item, list) and len(item) == 2]
+    if buttons:
+        send_buttons(settings, recipient, str(payload.get('body', '')), buttons)
+    else:
+        send(settings, recipient, whatsapp_text(str(payload.get('body', ''))))
     return 'sent'
 
 
-def queue_outbound(session: Session, settings: Settings, channel: d.ChannelRow, body: str) -> d.OutboxRow:
+def queue_outbound(session: Session, settings: Settings, channel: d.ChannelRow, body: str,
+                   buttons: list[tuple[str, str]] | None = None) -> d.OutboxRow:
     """Outbound messages are queued, and only sent when live mode is explicitly configured."""
     if not channel.opted_in:
         raise PlatformError('CHANNEL_NOT_OPTED_IN', 'This channel is not opted in.', 409)
@@ -427,6 +507,7 @@ def queue_outbound(session: Session, settings: Settings, channel: d.ChannelRow, 
     row = d.OutboxRow(tenant_id=channel.tenant_id, kind='whatsapp.outbound', aggregate_id=channel.id,
                       payload={'channel_id': channel.id, 'body': body,
                                'requires_template': not within_session,
+                               'buttons': [list(item) for item in (buttons or [])],
                                'send_mode': settings.whatsapp_send_mode})
     session.add(row)
     return row
