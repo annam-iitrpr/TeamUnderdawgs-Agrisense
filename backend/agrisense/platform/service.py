@@ -240,10 +240,10 @@ class DomainService:
                     # Receipt time belongs to server, not the submitted consent timestamp.
                     patch['consents']=[{**v,'recorded_at':d.utcnow().isoformat()} for v in patch['consents']]
                 value=c.Farmer.model_validate({**row.payload,**patch,'version':row.version});row.payload=dump(value);return value
-            if not self.actor.email_verified:raise PlatformError('EMAIL_VERIFICATION_REQUIRED','Verify your email before deleting your account.',403)
+            if not self.actor.identity_verified:raise PlatformError('IDENTITY_VERIFICATION_REQUIRED','Verify your phone before deleting your account.',403)
             job=self.job('privacy.delete',{'user_id':self.actor.user_id});user=self.s.get(d.User,self.actor.user_id);user.disabled=True;return job
         if path=='/me/export':
-            if not self.actor.email_verified:raise PlatformError('EMAIL_VERIFICATION_REQUIRED','Verify your email before exporting data.',403)
+            if not self.actor.identity_verified:raise PlatformError('IDENTITY_VERIFICATION_REQUIRED','Verify your phone before exporting data.',403)
             return self.job('privacy.export',{})
         if path=='/fields':
             return self.paginate(d.FieldRow,query,archived=False) if method=='GET' else self.create_field(body)
@@ -421,7 +421,7 @@ class DomainService:
                 for row in self.s.scalars(select(d.ChannelRow).where(d.ChannelRow.tenant_id==self.actor.tenant_id,d.ChannelRow.farmer_id==self.actor.farmer_id,d.ChannelRow.provider=='whatsapp')):
                     row.opted_in=False;self.s.delete(row)
                 return c.MutationReceipt(id=d.new_id(),status='completed')
-            if not self.actor.email_verified:raise PlatformError('EMAIL_VERIFICATION_REQUIRED','Verify your email before linking WhatsApp.',403)
+            if not self.actor.identity_verified:raise PlatformError('IDENTITY_VERIFICATION_REQUIRED','Verify your phone before linking WhatsApp.',403)
             code=secrets.token_urlsafe(18);id=d.new_id();expiry=d.utcnow()+timedelta(minutes=10)
             self.s.add(d.LinkChallenge(**self.owned_values({'id':id,'consent_version':body.consent_version}),code_hash=hashlib.sha256(code.encode()).hexdigest(),expires_at=expiry))
             return c.ChannelLinkChallenge(challenge_id=id,code=code,expires_at=expiry,instructions='Send LINK followed by this code from your WhatsApp account. This code can be used once.')

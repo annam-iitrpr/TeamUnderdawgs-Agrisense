@@ -18,7 +18,7 @@ from agrisense.platform.errors import PlatformError
 @dataclass(frozen=True)
 class Identity:
     uid: str
-    email_verified: bool
+    identity_verified: bool
     display_name: str
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class Actor:
     tenant_id: str
     farmer_id: str
     role: str
-    email_verified: bool
+    identity_verified: bool
 
 class FirebaseVerifier:
     def __init__(self, settings: Settings):
@@ -51,7 +51,11 @@ class FirebaseVerifier:
         uid=claims.get('uid') or claims.get('sub')
         if not isinstance(uid,str) or not uid:
             raise PlatformError('UNAUTHENTICATED','Please sign in again.',401)
-        return Identity(uid,bool(claims.get('email_verified')),str(claims.get('name') or 'Farmer')[:160])
+        # Email accounts used this claim historically. Phone Auth users prove
+        # possession through Firebase's phone provider, represented by the
+        # verified phone_number claim instead.
+        verified = bool(claims.get('email_verified') or claims.get('phone_number'))
+        return Identity(uid, verified, str(claims.get('name') or 'Farmer')[:160])
 
 
 def enroll(session: Session, identity: Identity) -> Actor:
@@ -76,4 +80,4 @@ def enroll(session: Session, identity: Identity) -> Actor:
     if not farmer:raise PlatformError('ACCOUNT_NOT_ENROLLED','Account membership requires operator review.',403)
     membership=session.get(Membership,(user.id,farmer.tenant_id))
     if not membership:raise PlatformError('FORBIDDEN','Account membership is unavailable.',403)
-    return Actor(user.id,farmer.tenant_id,farmer.id,membership.role,identity.email_verified)
+    return Actor(user.id,farmer.tenant_id,farmer.id,membership.role,identity.identity_verified)

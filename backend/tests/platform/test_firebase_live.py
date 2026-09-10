@@ -57,7 +57,7 @@ def verifier() -> FirebaseVerifier:
 def test_a_real_id_token_verifies_and_a_tampered_one_does_not(live_token):
     checker = verifier()
     identity = checker.verify(live_token)
-    assert identity.uid and isinstance(identity.email_verified, bool)
+    assert identity.uid and isinstance(identity.identity_verified, bool)
     for bad in (live_token[:-4] + 'AAAA', 'not-a-token', ''):
         with pytest.raises(PlatformError) as raised:
             checker.verify(bad)

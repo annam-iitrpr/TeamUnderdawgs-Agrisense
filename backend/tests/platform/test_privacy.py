@@ -64,7 +64,7 @@ async def test_export_requires_a_verified_email(harness, asha):
     harness.app.state.verifier.identities['token-asha'] = Identity('uid-asha', False, 'Asha')
     refused = asha.post('/me/export', None)
     assert refused.status_code == 403
-    assert refused.json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'
+    assert refused.json()['error']['code'] == 'IDENTITY_VERIFICATION_REQUIRED'
 
 
 async def test_deletion_removes_the_records_and_the_stored_objects(harness, asha, ravi, season, field):
@@ -113,7 +113,7 @@ async def test_deletion_requires_a_verified_email(harness, asha):
     harness.app.state.verifier.identities['token-asha'] = Identity('uid-asha', False, 'Asha')
     refused = asha.delete('/me')
     assert refused.status_code == 403
-    assert refused.json()['error']['code'] == 'EMAIL_VERIFICATION_REQUIRED'
+    assert refused.json()['error']['code'] == 'IDENTITY_VERIFICATION_REQUIRED'
 
 
 async def test_the_erasure_removes_its_own_job_record_along_with_the_account(harness, asha, season):

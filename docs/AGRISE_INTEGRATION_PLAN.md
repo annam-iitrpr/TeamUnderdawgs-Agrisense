@@ -19,8 +19,8 @@ canonical local env file. The deployed frontend is intended to be
 `agrisense.spacesdrive.cc`.
 
 Real credentials belong only in `~/Work/agrisense.env`, Secret Manager, or the
-team password manager. `docs/environment.example` is the shareable variable
-catalog; it contains no credentials.
+team password manager. The repository contains no credential file. The local
+WhatsApp relay `.env` now points back to the consolidated file.
 
 ## Current contracts and routes
 
@@ -182,3 +182,49 @@ Blocked on external or human input:
 - Advice certification and spray safety until an agronomist signs off.
 - Full live authenticated E2E until the latest API and frontend revisions are
   deployed and disposable phone/WhatsApp test accounts are available.
+
+## Prerequisites and manual verification checklist
+
+### Firebase SMS and web release
+
+- [ ] Enable Phone under Firebase Authentication providers.
+- [ ] Confirm the Firebase web app config in ~/Work/agrisense.env matches the API project.
+- [ ] Add a disposable E.164 test number or Firebase fictional test number.
+- [ ] Add the deployed frontend hostname to Firebase authorized domains.
+- [ ] Test sign-up, reload, sign-out, and sign-in again with SMS OTP.
+- [ ] Test invalid phone, invalid code, expired code, resend, and rate limiting.
+- [ ] Test account export, deletion, and WhatsApp linking after phone verification.
+
+### API and website release
+
+- [ ] Provision a least privilege Cloud Build service account for infra/deploy.sh.
+- [ ] Deploy the API and verify /health/live, /health/ready, contracts, and water/advice fixes.
+- [ ] Deploy the frontend to the configured Cloudflare Pages/Wrangler project.
+- [ ] Verify /, /sign-in, /sign-up, /close-season, /water, and /ask publicly.
+- [ ] Confirm frontend API URL, Firebase config, CORS, and Cloud Run URL agree.
+
+### WhatsApp manual flow
+
+- [ ] Configure the Meta callback URL /webhooks/whatsapp and its credentials.
+- [ ] Complete SMS sign-in, create a WhatsApp link code, and send LINK <code>.
+- [ ] Confirm one inbox row, conversation message, assistant job, and outbound outbox row.
+- [ ] Replay the same Meta message ID and confirm no duplicate job or reply.
+- [ ] Test unlinked numbers, unlinking, unsupported media, and the 24 hour window.
+- [ ] Verify a live Meta text reply only after the outbox dry run is clean.
+- [ ] Complete media download/custody for image and voice messages.
+
+### Science/reference data
+
+- [ ] Supply district/state sowing windows for the pilot regions.
+- [ ] Supply reviewed seasonal irrigation and per hectare cultivation costs.
+- [ ] Supply paired yield/price/cost records before enabling economics ranking.
+- [ ] Supply product label constraints and agronomist approval before spray certification.
+
+## Current remaining work
+
+- API and frontend production deployment.
+- Firebase Phone Auth activation and real SMS smoke test.
+- WhatsApp media, image/voice ingestion, active-field state, formatting, live send, and route mapping.
+- Authenticated API/browser E2E against disposable accounts; the 30-test Chromium suite covers public layout, PWA, landing, and phone-form validation.
+- Regional crop calendar, economics, product-label, and agronomist inputs.
+- Replace the placeholder privacy policy before public use.
