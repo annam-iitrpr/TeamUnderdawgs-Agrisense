@@ -61,34 +61,11 @@ function setTranslateCookie(target: string): void {
 export function PageTranslation() {
   const { language } = useLanguage();
 
-  useEffect(() => {
-    const target = GOOGLE_CODE[language] ?? "en";
-    let stored: string | null = null;
-    try {
-      stored = window.sessionStorage.getItem("agrisense.gtrans");
-    } catch {
-      // Private mode. The cookie below still works for this page load.
-    }
-    if (stored === target) return;
-
-    setTranslateCookie(target);
-    try {
-      window.sessionStorage.setItem("agrisense.gtrans", target);
-    } catch {
-      // Nothing to remember; the reload below still applies the cookie.
-    }
-
-    // The widget only reads the cookie as it initialises, so a change after
-    // load needs the page to come back. Skipped on the first paint in English,
-    // which is the common case and must not cost a farmer a reload.
-    if (stored !== null || target !== "en") {
-      window.location.reload();
-      return;
-    }
-  }, [language]);
-
+  // Load the widget once. It reads the cookie as it initialises, so the cookie
+  // is set before the script is appended.
   useEffect(() => {
     if (document.getElementById(SCRIPT_ID)) return;
+    setTranslateCookie(GOOGLE_CODE[language] ?? "en");
     window.googleTranslateElementInit = () => {
       const Element = window.google?.translate?.TranslateElement;
       if (!Element) return;
@@ -100,7 +77,35 @@ export function PageTranslation() {
     // A translation layer is a nicety; it must never block the app rendering.
     script.async = true;
     document.body.appendChild(script);
+    // Deliberately runs once: `language` is read for the initial cookie only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A later change drives the widget's own control rather than reloading.
+  //
+  // Reloading to re-read the cookie is the documented trick and it is a trap:
+  // it needs somewhere to remember that the reload already happened, and when
+  // that store is unavailable -- a private window, blocked site data -- the
+  // condition never clears and the page reloads forever. A demo that reload
+  // loops is worse than one that is not translated, so nothing here reloads.
+  useEffect(() => {
+    const target = GOOGLE_CODE[language] ?? "en";
+    setTranslateCookie(target);
+    let attempts = 0;
+    const apply = () => {
+      const combo = document.querySelector<HTMLSelectElement>("select.goog-te-combo");
+      if (!combo) {
+        // The widget loads asynchronously and may not be ready yet. Give it a
+        // bounded number of tries rather than polling for the life of the page.
+        if (++attempts < 20) window.setTimeout(apply, 300);
+        return;
+      }
+      if (combo.value === target) return;
+      combo.value = target;
+      combo.dispatchEvent(new Event("change"));
+    };
+    apply();
+  }, [language]);
 
   return <div id="agrisense-gtranslate-host" className="sr-only" aria-hidden />;
 }
