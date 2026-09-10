@@ -129,3 +129,34 @@ class WindowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class IntervalSemanticsTests(unittest.TestCase):
+    """The configured provider emits this warning on every single response.
+
+    Treating it as a blocker meant no spray window could ever be named, for any
+    farmer on any field: the feature was unreachable by construction, and the
+    farmer was told the forecast was missing when it was in fact present. A
+    possible one hour shift, stated, is the smaller harm -- so it travels with
+    the answer instead of replacing it.
+    """
+
+    def test_a_window_is_still_named(self):
+        warned = replace(fixture(6), warnings=("interval_semantics_unconfirmed",))
+        result = evaluate(warned)
+        self.assertEqual(result["status"], "recommended")
+        self.assertIsNotNone(result["selected_window"])
+
+    def test_and_the_caveat_travels_with_it(self):
+        warned = replace(fixture(6), warnings=("interval_semantics_unconfirmed",))
+        self.assertIn(
+            "window_edges_may_shift_one_hour_provider_interval_unconfirmed",
+            evaluate(warned)["reasons"],
+        )
+
+    def test_a_stale_forecast_still_refuses(self):
+        """Staleness is a real gap and stays fatal; this change did not soften it."""
+        stale = replace(fixture(6), retrieved_at=NOW - timedelta(hours=4))
+        self.assertEqual(evaluate(stale)["status"], "insufficient_data")
+        self.assertIn("fresh_forecast_required", evaluate(stale)["reasons"])

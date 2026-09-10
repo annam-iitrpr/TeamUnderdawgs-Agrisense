@@ -147,7 +147,7 @@ def rank_windows(
             "alternatives": [],
             "rejected": [],
         }
-    if freshness(bundle, now) != "fresh" or "interval_semantics_unconfirmed" in bundle.warnings:
+    if freshness(bundle, now) != "fresh":
         return {
             "status": "insufficient_data",
             "selected_window": None,
@@ -156,6 +156,23 @@ def rank_windows(
             "alternatives": [],
             "rejected": [],
         }
+    # An unconfirmed interval convention is carried, not fatal.
+    #
+    # It means we have not confirmed whether the provider timestamps an hour at
+    # its start or its end, which can shift a named window by an hour. The
+    # configured provider emits this warning on every response, so treating it
+    # as a blocker meant no spray window could ever be named for any farmer on
+    # any field -- the whole feature was unreachable by construction, and the
+    # farmer was told the data was missing when it was actually present.
+    #
+    # A possible one hour offset, stated, is a smaller harm than refusing to
+    # answer at all, so it travels with the recommendation as a reason the
+    # farmer and an agronomist can both see.
+    carried = (
+        ["window_edges_may_shift_one_hour_provider_interval_unconfirmed"]
+        if "interval_semantics_unconfirmed" in bundle.warnings
+        else []
+    )
     hours = {hour.start_at: hour for hour in bundle.hours}
     accepted, rejected = [], []
     unique = {(row.start_at, row.end_at): row for row in candidates}
@@ -236,11 +253,14 @@ def rank_windows(
         "readiness": None if selected is None else selected["readiness"],
         "alternatives": accepted[1:4] if status == "recommended" else [],
         "rejected": rejected,
-        "reasons": ["no_stress_need"]
-        if status == "monitor"
-        else []
-        if selected
-        else ["no_eligible_window"],
+        "reasons": carried
+        + (
+            ["no_stress_need"]
+            if status == "monitor"
+            else []
+            if selected
+            else ["no_eligible_window"]
+        ),
         "policy_evidence_id": policy.evidence_id,
         "assumptions": ["binary_feasibility_viability", "stull_standard_pressure_approximation"],
     }
