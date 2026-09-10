@@ -109,7 +109,7 @@ def test_a_linked_text_creates_the_normal_conversation_and_assistant_job(harness
         assert job.payload['request']['message_id'] == user_message.id
 
 
-def test_media_is_recorded_but_does_not_create_an_empty_assistant_turn(harness, asha):
+def test_media_is_recorded_and_queued_for_worker_without_an_empty_assistant_turn(harness, asha):
     code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
     signed(harness, message(f'LINK {code}', 'wamid.link'))
     payload = {'entry': [{'changes': [{'value': {'messages': [
@@ -117,7 +117,9 @@ def test_media_is_recorded_but_does_not_create_an_empty_assistant_turn(harness, 
          'image': {'id': 'media.1'}, 'timestamp': '1757462400'}]}}]}]}
     assert signed(harness, payload).status_code == 200
     with harness.app.state.sessions() as session:
-        assert session.scalars(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')).all() == []
+        jobs = session.scalars(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')).all()
+        assert len(jobs) == 1
+        assert jobs[0].payload['request']['media_id'] == 'media.1'
 
 
 def test_extracts_interactive_replies_and_media_captions():
@@ -155,7 +157,7 @@ def test_journal_command_is_processed_by_worker_and_queued_for_delivery(harness,
     processed = asyncio.run(worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings))
     assert processed == 1
     with harness.app.state.sessions() as session:
-        journal = session.scalar(select(d.JournalRow).where(d.JournalRow.source == 'whatsapp'))
+        journal = session.scalar(select(d.JournalRow).where(d.JournalRow.payload['source'].as_string() == 'whatsapp'))
         assert journal is not None
         outbound = session.scalar(select(d.OutboxRow).where(d.OutboxRow.kind == 'whatsapp.outbound'))
         assert outbound is not None
@@ -266,7 +268,7 @@ def test_a_revoked_channel_is_not_messaged_even_if_something_was_already_queued(
     assert calls == []
 
 
-def test_a_send_never_happens_without_a_number_the_farmer_supplied(harness, asha, monkeypatch):
+def test_a_linked_channel_sends_to_the_number_the_farmer_supplied(harness, asha, monkeypatch):
     calls = []
     monkeypatch.setattr(whatsapp, 'send', lambda *args: calls.append(args) or 'wamid.out')
     channel_id = linked_channel(harness, asha)
@@ -275,6 +277,5 @@ def test_a_send_never_happens_without_a_number_the_farmer_supplied(harness, asha
         channel = session.get(d.ChannelRow, channel_id)
         event = whatsapp.queue_outbound(session, settings, channel, 'Irrigation is due today.')
         session.commit()
-        # Only a digest is stored, so there is no number to send to unless one was supplied.
-        assert whatsapp.deliver_outbound(session, settings, event) == 'recipient_unknown'
-    assert calls == []
+        assert whatsapp.deliver_outbound(session, settings, event) == 'sent'
+    assert len(calls) == 1 and calls[0][1] == NUMBER

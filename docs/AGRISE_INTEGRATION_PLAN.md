@@ -4,6 +4,9 @@ This is the handoff document for the next implementation session. It is
 intentionally self-contained: read this file, `AGENTS.md`, the contract files,
 and the linked WhatsApp guide before changing code.
 
+For teammate setup and the copy-ready manual checklist, use
+`docs/TEAM_SETUP_AND_MANUAL_TESTING.md`.
+
 ## Project context
 
 AgriSense is a farmer-facing web/PWA plus a WhatsApp channel for forecast-driven
