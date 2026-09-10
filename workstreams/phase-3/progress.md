@@ -96,3 +96,120 @@ intended behaviour until the dependency exists:
 - `backend/.venv/bin/python -m pytest backend/tests/platform/test_contracts.py -q`: **6 passed**. Validates all 57 operations, schema references/auth/idempotency, 21 synthetic fixtures, UTC interval validation, null-versus-zero, quantile ordering and forbidden client identity fields.
 - `scripts/generate_contracts.py --check`: passed; all generated artifacts and hashes match.
 - Early tag: `contract_v1`; completed bootstrap tag remains reserved.
+
+---
+
+## 2026-09-10 — P1-05 readiness, and crop scores moved into onboarding
+
+### Readiness and spray windows (P1-05)
+
+New screen at `/readiness?season=`, linked from each season card ahead of Money and
+Water because it is the only one of the three that answers "what do I do today".
+
+It consumes `/seasons/{id}/recommendations/latest` and `/seasons/{id}/forecast`. The
+forecast is fetched separately and allowed to fail on its own — it supplies the
+freshness line, not the advice, so losing it must not blank the window the farmer
+came to read.
+
+Presentation decisions worth recording:
+
+- The window leads; the score explains it. A readiness figure with no time attached
+  does not help anyone decide whether to walk into a field.
+- `need`, `timing_fit` and `viability` are shown as three separate 10-segment meters,
+  never blended. They fail for different reasons and imply different actions: "the
+  crop does not need it" means wait, "the weather will not carry it" means go on a
+  different day. A single averaged score hides which is true.
+- `readiness` is 0–100 in the contract while the three parts are 0–1, so it is scaled
+  rather than drawn on a second axis.
+- The stress projection is grouped by `stress_type`. The contract carries one point
+  per (date, stress_type), so day heat, night heat and frost arrive as separate points
+  on the same day; averaging them would produce a bar describing none of them.
+- A day with no value draws a dashed gap, not a zero-height bar. A column sitting at
+  the axis reads as "calm", which is the opposite of "not known". The caption states
+  how many of the points are actually known.
+- A `safety_check` with status `unknown` is captioned "treat this as not cleared, not
+  as cleared".
+- Engine reason codes are humanised before display; `project_assumption_pending_
+  validation` reached the farmer raw in the first cut.
+
+Verified against a real evaluation (season `55b5ff…`, cotton, Ludhiana): the engine
+returned `insufficient_data` with no window but a full 33-point stress curve across
+three types from `cehub:Meteoblue`, and one onset with a null date. That exercises the
+no-window path, the unknown-score path, the multi-type curve and the null-onset path
+together. No horizontal scroll at 375px; caption and axis both fully visible.
+
+### Crop scores now appear during onboarding, not after it
+
+Previously the crop step said "choose the crop once the field is saved" and deferred
+everything — so a farmer reached the dashboard before ever seeing a compatibility,
+water or return figure. That inverted the PRD's flow.
+
+The field is now created when the farmer leaves the **land** step rather than at the
+end of onboarding. This was forced by the contract: `PlanningRequest` requires a
+`field_id`, and the engine scores a crop *against a field*, so there is nothing to
+compare until the field exists. Two useful consequences — a farmer who abandons
+onboarding halfway keeps the land they entered, and the review step becomes a genuine
+summary of something real.
+
+The crop step now runs `/planning/compare` for real and renders the existing
+`CropCard` per candidate, so both branches show the same figures:
+
+- "Suggest crops" compares the reviewed catalogue (max 5, the engine's limit).
+- "I already have a crop" compares that one crop against the same field, so the
+  single-crop view cannot disagree with the ranked list about the same crop.
+
+`crop.seasonId` was added to the draft to separate "highlighted in the picker" from
+"the season exists on the server". The success notice previously appeared the instant
+a crop was tapped, before any request had been made — it now waits for the created
+season. Draft version bumped to 3; `loadDraft` discards rather than migrates an older
+shape by design.
+
+### Shared, to stop parallel screens drifting
+
+- `features/planning/use-comparison.ts` — request shape, the tomorrow-not-today sowing
+  window, and a ticket guard so a slow response cannot overwrite a newer one when the
+  farmer switches modes quickly.
+- `features/planning/no-candidates.tsx` — extracted from the planner and now used by
+  onboarding too, so a farmer is told the same thing in both places. It names each
+  excluded crop from `facts.crop_id`; the first cut showed five identical unnamed
+  lines, which tells a farmer nothing.
+- `DataModeBadge` moved into `components/ui.tsx`. Two copies existed and had already
+  diverged — one pulsed on live data, one did not.
+
+Suitability ranking uses the server's order throughout. The engine's ranking weighs
+more than the `compatibility` map exposes, so re-deriving it from the mean of that map
+would quietly disagree with the engine about which crop is best.
+
+### Still blocked on Phase 2 data, not on code
+
+`/planning/compare` now returns, for every crop in the catalogue:
+
+```
+reviewed_regional_crop_reference_missing  {crop_id: cotton|maize|rice|soybean|wheat}
+data_mode: unavailable, candidates: []
+```
+
+So compatibility, water and ROI figures exist for no crop yet. The UI is wired to
+display all of them and says plainly why it cannot. `/seasons/{id}/recommendations/
+latest` returns `insufficient_data` with reasons `rule_parameters_require_field_
+validation` and `confirmed_product_selection_required` for the same underlying reason.
+Nothing here is fabricated to fill the gap.
+
+### Also fixed
+
+- Mobile clip: the stress-curve caption inherited the chart scroller's minimum width
+  and ran off a narrow screen. Only the chart scrolls now.
+- Three `?? []` memo inputs produced a new array identity every render and defeated the
+  memo they fed (`money-screen`, `agronomist/panels`, `crop-planner`).
+- An unescaped apostrophe in `what-if.tsx` was the one hard lint error in the tree.
+- `scripts/deploy/web-cloudflare.sh` added. The Cloudflare deploy was previously only
+  reconstructable by grepping the built bundle for its baked values. It takes every
+  value from the environment (no keys in the repo) and refuses to upload a bundle
+  containing a localhost API base or missing the intended one.
+
+Typecheck clean, lint clean (zero errors, zero warnings), 108 web unit tests pass.
+
+### Needs an operator
+
+`wrangler deploy` requires `CLOUDFLARE_API_TOKEN`, which is not in this environment.
+The build and its pre-upload validation both pass; only the upload is blocked.
