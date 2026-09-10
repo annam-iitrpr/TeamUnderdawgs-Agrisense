@@ -114,11 +114,37 @@ export function CropCard({
             plan.exclusions?.[0]?.code ? explainCode(plan.exclusions[0].code) : undefined
           }
         />
-        <ScoreMeter
-          score={waterScore}
-          label="Water need, against the other crops"
-          invertMeaning={{ strong: "Needs least", fair: "Middling", weak: "Needs most" }}
-        />
+        {/* What this crop needs on this land, not how it ranks against the
+            others. A farmer deciding what to sow needs the volume they have to
+            find; "needs least of the five" tells them nothing about whether
+            they can meet it. The depth is shown too, because that is the form
+            an agronomist can check the figure in. */}
+        <div>
+          <p className="text-xs text-slate">Water this crop needs on your land</p>
+          {seasonalLitres != null ? (
+            <>
+              <p className="mt-0.5 text-h3 font-semibold tabular-nums text-ink">
+                {formatLitres(seasonalLitres)}
+              </p>
+              <p className="text-xs text-slate">
+                whole season on {areaHa} ha
+                {areaHa > 0
+                  ? ` · about ${Math.round(seasonalLitres / (areaHa * 10000))} mm`
+                  : ""}
+                {/* This is the crop's water requirement for the season (FAO
+                    IWM 3, table 5), not what is left after rain. Saying rain
+                    was already counted would understate what a farmer has to
+                    find. Rain is subtracted day by day in the water plan, once
+                    there is a sown crop and a forecast to subtract. */}
+                . Rain during the season covers part of this.
+              </p>
+            </>
+          ) : (
+            <p className="mt-0.5 text-sm text-slate">
+              Needs the season&rsquo;s rainfall and reference water use for this crop.
+            </p>
+          )}
+        </div>
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
