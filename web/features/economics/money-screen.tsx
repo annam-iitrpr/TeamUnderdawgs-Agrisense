@@ -13,7 +13,7 @@
  * would hide the one number a farmer most needs to see.
  */
 import { AppShell } from "@/components/app-shell";
-import { Button, Callout, Card, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
+import { Callout, Card, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { EstimateBand } from "@/features/planning/estimate-band";
 import type { Economics, JournalEntry, Season } from "@/lib/api/contract";
@@ -51,7 +51,10 @@ export function MoneyScreen({ seasonId }: { seasonId: string }) {
 
   const season = seasonQuery.data ?? null;
   const economics = economicsQuery.data ?? null;
-  const entries: JournalEntry[] = journalQuery.data?.items ?? [];
+  // Memoised rather than defaulted inline: a fresh `[]` on every render gives
+  // the reductions below a new dependency each time and defeats their memo.
+  const journalItems = journalQuery.data?.items;
+  const entries: JournalEntry[] = useMemo(() => journalItems ?? [], [journalItems]);
 
   // Recorded spending is the farmer's own arithmetic on their own entries, so it
   // is a fact rather than an estimate and is labelled that way.

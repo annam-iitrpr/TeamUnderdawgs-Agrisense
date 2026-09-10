@@ -19,15 +19,23 @@
  *    field.
  */
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
-import { Button, Callout, Card, TextField } from "@/components/ui";
+import { Button, Callout, Card, Skeleton, TextField } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError } from "@/lib/api/envelope";
 import { catalog as catalogApi, fields as fieldsApi } from "@/lib/api/routes";
 import { newIdempotencyKey } from "@/lib/api/client";
-import type { AreaUnit, LocationResult, LocationSource } from "@/lib/api/contract";
+import type { AreaUnit, Crop, LocationResult, LocationSource } from "@/lib/api/contract";
 import { AMBIGUOUS_UNITS, AREA_UNITS, parseArea, roundHectares } from "@/lib/area";
 import { formatArea } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCrops } from "@/features/crops/use-crop-name";
+import { CropCard } from "@/features/planning/crop-card";
+import { NoCandidates } from "@/features/planning/no-candidates";
+import {
+  MAX_CANDIDATES,
+  useAutoComparison,
+  waterScores,
+} from "@/features/planning/use-comparison";
 import {
   canAdvance,
   clearDraft,
@@ -108,6 +116,19 @@ export function OnboardingFlow() {
     });
   }, [update]);
 
+  /**
+   * Leaving the land step saves the field before moving on; a failure holds the
+   * farmer on the step with the error rather than sending them to a crop
+   * comparison that has no field to compare against.
+   */
+  async function advance() {
+    if (step === "land" && !draft?.fieldId) {
+      const fieldId = await ensureField();
+      if (!fieldId) return;
+    }
+    goNext();
+  }
+
   const goBack = useCallback(() => {
     update((d) => {
       d.step = Math.max(d.step - 1, 0);
@@ -119,8 +140,22 @@ export function OnboardingFlow() {
     return parseArea(draft.land.enteredArea, draft.land.unit);
   }, [draft]);
 
-  async function save() {
-    if (!draft || !uid || !area?.ok) return;
+  /**
+   * Saves the field, once, as the farmer leaves the land step.
+   *
+   * This used to happen at the very end. It had to move: the crop step now
+   * shows what each crop would actually do on *this* field — compatibility,
+   * water, yield and return — and the engine scores a crop against a field id.
+   * There is nothing to score against until the field exists.
+   *
+   * Calling it twice is safe. The draft's idempotency key is reused rather than
+   * minted per attempt, so a timeout followed by a retry resolves to the same
+   * field instead of creating a second one, and the id is remembered in the
+   * draft so a reload does not create another.
+   */
+  const ensureField = useCallback(async (): Promise<string | null> => {
+    if (!draft || !uid || !area?.ok) return null;
+    if (draft.fieldId) return draft.fieldId;
     setSaving(true);
     setSaveError(null);
     try {
@@ -141,8 +176,8 @@ export function OnboardingFlow() {
         // The draft's key, not a fresh one: this is what makes a retry safe.
         draft.idempotencyKey,
       );
-      clearDraft(uid);
-      router.replace(`/?field=${encodeURIComponent(data.id)}`);
+      update((d) => void (d.fieldId = data.id));
+      return data.id;
     } catch (error) {
       if (error instanceof ApiError) {
         setSaveError(
@@ -153,9 +188,26 @@ export function OnboardingFlow() {
       } else {
         setSaveError(t("errorUnreachable"));
       }
+      return null;
     } finally {
       setSaving(false);
     }
+  }, [draft, uid, area, update, t]);
+
+  /**
+   * Finishes onboarding.
+   *
+   * By this point the field already exists and any chosen crop already has a
+   * season, so this creates nothing — it clears the draft and hands over to the
+   * dashboard. It still calls `ensureField` because a farmer can reach the
+   * review step without the land-step save having succeeded.
+   */
+  async function save() {
+    if (!draft || !uid) return;
+    const fieldId = draft.fieldId ?? (await ensureField());
+    if (!fieldId) return;
+    clearDraft(uid);
+    router.replace(`/?field=${encodeURIComponent(fieldId)}`);
   }
 
   if (!draft) {
@@ -193,7 +245,9 @@ export function OnboardingFlow() {
         {step === "land" ? (
           <LandStep draft={draft} update={update} area={area} />
         ) : null}
-        {step === "crop" ? <CropStep draft={draft} update={update} /> : null}
+        {step === "crop" ? (
+          <CropStep draft={draft} update={update} areaHa={area?.ok ? area.areaHa : null} />
+        ) : null}
         {step === "soil" ? <SoilStep draft={draft} update={update} /> : null}
         {step === "review" ? <ReviewStep draft={draft} area={area} /> : null}
       </div>
@@ -227,7 +281,9 @@ export function OnboardingFlow() {
           <Button
             size="lg"
             className="flex-1"
-            onClick={goNext}
+            onClick={() => void advance()}
+            busy={saving}
+            busyLabel="Saving your field"
             disabled={!canAdvance(step, draft)}
           >
             {t("next")}
@@ -640,11 +696,74 @@ function LandStep({
   );
 }
 
-function CropStep({ draft, update }: StepProps) {
+function CropStep({
+  draft,
+  update,
+  areaHa,
+}: StepProps & { areaHa: number | null }) {
+  const { crops, cropFor, isLoading: cropsLoading } = useCrops();
+  const fieldId = draft.fieldId;
+
+  // "Help me choose" compares the reviewed catalogue; naming a crop compares
+  // that one against the same field so the figures are on the same footing.
+  const candidates = useMemo(() => {
+    if (draft.crop.mode === "known") return draft.crop.cropId ? [draft.crop.cropId] : [];
+    if (draft.crop.mode === "help_me_choose") {
+      return crops.slice(0, MAX_CANDIDATES).map((c) => c.id);
+    }
+    return [];
+  }, [draft.crop.mode, draft.crop.cropId, crops]);
+
+  const { comparison, loading, error } = useAutoComparison(fieldId, candidates);
+
+  // Server order, not a local re-sort: the engine already ranked these.
+  const ranked = useMemo(() => comparison?.candidates ?? [], [comparison]);
+  const water = useMemo(() => waterScores(ranked), [ranked]);
+
+  const [choosing, setChoosing] = useState<string | null>(null);
+  const [chooseError, setChooseError] = useState<string | null>(null);
+
+  /**
+   * Starts the season straight from the comparison.
+   *
+   * The whole point of showing these figures here is that the farmer decides
+   * while looking at them, so the choice is committed on this screen rather
+   * than deferred to a picker on another one.
+   */
+  async function choose(cropId: string) {
+    if (!fieldId || !areaHa) return;
+    setChoosing(cropId);
+    setChooseError(null);
+    try {
+      const { data } = await fieldsApi.createSeason(
+        fieldId,
+        {
+          crop_id: cropId,
+          allocated_area_ha: roundHectares(areaHa),
+          status: "active",
+        },
+        newIdempotencyKey(),
+      );
+      update((d) => {
+        d.crop.mode = "known";
+        d.crop.cropId = cropId;
+        d.crop.cropName = cropFor(cropId)?.name ?? cropId;
+        d.crop.seasonId = data.id;
+      });
+    } catch (cause) {
+      setChooseError(
+        cause instanceof ApiError ? cause.message : "That crop could not be added.",
+      );
+    } finally {
+      setChoosing(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate">
-        You can set the crop now or after saving the field.
+        Pick a crop and see what it would do on this field, or let AgriSense suggest some. You
+        can also skip this and decide later.
       </p>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -652,30 +771,162 @@ function CropStep({ draft, update }: StepProps) {
           selected={draft.crop.mode === "known"}
           onClick={() => update((d) => void (d.crop.mode = "known"))}
           title="I already have a crop"
-          detail="Tell us what is planted or what you plan to plant."
+          detail="See how it suits this field before you commit."
         />
         <ModeCard
           selected={draft.crop.mode === "help_me_choose"}
           onClick={() => update((d) => void (d.crop.mode = "help_me_choose"))}
-          title="Help me choose"
-          detail="Compare crops that suit this field."
+          title="Suggest crops"
+          detail="Compare fit, water and expected return."
         />
       </div>
 
-      {/*
-        The crop itself is added on the field's own screen once the field exists,
-        because a season needs a field id to belong to. Saying so beats a picker
-        here that cannot save what it collects.
-      */}
-      {draft.crop.mode !== "undecided" ? (
-        <Callout tone="info" title="Choose the crop once the field is saved">
-          <p>
-            Save this field first, then pick the crop from the field&rsquo;s own screen. A crop
-            has to belong to a saved field before AgriSense can plan anything for it.
-          </p>
-          <p className="mt-2">Nothing you have entered here is lost.</p>
+      {draft.crop.mode === "known" ? (
+        <CropPicker
+          crops={crops}
+          loading={cropsLoading}
+          selected={draft.crop.cropId}
+          onSelect={(id) =>
+            update((d) => {
+              d.crop.cropId = id;
+              d.crop.cropName = crops.find((c) => c.id === id)?.name ?? id;
+            })
+          }
+        />
+      ) : null}
+
+      {/* Without a saved field there is nothing to score against, and saying so
+          is better than showing an empty comparison that looks like a failure. */}
+      {draft.crop.mode !== "undecided" && !fieldId ? (
+        <Callout tone="caution" title="Your field is not saved yet">
+          Go back one step and save your land details. A crop is scored against a particular
+          field, so there is nothing to compare until then.
         </Callout>
       ) : null}
+
+      {loading ? (
+        <div className="space-y-3" aria-busy="true">
+          <Skeleton className="h-40 w-full rounded-card" />
+          <Skeleton className="h-40 w-full rounded-card" />
+        </div>
+      ) : null}
+
+      {error ? (
+        <Callout tone="blocked" title="The comparison could not be loaded">
+          {error.message}
+        </Callout>
+      ) : null}
+
+      {chooseError ? (
+        <Callout tone="blocked" title="That crop could not be added">
+          {chooseError}
+        </Callout>
+      ) : null}
+
+      {!loading && ranked.length > 0 ? (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-ink">
+            {draft.crop.mode === "known"
+              ? "How this crop suits your field"
+              : `${ranked.length} crop${ranked.length === 1 ? "" : "s"} compared for your field`}
+          </p>
+          {ranked.map((plan, index) => (
+            <CropCard
+              key={plan.crop_id}
+              plan={plan}
+              crop={cropFor(plan.crop_id)}
+              areaHa={areaHa ?? 0}
+              rank={draft.crop.mode === "known" ? undefined : index + 1}
+              waterScore={water.get(plan.crop_id) ?? null}
+              selected={draft.crop.cropId === plan.crop_id}
+              onChoose={() => void choose(plan.crop_id)}
+              choosing={choosing === plan.crop_id}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/*
+        The engine declining to score a crop is a real answer, not an empty
+        state, and the farmer is told which crops and why. They are not blocked
+        by it: a season can still be recorded, and the figures fill in once the
+        reviewed data for their district is published.
+      */}
+      {!loading && !error && ranked.length === 0 && comparison ? (
+        <NoCandidates
+          comparison={comparison}
+          fieldName={draft.land.name.trim() || "this field"}
+          nameFor={(id) => cropFor(id)?.name ?? id}
+          footer={
+            draft.crop.cropId && !draft.crop.seasonId ? (
+              <div className="mt-3">
+                <Button
+                  onClick={() => void choose(draft.crop.cropId!)}
+                  busy={choosing !== null}
+                  busyLabel="Adding"
+                >
+                  Start a season with {cropFor(draft.crop.cropId)?.name ?? draft.crop.cropId}
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm">
+                Choose &ldquo;I already have a crop&rdquo; above to record your season anyway.
+              </p>
+            )
+          }
+        />
+      ) : null}
+
+      {/* Only once the season exists. Selecting a crop in the picker is not the
+          same as committing to it, and saying so before the request has even
+          been made is simply untrue. */}
+      {draft.crop.seasonId && draft.crop.cropName ? (
+        <Callout tone="success" title={`${draft.crop.cropName} is set for this field`}>
+          You can change it, or add a second crop, from the field&rsquo;s own screen later.
+        </Callout>
+      ) : null}
+    </div>
+  );
+}
+
+/** The reviewed catalogue, not a free-text box: a crop id has to be real. */
+function CropPicker({
+  crops,
+  loading,
+  selected,
+  onSelect,
+}: {
+  crops: Crop[];
+  loading: boolean;
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (loading) return <Skeleton className="h-12 w-full rounded-control" />;
+  if (crops.length === 0) {
+    return (
+      <Callout tone="caution" title="The crop list could not be loaded">
+        You can set the crop later from the field&rsquo;s own screen.
+      </Callout>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Crop">
+      {crops.map((crop) => (
+        <button
+          key={crop.id}
+          type="button"
+          aria-pressed={selected === crop.id}
+          onClick={() => onSelect(crop.id)}
+          className={cn(
+            "min-h-[44px] rounded-control border px-3 text-sm font-semibold",
+            selected === crop.id
+              ? "border-forest bg-forest text-white"
+              : "border-mist bg-card text-ink",
+          )}
+        >
+          {crop.name}
+        </button>
+      ))}
     </div>
   );
 }

@@ -15,7 +15,7 @@
  */
 import { AppShell } from "@/components/app-shell";
 import { LanguageSwitcher, useLanguage } from "@/components/language-provider";
-import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
+import { Button, Callout, Card, DataModeBadge, EmptyState, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { InstallAppButton } from "@/features/pwa/pwa-controls";
 import { AddSeasonForm } from "@/features/crops/add-season-form";
@@ -24,11 +24,11 @@ import { RemoveField } from "./remove-field";
 import { useCrops } from "@/features/crops/use-crop-name";
 import { useApiQuery } from "@/lib/api/query";
 import { fields as fieldsApi, seasons as seasonsApi } from "@/lib/api/routes";
-import type { DataMode, Field, Recommendation, Season } from "@/lib/api/contract";
+import type { Field, Recommendation, Season } from "@/lib/api/contract";
 import { formatArea, formatDateShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useActiveField } from "./active-field";
-import { ChevronDown, Droplets, IndianRupee, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
+import { ChevronDown, Clock, Droplets, IndianRupee, MapPin, Plus, Sparkles, Sprout } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -129,49 +129,6 @@ export function FieldDashboard() {
         ) : null}
       </div>
     </AppShell>
-  );
-}
-
-/** Visible honesty label. `unavailable` and `demo` must never look like `live`. */
-function DataModeBadge({ mode }: { mode: DataMode | undefined }) {
-  const { t } = useLanguage();
-  if (!mode) return null;
-  const label =
-    mode === "live"
-      ? t("dataLive")
-      : mode === "demo"
-        ? t("dataDemo")
-        : mode === "estimated"
-          ? t("dataEstimated")
-          : mode === "mixed"
-            ? t("dataMixed")
-            : t("dataUnavailable");
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold",
-        mode === "live"
-          ? "border-sprout/40 bg-sprout/10 text-forest"
-          : mode === "demo"
-            ? "border-amber/50 bg-amber/10 text-amber-ink"
-            : "border-mist text-slate",
-      )}
-    >
-      {/* A live badge that looks identical to a stale one tells a farmer nothing.
-          The dot pulses only while data really is live; every other mode is still. */}
-      <span
-        aria-hidden
-        className={cn(
-          "size-1.5 rounded-full",
-          mode === "live"
-            ? "animate-pulse bg-forest motion-reduce:animate-none"
-            : mode === "demo"
-              ? "bg-amber-ink"
-              : "bg-slate",
-        )}
-      />
-      {label}
-    </span>
   );
 }
 
@@ -451,9 +408,17 @@ function SeasonCard({ field, season }: { field: Field; season: Season }) {
         recommendation={recommendation}
       />
 
-      {/* The two views that explain the season's numbers, reachable from the
-          season they belong to rather than from a global menu. */}
+      {/* The views that explain the season, reachable from the season they
+          belong to rather than from a global menu. Readiness leads because it
+          is the only one that answers "what do I do today". */}
       <div className="mt-4 flex flex-wrap gap-2 border-t border-mist pt-4">
+        <Link
+          href={`/readiness?season=${encodeURIComponent(season.id)}`}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-mist px-3 text-sm font-semibold text-ink"
+        >
+          <Clock aria-hidden className="size-4 text-forest" />
+          When to go out
+        </Link>
         <Link
           href={`/money?season=${encodeURIComponent(season.id)}`}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-control border border-mist px-3 text-sm font-semibold text-ink"

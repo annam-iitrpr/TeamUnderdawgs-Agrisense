@@ -66,6 +66,20 @@ export type Estimate = Schema<"Estimate">;
 export type WaterEstimate = Schema<"WaterEstimate">;
 export type Economics = Schema<"Economics">;
 export type ForecastBundle = Schema<"ForecastBundle">;
+export type ForecastHour = Schema<"ForecastHour">;
+export type Interval = Schema<"Interval">;
+
+/**
+ * A stress curve carries one point per (date, stress type), so a single day can
+ * appear more than once. Screens must group by `stress_type` rather than
+ * assuming one series, or heat and moisture stress overwrite each other.
+ */
+export type StressPoint = Schema<"StressPoint">;
+export type StressOnset = Schema<"StressOnset">;
+export type SafetyCheck = Schema<"SafetyCheck">;
+export type ProductFit = Schema<"ProductFit">;
+export type RecommendationStatus = Recommendation["status"];
+export type SafetyStatus = SafetyCheck["status"];
 
 /* ── planning ────────────────────────────────────────────────────────────── */
 

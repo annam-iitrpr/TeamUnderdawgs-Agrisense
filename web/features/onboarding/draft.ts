@@ -21,7 +21,10 @@
 import type { AreaUnit, LocationSource } from "@/lib/api/contract";
 
 const KEY_PREFIX = "agrisense.draft.onboarding";
-const DRAFT_VERSION = 1;
+// Bumped when the shape changes: loadDraft discards rather than migrates an
+// older draft by design, so resuming never half-understands a stale structure.
+// v2 added `fieldId`, v3 added `crop.seasonId`.
+const DRAFT_VERSION = 3;
 
 export type CropChoiceMode = "known" | "help_me_choose" | "undecided";
 
@@ -31,6 +34,17 @@ export type OnboardingDraft = {
   idempotencyKey: string;
   startedAt: string;
   step: number;
+
+  /**
+   * The saved field, once it exists.
+   *
+   * The field is created when the farmer leaves the land step rather than at
+   * the end, because comparing crops needs a real `field_id` — the engine
+   * scores a crop *against a field*, and there is nothing to score against
+   * until the field is saved. It also means a farmer who abandons onboarding
+   * halfway keeps the land they entered instead of losing it.
+   */
+  fieldId: string | null;
 
   consents: { service: boolean; modelLearning: boolean; notifications: boolean };
 
@@ -55,6 +69,14 @@ export type OnboardingDraft = {
   crop: {
     mode: CropChoiceMode;
     cropId: string | null;
+    /**
+     * Set only once the season actually exists on the server.
+     *
+     * `cropId` alone means "highlighted in the picker", which is not a
+     * commitment — treating the two as the same told farmers their crop was
+     * saved the instant they tapped it, before any request had been made.
+     */
+    seasonId: string | null;
     cropName: string | null;
     variety: string | null;
     planted: boolean | null;
@@ -71,12 +93,14 @@ export function newDraft(idempotencyKey: string): OnboardingDraft {
     idempotencyKey,
     startedAt: new Date().toISOString(),
     step: 0,
+    fieldId: null,
     consents: { service: false, modelLearning: false, notifications: false },
     location: { latitude: null, longitude: null, source: null, precisionM: null, label: null },
     land: { name: "", enteredArea: "", unit: "acre", irrigationMethod: null },
     crop: {
       mode: "undecided",
       cropId: null,
+      seasonId: null,
       cropName: null,
       variety: null,
       planted: null,

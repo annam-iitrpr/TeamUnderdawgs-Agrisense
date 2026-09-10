@@ -1,5 +1,7 @@
 "use client";
 
+import { useLanguage } from "@/components/language-provider";
+import type { DataMode } from "@/lib/api/contract";
 import { cn, stressToken } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -411,6 +413,57 @@ export function UnknownValue({
       <CircleHelp aria-hidden className="size-3.5 shrink-0" />
       <span className="text-sm">{label}</span>
       {reason ? <span className="text-xs">({reason})</span> : null}
+    </span>
+  );
+}
+
+/**
+ * The visible honesty label.
+ *
+ * `unavailable` and `demo` must never look like `live`, so the mode is carried
+ * by three signals at once — wording, border colour and a dot that pulses only
+ * when the data really is live. Colour alone would fail for a farmer who cannot
+ * distinguish it, and wording alone is too easy to skim past.
+ *
+ * This lives here rather than in a screen because it had already been copied
+ * into two dashboards and the copies had drifted: one pulsed, one did not.
+ */
+export function DataModeBadge({ mode }: { mode: DataMode | undefined }) {
+  const { t } = useLanguage();
+  if (!mode) return null;
+  const label =
+    mode === "live"
+      ? t("dataLive")
+      : mode === "demo"
+        ? t("dataDemo")
+        : mode === "estimated"
+          ? t("dataEstimated")
+          : mode === "mixed"
+            ? t("dataMixed")
+            : t("dataUnavailable");
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold",
+        mode === "live"
+          ? "border-sprout/40 bg-sprout/10 text-forest"
+          : mode === "demo"
+            ? "border-amber/50 bg-amber/10 text-amber-ink"
+            : "border-mist text-slate",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 rounded-full",
+          mode === "live"
+            ? "animate-pulse bg-forest motion-reduce:animate-none"
+            : mode === "demo"
+              ? "bg-amber-ink"
+              : "bg-slate",
+        )}
+      />
+      {label}
     </span>
   );
 }

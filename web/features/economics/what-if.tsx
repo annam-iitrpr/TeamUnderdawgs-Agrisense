@@ -172,7 +172,7 @@ export function WhatIf({ economics }: { economics: Economics }) {
               }}
             >
               <RotateCcw aria-hidden className="size-4" />
-              Back to the engine's estimate
+              Back to the engine&apos;s estimate
             </Button>
           ) : null}
         </>

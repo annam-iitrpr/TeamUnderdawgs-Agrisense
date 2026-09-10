@@ -9,11 +9,11 @@
  */
 import { AppShell } from "@/components/app-shell";
 import { useLanguage } from "@/components/language-provider";
-import { Button, Callout, Card, ErrorState, Skeleton } from "@/components/ui";
+import { Button, Callout, Card, DataModeBadge, ErrorState, Skeleton } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useApiQuery } from "@/lib/api/query";
 import { tasks as tasksApi } from "@/lib/api/routes";
-import type { DataMode, Task } from "@/lib/api/contract";
+import type { Task } from "@/lib/api/contract";
 import { formatDateWithWeekday, istDateKey } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ACTIONABLE_STATUSES, groupTasks, planCounts } from "./task-grouping";
@@ -89,31 +89,6 @@ export function SevenDayPlan() {
         </div>
       </div>
     </AppShell>
-  );
-}
-
-function DataModeBadge({ mode }: { mode: DataMode | undefined }) {
-  const { t } = useLanguage();
-  if (!mode) return null;
-  const label =
-    mode === "live"
-      ? t("dataLive")
-      : mode === "demo"
-        ? t("dataDemo")
-        : mode === "estimated"
-          ? t("dataEstimated")
-          : mode === "mixed"
-            ? t("dataMixed")
-            : t("dataUnavailable");
-  return (
-    <span
-      className={cn(
-        "rounded-full border px-2.5 py-1 text-xs font-semibold",
-        mode === "live" ? "border-sprout/40 text-forest" : "border-mist text-slate",
-      )}
-    >
-      {label}
-    </span>
   );
 }
 

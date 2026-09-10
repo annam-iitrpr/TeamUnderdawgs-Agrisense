@@ -145,7 +145,10 @@ export function FieldsPanel({ uid }: { uid: string | null }) {
   const [irrigation, setIrrigation] = useState<string>("all");
   const [includeArchived, setIncludeArchived] = useState(false);
 
-  const all: Field[] = query.data?.items ?? [];
+  // See money-screen: an inline `?? []` is a new array identity per render, so
+  // the option list below would be rebuilt on every keystroke in the search box.
+  const items = query.data?.items;
+  const all: Field[] = useMemo(() => items ?? [], [items]);
 
   const irrigationOptions = useMemo(() => {
     const set = new Set<string>();

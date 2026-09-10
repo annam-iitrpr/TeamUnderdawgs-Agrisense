@@ -24,6 +24,7 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CropCard } from "./crop-card";
+import { NoCandidates } from "./no-candidates";
 import { CropComparisonTable } from "./crop-comparison-table";
 import { relativeWaterScore } from "./water-figures";
 
@@ -166,7 +167,9 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
     }
   }
 
-  const plans = comparison?.candidates ?? [];
+  // Stable identity so re-sorting is not redone on every unrelated render.
+  const candidates = comparison?.candidates;
+  const plans = useMemo(() => candidates ?? [], [candidates]);
   const ordered = useMemo(() => sorted(plans, sort), [plans, sort]);
   const allWater = plans.map((p) => p.water?.seasonal?.p50 ?? null);
   const comparing = ordered.filter((p) => compareSet.has(p.crop_id));
@@ -245,7 +248,16 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
             ) : null}
 
             {plans.length === 0 ? (
-              <NoCandidates comparison={comparison} fieldName={field?.name ?? "this field"} />
+              <NoCandidates
+                comparison={comparison}
+                fieldName={field?.name ?? "this field"}
+                nameFor={(id) => cropFor(id)?.name ?? id}
+                footer={
+                  <p className="mt-2 text-sm">
+                    You can still add a crop to this field and record your season now.
+                  </p>
+                }
+              />
             ) : (
               <>
                 {plans.length < 5 && mode === "suggest" ? (
@@ -309,73 +321,3 @@ export function CropPlanner({ fieldId, initialCropId }: { fieldId: string; initi
   );
 }
 
-/**
- * Why nothing came back.
- *
- * The engine's own exclusion codes are shown rather than a generic empty state,
- * because "your field is fully assigned" and "no reviewed data for your region"
- * need completely different actions from the farmer.
- */
-function NoCandidates({
-  comparison,
-  fieldName,
-}: {
-  comparison: CropComparison | null;
-  fieldName: string;
-}) {
-  const exclusions = comparison?.exclusions ?? [];
-  const fullyAllocated = exclusions.some((e) => e.code === "no_unallocated_area");
-  const noRegionalData = exclusions.some(
-    (e) => e.code === "reviewed_regional_crop_reference_missing",
-  );
-
-  if (fullyAllocated) {
-    return (
-      <Callout tone="info" title="This field is fully assigned">
-        <p>
-          Every hectare of {fieldName} already belongs to a season, so there is no area left to
-          plan for. Close a season, or reduce the area it uses, and then come back.
-        </p>
-      </Callout>
-    );
-  }
-
-  if (noRegionalData) {
-    const crops = exclusions
-      .filter((e) => e.code === "reviewed_regional_crop_reference_missing")
-      .map((e) => String((e.facts as Record<string, unknown>)?.crop_id ?? ""))
-      .filter(Boolean);
-    return (
-      <Callout tone="caution" title="No reviewed data for your area yet">
-        <p>
-          AgriSense has the weather for {fieldName} but not the reviewed agronomic records it
-          needs to score {crops.length > 0 ? crops.join(", ") : "these crops"} here. It will
-          not rank crops on a guess, so nothing is shown rather than a made-up score.
-        </p>
-        <p className="mt-2 text-sm">
-          You can still add a crop to this field and record your season now. Suitability,
-          water and return appear here as soon as the reviewed data is published.
-        </p>
-      </Callout>
-    );
-  }
-
-  return (
-    <Callout tone="caution" title="No crop can be compared for this field yet">
-      <p>
-        AgriSense will not rank crops without reviewed records for your area, because a
-        suitability score with nothing behind it would be a guess dressed up as advice.
-      </p>
-      {exclusions.length > 0 ? (
-        <ul className="mt-2 list-inside list-disc text-sm">
-          {exclusions.slice(0, 5).map((reason) => (
-            <li key={reason.code}>{reason.code.replace(/_/g, " ")}</li>
-          ))}
-        </ul>
-      ) : null}
-      <p className="mt-2 text-sm">
-        You can still add a crop directly from your field and record your season.
-      </p>
-    </Callout>
-  );
-}
