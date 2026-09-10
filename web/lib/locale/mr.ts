@@ -90,4 +90,11 @@ export const mr: Partial<Dict> = {
   authInvalidPhone: "देश कोडासह योग्य फोन नंबर टाका.",
   authInvalidCode: "सहा अंकी पडताळणी कोड टाका.",
   authCodeExpired: "या कोडची मुदत संपली आहे. नवीन कोड मागवा.",
+
+  /* Choosing a sign-in method, and the phone failures that need naming. */
+  signInWithPhone: "फोन",
+  signInWithEmail: "ईमेल",
+  authCaptchaFailed: "या डिव्हाइसची खात्री करता आली नाही. पेज पुन्हा उघडून पहा.",
+  authPhoneNotAllowed: "या अॅपमध्ये फोनने साइन इन चालू नाही.",
+  authQuotaExceeded: "आज बरेच कोड पाठवले गेले. उद्या करा, किंवा ईमेल वापरा.",
 };

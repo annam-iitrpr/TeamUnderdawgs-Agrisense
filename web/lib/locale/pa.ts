@@ -91,4 +91,11 @@ export const pa: Partial<Dict> = {
   authInvalidPhone: "ਦੇਸ਼ ਕੋਡ ਸਮੇਤ ਸਹੀ ਫ਼ੋਨ ਨੰਬਰ ਦਿਓ।",
   authInvalidCode: "ਛੇ ਅੰਕਾਂ ਦਾ ਤਸਦੀਕ ਕੋਡ ਦਿਓ।",
   authCodeExpired: "ਇਸ ਕੋਡ ਦੀ ਮਿਆਦ ਮੁੱਕ ਗਈ ਹੈ। ਨਵਾਂ ਕੋਡ ਮੰਗੋ।",
+
+  /* Choosing a sign-in method, and the phone failures that need naming. */
+  signInWithPhone: "ਫ਼ੋਨ",
+  signInWithEmail: "ਈਮੇਲ",
+  authCaptchaFailed: "ਅਸੀਂ ਇਸ ਡਿਵਾਈਸ ਦੀ ਪੁਸ਼ਟੀ ਨਹੀਂ ਕਰ ਸਕੇ। ਪੇਜ ਦੁਬਾਰਾ ਖੋਲ੍ਹ ਕੇ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  authPhoneNotAllowed: "ਇਸ ਐਪ ਵਿੱਚ ਫ਼ੋਨ ਨਾਲ ਸਾਈਨ ਇਨ ਚਾਲੂ ਨਹੀਂ ਹੈ।",
+  authQuotaExceeded: "ਅੱਜ ਬਹੁਤ ਕੋਡ ਭੇਜੇ ਜਾ ਚੁੱਕੇ ਹਨ। ਕੱਲ੍ਹ ਕੋਸ਼ਿਸ਼ ਕਰੋ, ਜਾਂ ਈਮੇਲ ਵਰਤੋ।",
 };

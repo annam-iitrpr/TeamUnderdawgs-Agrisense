@@ -91,4 +91,11 @@ export const te: Partial<Dict> = {
   authInvalidPhone: "దేశ కోడ్‌తో సరైన ఫోన్ నంబర్ ఇవ్వండి.",
   authInvalidCode: "ఆరు అంకెల ధృవీకరణ కోడ్ ఇవ్వండి.",
   authCodeExpired: "ఈ కోడ్ గడువు ముగిసింది. కొత్త కోడ్‌ను అభ్యర్థించండి.",
+
+  /* Choosing a sign-in method, and the phone failures that need naming. */
+  signInWithPhone: "ఫోన్",
+  signInWithEmail: "ఇమెయిల్",
+  authCaptchaFailed: "ఈ పరికరాన్ని నిర్ధారించలేకపోయాము. పేజీని మళ్ళీ తెరిచి ప్రయత్నించండి.",
+  authPhoneNotAllowed: "ఈ యాప్‌లో ఫోన్ సైన్ ఇన్ ఆన్ చేయలేదు.",
+  authQuotaExceeded: "ఈ రోజు చాలా కోడ్‌లు పంపాము. రేపు ప్రయత్నించండి, లేదా ఇమెయిల్ వాడండి.",
 };

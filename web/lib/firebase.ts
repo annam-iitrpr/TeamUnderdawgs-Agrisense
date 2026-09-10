@@ -102,18 +102,61 @@ export type AuthErrorKey =
   | "authInvalidCode"
   | "authTooManyAttempts"
   | "authCodeExpired"
+  | "authCaptchaFailed"
+  | "authPhoneNotAllowed"
+  | "authQuotaExceeded"
+  | "authInvalidEmail"
+  | "authInvalidCredentials"
+  | "authWeakPassword"
+  | "authEmailInUse"
   | "errorUnreachable"
   | "errorTitle";
 
 export function authErrorKey(code: unknown): AuthErrorKey {
   const value = typeof code === "string" ? code : "";
   switch (value) {
+    /* Phone. Each code gets its own message because each has a different
+       remedy; "something went wrong" when the real problem is a missing
+       country code wastes the one thing the person can fix. */
     case "auth/invalid-phone-number":
+    case "auth/missing-phone-number":
       return "authInvalidPhone";
     case "auth/invalid-verification-code":
+    case "auth/missing-verification-code":
       return "authInvalidCode";
     case "auth/code-expired":
+    case "auth/session-expired":
       return "authCodeExpired";
+    /* `invalid-app-credential` is what the SDK returns when the page's domain
+       is not in Firebase's authorized-domains list. It reads like a captcha
+       problem and is not one — it is a configuration fault nobody on a handset
+       can fix, and it was the actual cause of phone sign-in failing here. It is
+       grouped with the captcha codes only because the user-facing remedy,
+       reloading, is the same. */
+    case "auth/captcha-check-failed":
+    case "auth/invalid-app-credential":
+    case "auth/missing-app-credential":
+      return "authCaptchaFailed";
+    case "auth/operation-not-allowed":
+    case "auth/admin-restricted-operation":
+      return "authPhoneNotAllowed";
+    case "auth/quota-exceeded":
+      return "authQuotaExceeded";
+
+    /* Email and password. `user-not-found` and `wrong-password` deliberately
+       collapse into one message: distinguishing them confirms which addresses
+       are registered, which is an account enumeration leak. */
+    case "auth/invalid-email":
+      return "authInvalidEmail";
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "authInvalidCredentials";
+    case "auth/weak-password":
+      return "authWeakPassword";
+    case "auth/email-already-in-use":
+      return "authEmailInUse";
+
     case "auth/too-many-requests":
       return "authTooManyAttempts";
     case "auth/network-request-failed":

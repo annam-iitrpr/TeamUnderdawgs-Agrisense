@@ -105,6 +105,13 @@ export const en = {
   authEmailInUse: "That email address cannot be used. Try signing in.",
   authRequiredEmail: "Enter your email address.",
   authRequiredPassword: "Enter your password.",
+
+  /* Choosing a sign-in method, and the phone failures that need naming. */
+  signInWithPhone: "Phone",
+  signInWithEmail: "Email",
+  authCaptchaFailed: "We could not confirm this device. Reload the page and try again.",
+  authPhoneNotAllowed: "Signing in by phone is not switched on for this app.",
+  authQuotaExceeded: "Too many codes have been sent today. Try again tomorrow, or use email.",
 } as const;
 
 export type Dict = Record<keyof typeof en, string>;
