@@ -154,8 +154,11 @@ def test_journal_command_is_processed_by_worker_and_queued_for_delivery(harness,
     signed(harness, message(f'LINK {code}', 'wamid.link'))
     assert signed(harness, message('log watered 20 mm', 'wamid.journal')).status_code == 200
 
-    processed = asyncio.run(worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings))
-    assert processed == 1
+    # The webhook now starts this work itself rather than leaving it for the next
+    # scheduled pass, so the job may already be done by the time we get here. This
+    # drain is the safety net for that race, not the thing under test: what matters
+    # is the recorded outcome below, whichever path produced it.
+    asyncio.run(worker.drain_jobs(harness.app.state.sessions, harness.app.state.settings))
     with harness.app.state.sessions() as session:
         journal = session.scalar(select(d.JournalRow).where(d.JournalRow.payload['source'].as_string() == 'whatsapp'))
         assert journal is not None
@@ -343,3 +346,54 @@ def test_the_whatsapp_consumer_only_sees_its_own_events(harness, asha):
     worker.drain_outbox(harness.app.state.sessions, 'whatsapp', record,
                         kinds=('whatsapp.outbound',))
     assert seen == ['whatsapp.outbound'], f'the consumer was handed {seen}'
+
+
+def tapped(option_id, message_id, sender=NUMBER):
+    """What Meta sends when a farmer taps a button or a list row, rather than typing."""
+    return {'entry': [{'changes': [{'value': {'messages': [
+        {'id': message_id, 'from': sender, 'type': 'interactive', 'timestamp': '1757462400',
+         'interactive': {'type': 'list_reply', 'list_reply': {'id': option_id, 'title': option_id}}}]}}]}]}
+
+
+def test_a_tapped_option_is_read_the_same_as_the_typed_command():
+    events = whatsapp.extract(tapped('readiness', 'wamid.tap'))
+    assert events[0]['text'] == 'readiness'
+
+
+def test_the_menu_is_offered_as_a_list_because_it_is_longer_than_three_buttons(harness, asha):
+    channel_id = linked_channel(harness, asha)
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        reply = whatsapp.command_reply(session, harness.app.state.settings, {'command': 'menu'},
+                                       channel.tenant_id, channel.farmer_id)
+    assert [option[0] for option in reply.options] == [option[0] for option in whatsapp.MENU_OPTIONS]
+    assert len(reply.options) <= whatsapp.LIST_LIMIT
+    assert reply.buttons == ()
+
+
+def test_every_answer_carries_a_way_back_to_the_menu():
+    reply = whatsapp.with_menu('Readiness is 7.', ('water', 'Water'))
+    assert reply.buttons[-1] == whatsapp.MENU_BUTTON
+    # Three is the Cloud API's hard cap: a fourth would be rejected for the whole message.
+    assert len(whatsapp.with_menu('x', ('a', 'A'), ('b', 'B'), ('c', 'C')).buttons) == whatsapp.BUTTON_LIMIT
+
+
+def test_a_list_reply_survives_the_outbox_so_delivery_can_send_it(harness, asha):
+    channel_id = linked_channel(harness, asha)
+    with harness.app.state.sessions() as session:
+        channel = session.get(d.ChannelRow, channel_id)
+        event = whatsapp.queue_outbound(
+            session, harness.app.state.settings, channel,
+            whatsapp.menu_reply('What would you like to see?'))
+        session.commit()
+        assert event.payload['options'][0] == list(whatsapp.MENU_OPTIONS[0])
+        assert event.payload['list_label'] == 'Open menu'
+
+
+def test_tapping_a_field_row_selects_it_without_matching_on_the_name(harness, asha, field):
+    linked_channel(harness, asha)
+    assert signed(harness, tapped(f'field:{field["id"]}', 'wamid.pickfield')).status_code == 200
+    with harness.app.state.sessions() as session:
+        job = session.scalar(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')
+                             .order_by(d.JobRow.created_at.desc()))
+        assert job.payload['request']['command'] == 'field_selected'

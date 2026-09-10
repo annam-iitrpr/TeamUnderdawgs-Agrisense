@@ -117,7 +117,8 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
                 d.ChannelRow.farmer_id == row.farmer_id,
                 d.ChannelRow.provider == 'whatsapp', d.ChannelRow.opted_in.is_(True)))
             if channel is not None:
-                whatsapp.queue_outbound(session, settings, channel, journal_reply)
+                whatsapp.queue_outbound(session, settings, channel,
+                                        whatsapp.with_menu(journal_reply, ('history', 'Field log')))
             return None
         message = assistant.reply(session, settings, row.tenant_id, row.farmer_id,
                                   request['conversation_id'], request['message_id'])
@@ -127,12 +128,17 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
             d.ChannelRow.provider == 'whatsapp', d.ChannelRow.opted_in.is_(True)))
         if channel is not None:
             proposal_ids = message.payload.get('proposal_ids', [])
-            buttons = []
+            text = message.payload.get('text', '')
             if proposal_ids:
                 proposal_id = proposal_ids[0]
-                buttons = [(f'proposal_confirm:{proposal_id}', 'Confirm'),
-                            (f'proposal_cancel:{proposal_id}', 'Cancel')]
-            whatsapp.queue_outbound(session, settings, channel, message.payload.get('text', ''), buttons)
+                reply = whatsapp.ChannelReply(body=text, buttons=(
+                    (f'proposal_confirm:{proposal_id}', 'Confirm'),
+                    (f'proposal_cancel:{proposal_id}', 'Cancel')))
+            else:
+                # Even a free-text answer ends with a way onward, so the farmer never
+                # has to know a command exists to get back to the rest of the app.
+                reply = whatsapp.with_menu(text)
+            whatsapp.queue_outbound(session, settings, channel, reply)
         return message.id
     if row.kind == 'privacy.export':
         return privacy.export(session, settings, row.tenant_id, row.farmer_id, row.id)

@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -27,6 +28,53 @@ log = logging.getLogger('agrisense.platform.whatsapp')
 LINK_PREFIX = 'LINK'
 SESSION_WINDOW = timedelta(hours=24)
 MEDIA_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'audio/ogg', 'audio/mpeg', 'audio/wav', 'audio/webm'}
+# Cloud API interactive limits. Exceeding any of them is rejected for the whole
+# message, so every option is trimmed to fit rather than risking a silent failure.
+BUTTON_LIMIT = 3
+BUTTON_TITLE = 20
+LIST_LIMIT = 10
+LIST_TITLE = 24
+LIST_DESCRIPTION = 72
+
+
+@dataclass(frozen=True)
+class ChannelReply:
+    """An answer together with the ways out of it.
+
+    A farmer on WhatsApp should never have to remember a command vocabulary or type a
+    value in a shape we invented. Every reply therefore carries its next steps as
+    tappable options: up to three as quick-reply buttons, more as a list. Free text
+    still works, and still reaches the assistant, but nobody has to use it to navigate.
+    """
+
+    body: str
+    buttons: tuple[tuple[str, str], ...] = ()
+    #: Label on the control that opens a list. Only meaningful when `options` is set.
+    list_label: str = 'Choose'
+    options: tuple[tuple[str, str, str], ...] = ()
+
+
+#: The whole navigable surface, as a list because it is longer than three buttons.
+MENU_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    ('readiness', 'Readiness', 'Is the crop ready, and what to do next'),
+    ('water', 'Water', 'How much water the crop needs now'),
+    ('money', 'Money', 'Costs and sales recorded for this season'),
+    ('history', 'Field log', 'The last few things recorded'),
+    ('fields', 'Switch field', 'Choose which field to ask about'),
+    ('journal_help', 'Record something', 'Log irrigation, spraying or harvest'),
+    ('close', 'Close season', 'Record the harvest and finish the season'),
+)
+#: Appended to answers so a farmer is never left at a dead end with nothing to tap.
+MENU_BUTTON = ('menu', 'Menu')
+
+
+def menu_reply(body: str) -> ChannelReply:
+    return ChannelReply(body=body, list_label='Open menu', options=MENU_OPTIONS)
+
+
+def with_menu(body: str, *buttons: tuple[str, str]) -> ChannelReply:
+    """An answer plus its follow-ups, always ending in a way back to the menu."""
+    return ChannelReply(body=body, buttons=(*buttons, MENU_BUTTON)[:BUTTON_LIMIT])
 
 
 def identity_hash(external_id: str) -> str:
@@ -185,8 +233,21 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         command = 'menu'
     elif lowered in {'fields', 'my fields', 'switch field'}:
         command = 'fields'
-    elif lowered in {'readiness', 'status', 'water', 'money', 'economics', 'history', 'log'}:
+    elif lowered in {'readiness', 'status', 'water', 'money', 'economics', 'history', 'log', 'journal_help'}:
         command = {'status': 'readiness', 'economics': 'money', 'log': 'history'}.get(lowered, lowered)
+    elif lowered.startswith('field:'):
+        # A tapped list row carries the field id, so selection needs no name matching.
+        selected = session.scalar(select(d.FieldRow).where(
+            d.FieldRow.id == text.split(':', 1)[1].strip(),
+            d.FieldRow.tenant_id == channel.tenant_id,
+            d.FieldRow.farmer_id == channel.farmer_id,
+            d.FieldRow.archived.is_(False)))
+        if selected is None:
+            command = 'fields'
+        else:
+            conversation.payload = {**conversation.payload, 'field_id': selected.id}
+            channel.payload = {**channel.payload, 'active_field_id': selected.id}
+            command = 'field_selected'
     elif lowered.startswith('log '):
         command = 'journal'
     elif lowered.startswith('proposal_confirm:'):
@@ -234,18 +295,25 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
 
 
 def command_reply(session: Session, settings: Settings, request: dict[str, Any], tenant_id: str,
-                  farmer_id: str) -> str | None:
+                  farmer_id: str) -> ChannelReply | None:
     """Small deterministic channel commands; all agronomic answers stay in the assistant."""
     command = request.get('command')
     if command == 'menu':
-        return '*AgriSense menu*\nReply with readiness, water, money, journal, or fields.\nUse `use <field name>` to switch fields.'
+        return menu_reply('*AgriSense*\nWhat would you like to see?')
     if command == 'fields':
         fields = list(session.scalars(select(d.FieldRow).where(
             d.FieldRow.tenant_id == tenant_id, d.FieldRow.farmer_id == farmer_id,
             d.FieldRow.archived.is_(False)).order_by(d.FieldRow.name)))
         if not fields:
-            return 'No fields are set up yet. Add a field in the AgriSense web app first.'
-        return '*Your fields*\n' + '\n'.join(f'{index}. {field.name}' for index, field in enumerate(fields, 1)) + '\nReply `use <name>` to switch.'
+            return with_menu('No fields are set up yet. Add a field in the AgriSense web app first.')
+        # The field id travels in the option, so picking one is a tap and never a
+        # name the farmer has to spell the way we happen to store it.
+        return ChannelReply(
+            body='*Your fields*\nChoose the field you want to ask about.',
+            list_label='Choose field',
+            options=tuple((f'field:{row.id}', row.name,
+                           f'{row.area_ha} ha' if row.area_ha is not None else '')
+                          for row in fields[:LIST_LIMIT]))
     if command == 'field_selected':
         message = session.get(d.MessageRow, request.get('message_id'))
         field_id = session.scalar(select(d.ConversationRow).where(
@@ -254,13 +322,16 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         field = session.scalar(select(d.FieldRow).where(
             d.FieldRow.id == field_id, d.FieldRow.tenant_id == tenant_id,
             d.FieldRow.farmer_id == farmer_id)) if field_id else None
-        return f'Active field: {field.name}.' if field else 'That field is no longer available.'
+        if field is None:
+            return with_menu('That field is no longer available.')
+        return with_menu(f'Active field: {field.name}.',
+                         ('readiness', 'Readiness'), ('water', 'Water'))
     if command == 'reminder':
         from agrisense.platform.auth import Actor
         from agrisense.platform.service import DomainService
         farmer = session.get(d.FarmerRow, farmer_id)
         if farmer is None:
-            return 'Your farmer account could not be found.'
+            return with_menu('Your farmer account could not be found.')
         conversation = session.scalar(select(d.ConversationRow).where(
             d.ConversationRow.id == request.get('conversation_id'),
             d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
@@ -269,7 +340,8 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
             d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
         if season is None:
-            return 'No open season is available for the active field.'
+            return with_menu('No open season is available for the active field.',
+                             ('fields', 'Switch field'))
         message = session.get(d.MessageRow, request.get('message_id'))
         raw = ((message.payload if message else {}).get('text', '')).strip()[6:].strip()
         try:
@@ -280,12 +352,14 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             DomainService(session, actor, 'whatsapp', settings=settings).execute(
                 'POST', '/reminders', '', reminder, {})
         except (ValueError, PlatformError) as error:
-            return getattr(error, 'message', 'Use: remind 2026-09-12T07:00:00+05:30')
-        return f'Reminder set for {scheduled_at.isoformat()}.'
+            return with_menu(getattr(error, 'message', 'Use: remind 2026-09-12T07:00:00+05:30'))
+        return with_menu(f'Reminder set for {scheduled_at.isoformat()}.')
     if command == 'close_prompt':
-        return ('To close the active season, reply exactly: '
-                'close <harvest_kg> <harvested_area_ha> <sales_inr> <costs_inr> <YYYY-MM-DD>. '
-                'Example: close 1200 1.5 90000 45000 2026-09-10')
+        # Closing a season records real harvest numbers, so it stays a typed answer:
+        # there is no set of buttons that could carry a yield, a price and a date.
+        return with_menu('*Close season*\nSend the harvest details in one line:\n'
+                         '`close <harvest kg> <area ha> <sales ₹> <costs ₹> <YYYY-MM-DD>`\n'
+                         'Example: `close 1200 1.5 90000 45000 2026-09-10`')
     if command == 'close_execute':
         from agrisense.platform.auth import Actor
         from agrisense.platform.service import DomainService
@@ -298,11 +372,12 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
             d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
         if farmer is None or season is None:
-            return 'No open season is available for the active field.'
+            return with_menu('No open season is available for the active field.',
+                             ('fields', 'Switch field'))
         message = session.get(d.MessageRow, request.get('message_id'))
         parts = ((message.payload if message else {}).get('text', '')).strip().split()
         if len(parts) != 6:
-            return 'Use: close <harvest_kg> <harvested_area_ha> <sales_inr> <costs_inr> <YYYY-MM-DD>'
+            return with_menu('Use: `close <harvest kg> <area ha> <sales ₹> <costs ₹> <YYYY-MM-DD>`')
         try:
             close_request = c.SeasonCloseRequest(
                 expected_version=season.version, harvest_quantity_kg=float(parts[1]),
@@ -313,29 +388,31 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             summary = DomainService(session, actor, 'whatsapp', settings=settings).execute(
                 'POST', '/seasons/{id}/close', season.id, close_request, {})
         except (ValueError, PlatformError) as error:
-            return getattr(error, 'message', 'The close details could not be read. Check the numbers and date.')
+            return with_menu(getattr(error, 'message',
+                                     'The close details could not be read. Check the numbers and date.'))
         warnings = getattr(summary, 'warnings', [])
-        return 'Season closed successfully.' + (f'\nNote: {warnings[0]}' if warnings else '')
+        return with_menu('Season closed successfully.' + (f'\nNote: {warnings[0]}' if warnings else ''))
     if command in {'proposal_confirm', 'proposal_cancel'}:
         proposal_id = request.get('proposal_id')
         proposal = session.scalar(select(d.ProposalRow).where(
             d.ProposalRow.id == proposal_id, d.ProposalRow.tenant_id == tenant_id,
             d.ProposalRow.farmer_id == farmer_id))
         if proposal is None:
-            return 'That proposed action could not be found.'
+            return with_menu('That proposed action could not be found.')
         from agrisense.platform.auth import Actor
         from agrisense.platform.service import DomainService
         farmer = session.get(d.FarmerRow, farmer_id)
         if farmer is None:
-            return 'Your farmer account could not be found.'
+            return with_menu('Your farmer account could not be found.')
         actor = Actor(farmer.user_id, tenant_id, farmer_id, 'farmer', True)
         path = '/proposals/{id}/confirm' if command == 'proposal_confirm' else '/proposals/{id}/cancel'
         try:
             DomainService(session, actor, 'whatsapp', settings=settings).execute(
                 'POST', path, proposal.id, c.VersionedPatch(expected_version=proposal.version), {})
         except PlatformError as error:
-            return error.message
-        return 'The proposed action was confirmed.' if command == 'proposal_confirm' else 'The proposed action was cancelled.'
+            return with_menu(error.message)
+        return with_menu('The proposed action was confirmed.' if command == 'proposal_confirm'
+                         else 'The proposed action was cancelled.')
     conversation = session.scalar(select(d.ConversationRow).where(
         d.ConversationRow.id == request.get('conversation_id'),
         d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
@@ -345,34 +422,47 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
             d.JournalRow.tenant_id == tenant_id, d.JournalRow.farmer_id == farmer_id)
             .order_by(d.JournalRow.occurred_at.desc()).limit(5)))
         if not rows:
-            return 'No journal entries are recorded yet. Reply with what happened in the field to log it.'
-        return '*Recent field log*\n' + '\n'.join(
+            return with_menu('Nothing is recorded yet. Tell me what happened in the field and I will log it.',
+                             ('journal_help', 'How to record'))
+        return with_menu('*Recent field log*\n' + '\n'.join(
             f'- {row.occurred_at.date().isoformat()}: {row.payload.get("action", "observation")}'
-            for row in rows)
+            for row in rows), ('journal_help', 'Record something'))
     if command in {'readiness', 'water', 'money'}:
         season = session.scalar(select(d.SeasonRow).where(
             d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
             d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
         if season is None:
-            return 'No open season is available for the active field. Set up a season in the web app first.'
+            return with_menu('No open season is available for the active field. Set up a season in the web app first.',
+                             ('fields', 'Switch field'))
         recommendation = session.scalar(select(d.RecommendationRow).where(
             d.RecommendationRow.tenant_id == tenant_id, d.RecommendationRow.season_id == season.id,
             d.RecommendationRow.superseded.is_(False)).order_by(d.RecommendationRow.created_at.desc()).limit(1))
         if recommendation is None:
-            return 'No current evaluation is available. Ask AgriSense to evaluate this season in the web app first.'
+            return with_menu('No current evaluation is available. Ask AgriSense to evaluate this season in the web app first.')
         if command == 'readiness':
             value = recommendation.payload.get('recommendation', {})
             readiness = value.get('readiness')
             status = value.get('status', 'unknown').replace('_', ' ')
-            return f'*Readiness: {readiness if readiness is not None else "not known"}*\nStatus: {status}'
+            return with_menu(
+                f'*Readiness: {readiness if readiness is not None else "not known"}*\nStatus: {status}',
+                ('water', 'Water'), ('money', 'Money'))
         key = 'water' if command == 'water' else 'economics'
         value = recommendation.payload.get(key)
+        other = ('money', 'Money') if command == 'water' else ('water', 'Water')
         if not value:
-            return f'{command.title()} figures are not available for this evaluation.'
+            return with_menu(f'{command.title()} figures are not available for this evaluation.',
+                             ('readiness', 'Readiness'))
         missing = value.get('missing_reason')
         if missing:
-            return f'{command.title()} figures are not available yet: {missing.replace("_", " ")}'
-        return f'*{command.title()}*\n{value}'
+            # An unavailable figure says why. It is never replaced with a zero.
+            return with_menu(f'{command.title()} figures are not available yet: {missing.replace("_", " ")}',
+                             ('readiness', 'Readiness'))
+        return with_menu(f'*{command.title()}*\n{value}', ('readiness', 'Readiness'), other)
+    if command == 'journal_help':
+        return with_menu('*Record something*\nJust tell me what you did, in your own words — '
+                         'for example "watered 2 acres today" or "sprayed for aphids". '
+                         'You can send a photo or a voice note too.',
+                         ('history', 'Field log'))
     return None
 
 
@@ -555,6 +645,32 @@ def send_buttons(settings: Settings, recipient: str, body: str,
         raise PlatformError('WHATSAPP_SEND_FAILED', 'The message could not be sent.', 503, True) from exc
 
 
+def send_list(settings: Settings, recipient: str, body: str, label: str,
+              options: list[tuple[str, str, str]]) -> str:
+    """Send a tappable list, for the menus that do not fit in three buttons."""
+    import httpx
+    if not (settings.whatsapp_access_token and settings.whatsapp_phone_number_id):
+        raise PlatformError('WHATSAPP_NOT_CONFIGURED', 'Outbound messaging is not configured.', 503, True)
+    rows = []
+    for option_id, title, description in options[:LIST_LIMIT]:
+        row: dict[str, str] = {'id': option_id[:256], 'title': title[:LIST_TITLE]}
+        if description:
+            row['description'] = description[:LIST_DESCRIPTION]
+        rows.append(row)
+    payload = {'messaging_product': 'whatsapp', 'to': recipient, 'type': 'interactive',
+               'interactive': {'type': 'list', 'body': {'text': whatsapp_text(body)},
+                               'action': {'button': label[:BUTTON_TITLE],
+                                          'sections': [{'title': 'Options', 'rows': rows}]}}}
+    try:
+        response = httpx.post(graph_url(settings), headers={'Authorization': f'Bearer {settings.whatsapp_access_token}'},
+                              json=payload, timeout=10.0)
+        response.raise_for_status()
+        return (response.json().get('messages') or [{}])[0].get('id', '')
+    except httpx.HTTPError as exc:
+        log.warning('whatsapp list send failed: %s', type(exc).__name__)
+        raise PlatformError('WHATSAPP_SEND_FAILED', 'The message could not be sent.', 503, True) from exc
+
+
 def deliver_outbound(session: Session, settings: Settings, event: d.OutboxRow) -> str:
     """Outbox consumer for queued messages. Refuses to send what policy says it may not."""
     payload = event.payload or {}
@@ -570,24 +686,38 @@ def deliver_outbound(session: Session, settings: Settings, event: d.OutboxRow) -
     if not recipient:
         # Only a digest is stored, so a send needs a number the farmer supplied for this purpose.
         return 'recipient_unknown'
+    body = str(payload.get('body', ''))
+    options = [tuple(item) for item in payload.get('options', []) if isinstance(item, list) and len(item) == 3]
     buttons = [tuple(item) for item in payload.get('buttons', []) if isinstance(item, list) and len(item) == 2]
-    if buttons:
-        send_buttons(settings, recipient, str(payload.get('body', '')), buttons)
+    # A list carries more than three choices, so it wins where both were queued.
+    if options:
+        send_list(settings, recipient, body, str(payload.get('list_label') or 'Choose'), options)
+    elif buttons:
+        send_buttons(settings, recipient, body, buttons)
     else:
-        send(settings, recipient, whatsapp_text(str(payload.get('body', ''))))
+        send(settings, recipient, whatsapp_text(body))
     return 'sent'
 
 
-def queue_outbound(session: Session, settings: Settings, channel: d.ChannelRow, body: str,
+def queue_outbound(session: Session, settings: Settings, channel: d.ChannelRow,
+                   body: str | ChannelReply,
                    buttons: list[tuple[str, str]] | None = None) -> d.OutboxRow:
-    """Outbound messages are queued, and only sent when live mode is explicitly configured."""
+    """Outbound messages are queued, and only sent when live mode is explicitly configured.
+
+    A plain string is still accepted so callers that have nothing to offer beyond text
+    stay unchanged; a `ChannelReply` carries its own buttons or list alongside the words.
+    """
     if not channel.opted_in:
         raise PlatformError('CHANNEL_NOT_OPTED_IN', 'This channel is not opted in.', 409)
+    reply = body if isinstance(body, ChannelReply) else ChannelReply(
+        body=body, buttons=tuple(buttons or ()))
     within_session = channel.last_inbound_at is not None and d.aware(channel.last_inbound_at) > d.utcnow() - SESSION_WINDOW
     row = d.OutboxRow(tenant_id=channel.tenant_id, kind='whatsapp.outbound', aggregate_id=channel.id,
-                      payload={'channel_id': channel.id, 'body': body,
+                      payload={'channel_id': channel.id, 'body': reply.body,
                                'requires_template': not within_session,
-                               'buttons': [list(item) for item in (buttons or [])],
+                               'buttons': [list(item) for item in reply.buttons],
+                               'options': [list(item) for item in reply.options],
+                               'list_label': reply.list_label,
                                'send_mode': settings.whatsapp_send_mode})
     session.add(row)
     return row

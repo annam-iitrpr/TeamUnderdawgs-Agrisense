@@ -138,6 +138,13 @@ def start_queued_work(app: FastAPI) -> None:
         from agrisense.platform import worker
         try:
             await worker.drain_jobs(app.state.sessions, app.state.settings, limit=2)
+            # Running the job is only half the work. A job that answers a farmer queues its
+            # reply in the outbox, and that reply sits there until something delivers it, so
+            # draining jobs alone still left every WhatsApp answer waiting for the next
+            # scheduled pass. Delivery is blocking HTTP to Meta, so it goes to a thread
+            # rather than stalling the event loop for every other request in flight.
+            await asyncio.to_thread(
+                worker.drain_whatsapp_outbox, app.state.sessions, app.state.settings, 10)
         except Exception:
             log.exception('opportunistic drain failed; the scheduled worker still owns this job')
 
@@ -257,6 +264,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return failure(PlatformError('STORAGE_UNAVAILABLE', 'Storage is temporarily unavailable.', 503, True), request_id)
         finally:
             session.close()
+        # The farmer is waiting in a chat window, so the queued reply is started now
+        # instead of at the next scheduled pass a minute away. Meta is acknowledged
+        # either way: this hands the work to the event loop and does not await it.
+        start_queued_work(app)
         # Meta only needs an acknowledgement; nothing about the account is disclosed here.
         return Response(status_code=200)
 
