@@ -63,6 +63,47 @@ describe("explainMissing", () => {
     expect(explainMissing("no_future_irrigation_assumed")).not.toContain("_");
     expect(explainMissing("standard_demand_scenario")).not.toContain("_");
   });
+
+  it("phrases the gaps the planning cards notice for themselves", () => {
+    // These are not engine codes. A crop calendar that was never published for
+    // a district arrives as a null interval with no reason attached, and there
+    // is no yield anywhere in the economics contract. Both used to render as
+    // "Not known", which names neither the gap nor who can close it.
+    expect(explainMissing("reviewed_yield_per_hectare_unavailable")).toContain("yield");
+    expect(explainMissing("sowing_window_not_published_for_your_area")).toContain("sowing");
+    expect(explainMissing("harvest_window_not_published_for_your_area")).toContain("harvest");
+    expect(explainMissing("season_water_requirement_unavailable")).toContain("rainfall");
+    expect(explainMissing("no_mandi_reported_this_crop_today")).toContain("mandi");
+    for (const code of [
+      "reviewed_yield_per_hectare_unavailable",
+      "season_length_needs_sowing_and_harvest_windows",
+      "suitability_not_scored_for_this_field",
+      "figure_not_supplied",
+    ]) {
+      expect(explainMissing(code)).not.toContain("_");
+    }
+  });
+
+  it("tells a farmer which of their own numbers unlocks a season return", () => {
+    // The card withholds a modelled season total until the farmer has given a
+    // budget or recorded costs, so this phrase is the whole explanation they
+    // get for a missing figure. It has to name the action, not the shortfall.
+    const phrase = explainMissing("season_return_needs_your_budget_or_recorded_costs") ?? "";
+    expect(phrase).toContain("spend");
+    expect(phrase).toContain("record");
+    expect(phrase).not.toContain("_");
+  });
+
+  it("distinguishes a crop with no support price from a stale support price list", () => {
+    // "There is no floor under this range" and "the floor we have is four years
+    // old" are different situations, and only one of them means the government
+    // declares nothing for this crop.
+    expect(explainMissing("no_msp_is_declared_for_this_crop")).toContain("does not declare");
+    expect(explainMissing("current_declared_msp_series_unavailable")).toContain("2022-23");
+    expect(explainMissing("prices_are_reported_arrivals_not_a_forecast")).toContain(
+      "not a prediction",
+    );
+  });
 });
 
 describe("explainCode", () => {

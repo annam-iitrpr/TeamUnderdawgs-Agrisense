@@ -13,15 +13,16 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from agrisense.config import Settings
 from agrisense.contracts_generated import models as c
 from agrisense.platform import db as d
-from agrisense.platform import media
+from agrisense.platform import locations, media
 from agrisense.platform.errors import PlatformError
 
 log = logging.getLogger('agrisense.platform.whatsapp')
@@ -35,6 +36,33 @@ BUTTON_TITLE = 20
 LIST_LIMIT = 10
 LIST_TITLE = 24
 LIST_DESCRIPTION = 72
+
+# Farmer-local wall-clock dates. India has one civil zone, and a sowing window that
+# starts "tomorrow" has to mean tomorrow where the farmer is standing.
+IST = ZoneInfo('Asia/Kolkata')
+#: The planner accepts at most five candidates in one request.
+PLAN_CANDIDATES = 5
+# Sowing windows are seasonal -- paddy in June, wheat in November -- so a short window
+# excludes every crop whose season falls outside it and reports that as unsuitability.
+# It stops short of a full year because the comparison is made against reanalysis from
+# the same window one year back, which has to be settled weather and not a forecast.
+PLAN_WINDOW_DAYS = 330
+#: Hectares per entry unit, matching what the web app converts with.
+#
+# The kanal is the Punjab one of 5,445 sq ft. The kanal used elsewhere in India is
+# about 17% smaller, so the converted hectare figure is always read back to the farmer
+# before the field is saved rather than the unit being accepted silently.
+HECTARES_PER_UNIT = {'ha': 1.0, 'acre': 0.4046856422, 'sqm': 0.0001, 'kanal': 0.0505857}
+#: Offered in the order a farmer is most likely to want them.
+AREA_UNIT_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    ('field_unit:acre', 'Acres', ''),
+    ('field_unit:ha', 'Hectares', ''),
+    ('field_unit:kanal', 'Kanal', 'Punjab kanal, 5,445 sq ft'),
+    ('field_unit:sqm', 'Square metres', ''),
+)
+# A guard against a typo or a slipped unit, not an agronomic limit: 86% of Indian
+# holdings are under two hectares, so a five-figure entry is far more likely wrong.
+MAX_PLAUSIBLE_HECTARES = 10000
 
 
 @dataclass(frozen=True)
@@ -59,8 +87,11 @@ MENU_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ('readiness', 'Readiness', 'Is the crop ready, and what to do next'),
     ('water', 'Water', 'How much water the crop needs now'),
     ('money', 'Money', 'Costs and sales recorded for this season'),
+    ('suggest', 'Suggest crops', 'Which crops suit a field this season'),
+    ('setcrop', 'Set crop', 'Start a season with the crop you have chosen'),
     ('history', 'Field log', 'The last few things recorded'),
     ('fields', 'Switch field', 'Choose which field to ask about'),
+    ('field_add', 'Add a field', 'Set up a new field: name, place and area'),
     ('journal_help', 'Record something', 'Log irrigation, spraying or harvest'),
     ('close', 'Close season', 'Record the harvest and finish the season'),
 )
@@ -118,6 +149,11 @@ def extract(payload: dict[str, Any]) -> list[dict[str, Any]]:
                                'text': (message.get('text') or {}).get('body', '') or reply.get('id', '') or reply.get('title', ''),
                                'caption': content.get('caption', ''),
                                'media_id': content.get('id'),
+                               # A farmer cannot draw a polygon in a chat, so a dropped pin
+                               # is the one precise way they can say where a field is. It is
+                               # carried here or the add-field flow has nothing to work with.
+                               'latitude': content.get('latitude'),
+                               'longitude': content.get('longitude'),
                                'timestamp': message.get('timestamp')})
             for status in value.get('statuses', []) or []:
                 events.append({'kind': 'status', 'external_message_id': status.get('id', ''),
@@ -206,11 +242,17 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         return 'unlinked'
     if not channel.opted_in:
         return 'opted_out'
-    if event.get('type') not in ('text', 'interactive', 'image', 'audio'):
+    if event.get('type') not in ('text', 'interactive', 'image', 'audio', 'location'):
         # Media requires a separate Meta media download and an internal media asset
         # before the assistant can read it. Keep the signed event for audit, but do
         # not create an empty assistant turn.
         return 'unsupported_message'
+    if event.get('type') == 'location' and not text:
+        latitude, longitude = event.get('latitude'), event.get('longitude')
+        if latitude is not None and longitude is not None:
+            # A pin carries no words, and the conversation log still has to record
+            # what the farmer actually sent rather than an empty turn.
+            text = f'Location pin: {float(latitude):.5f}, {float(longitude):.5f}'
     if not text and not event.get('media_id'):
         return 'empty_message'
     channel.last_inbound_at = d.utcnow()
@@ -235,10 +277,23 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         command = 'fields'
     elif lowered in {'readiness', 'status', 'water', 'money', 'economics', 'history', 'log', 'journal_help'}:
         command = {'status': 'readiness', 'economics': 'money', 'log': 'history'}.get(lowered, lowered)
-    elif lowered.startswith('field:'):
+    elif lowered in {'suggest', 'suggest crops', 'setcrop', 'set crop'}:
+        command = 'setcrop' if lowered.startswith('set') else 'suggest'
+    elif lowered in {'field_add', 'add field', 'add a field', 'new field'}:
+        command = 'field_add'
+    elif lowered == 'field_cancel':
+        command = 'field_cancel'
+    elif lowered.startswith(('field_place:', 'field_unit:')) or event.get('type') == 'location':
+        command = 'field_add_step'
+    elif lowered.startswith('crop_set:'):
+        command = 'crop_set'
+    elif lowered.startswith('crop:'):
+        command = 'crop_detail'
+    elif lowered.startswith(('field:', 'suggest:', 'setcrop:')):
         # A tapped list row carries the field id, so selection needs no name matching.
+        prefix, _, chosen_id = text.partition(':')
         selected = session.scalar(select(d.FieldRow).where(
-            d.FieldRow.id == text.split(':', 1)[1].strip(),
+            d.FieldRow.id == chosen_id.strip(),
             d.FieldRow.tenant_id == channel.tenant_id,
             d.FieldRow.farmer_id == channel.farmer_id,
             d.FieldRow.archived.is_(False)))
@@ -247,7 +302,8 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         else:
             conversation.payload = {**conversation.payload, 'field_id': selected.id}
             channel.payload = {**channel.payload, 'active_field_id': selected.id}
-            command = 'field_selected'
+            command = {'field': 'field_selected', 'suggest': 'suggest_run',
+                       'setcrop': 'setcrop_run'}[prefix.lower()]
     elif lowered.startswith('log '):
         command = 'journal'
     elif lowered.startswith('proposal_confirm:'):
@@ -276,6 +332,10 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
             command = 'field_selected'
         else:
             command = 'fields'
+    if command is None and (conversation.payload or {}).get('add_field'):
+        # A half-finished field owns the farmer's next message: "North plot" is the
+        # answer to the question just asked, not a question for the assistant.
+        command = 'field_add_step'
     message_id = d.new_id()
     session.add(d.MessageRow(
         id=message_id, tenant_id=channel.tenant_id, farmer_id=channel.farmer_id,
@@ -290,6 +350,8 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
                              'conversation_id': conversation_id, 'message_id': message_id,
                              'media_id': event.get('media_id'), 'media_type': event.get('type'),
                              'command': command,
+                             'latitude': event.get('latitude'),
+                             'longitude': event.get('longitude'),
                              'proposal_id': text.split(':', 1)[1].strip() if command in {'proposal_confirm', 'proposal_cancel'} else None}}))
     return 'queued'
 
@@ -430,6 +492,393 @@ def active_field_id(session: Session, conversation: d.ConversationRow | None,
     return season.field_id
 
 
+def domain_service(session: Session, settings: Settings, tenant_id: str, farmer_id: str):
+    """The same service the web app writes through, acting as this farmer.
+
+    Nothing on this channel touches a table directly. Going through the service is what
+    keeps ownership, area allocation and versioning identical however a farmer arrives.
+    """
+    from agrisense.platform.auth import Actor
+    from agrisense.platform.service import DomainService
+    farmer = session.get(d.FarmerRow, farmer_id)
+    if farmer is None:
+        return None
+    return DomainService(session, Actor(farmer.user_id, tenant_id, farmer_id, 'farmer', True),
+                         'whatsapp', settings=settings)
+
+
+def resolved(coroutine: Any) -> Any:
+    """Drive one coroutine to completion from this synchronous handler.
+
+    The planning comparison is async because the web request path is, but the channel
+    reaches it from inside the worker's already-running loop, where `asyncio.run`
+    refuses to start a second one. It is therefore driven on a thread of its own. The
+    two threads never share the session in time: this one blocks until that one is done.
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coroutine)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coroutine).result()
+
+
+def farmer_fields(session: Session, tenant_id: str, farmer_id: str) -> list[d.FieldRow]:
+    return list(session.scalars(select(d.FieldRow).where(
+        d.FieldRow.tenant_id == tenant_id, d.FieldRow.farmer_id == farmer_id,
+        d.FieldRow.archived.is_(False)).order_by(d.FieldRow.name)))
+
+
+def field_choice(session: Session, tenant_id: str, farmer_id: str, prefix: str,
+                 body: str) -> tuple[d.FieldRow | None, ChannelReply | None]:
+    """The one field there is, or the tappable choice between several.
+
+    Returned as a pair rather than raising, because "there are no fields yet" and "pick
+    one" are both answers the farmer can act on, and neither is an error.
+    """
+    rows = farmer_fields(session, tenant_id, farmer_id)
+    if not rows:
+        return None, with_menu('No fields are set up yet. Add one here and I will take it from there.',
+                               ('field_add', 'Add a field'))
+    if len(rows) == 1:
+        return rows[0], None
+    return None, ChannelReply(body=body, list_label='Choose field', options=tuple(
+        (f'{prefix}:{row.id}', row.name, f'{row.area_ha} ha' if row.area_ha is not None else '')
+        for row in rows[:LIST_LIMIT]))
+
+
+def crop_catalogue(service: Any) -> list[dict[str, Any]]:
+    """The reviewed crop list, in the bundle's own order.
+
+    That order is regional suitability, which is exactly why the first five are the five
+    worth comparing. Re-sorting it here would compare the wrong five crops.
+    """
+    page = service.execute('GET', '/catalog/crops', '', None, {'limit': '25'})
+    return list(page.get('items') or [])
+
+
+def words(code: str | None) -> str:
+    return (code or '').replace('_', ' ').strip()
+
+
+def crop_lines(name: str, plan: dict[str, Any]) -> str:
+    """One candidate in words. A figure that is not available says so and stays absent.
+
+    Suitability, the sowing window and the season's water are the three the farmer is
+    choosing on, so each is reported or explicitly named as missing. None of them is
+    ever rendered as a zero: "0 mm of water" and "no sowing window" are claims, and a
+    gap in the reviewed record is not either of them.
+    """
+    lines = [f'*{name}*']
+    suitability = (plan.get('compatibility') or {}).get('suitability')
+    lines.append(f'Suitability {round(suitability * 100)} out of 100' if suitability is not None
+                 else 'Suitability: not scored for this field')
+    sowing = plan.get('sowing_interval') or {}
+    lines.append(f'Sow between {sowing["start_date"]} and {sowing["end_date"]}'
+                 if sowing.get('start_date') else 'Sowing window: not available')
+    water = plan.get('water') or {}
+    seasonal = water.get('seasonal') or {}
+    if seasonal.get('p50') is not None:
+        lines.append(f'Season water about {indian_number(seasonal["p50"])} '
+                     f'{seasonal.get("unit") or "m³"}')
+    else:
+        reason = words(water.get('missing_reason'))
+        lines.append('Season water: not worked out' + (f' ({reason})' if reason else ''))
+    return '\n'.join(lines)
+
+
+def crop_names(catalogue: list[dict[str, Any]]) -> dict[str, str]:
+    return {str(item.get('id')): str(item.get('name') or item.get('id')) for item in catalogue}
+
+
+def suggest_reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
+                  conversation: d.ConversationRow, field: d.FieldRow) -> ChannelReply:
+    """Rank crops for one field, through the same comparison the web planner runs.
+
+    The candidates are the catalogue's own first five: it is ordered by regional
+    suitability, and the engine takes five, so those are the five worth asking about.
+
+    The result is kept on the conversation so tapping a candidate can show its figures
+    without asking an upstream provider the same question twice, and so the detail a
+    farmer reads is the same one they were just shown rather than a fresh ranking.
+    """
+    from agrisense.platform import science
+    service = domain_service(session, settings, tenant_id, farmer_id)
+    if service is None:
+        return with_menu('Your farmer account could not be found.')
+    catalogue = crop_catalogue(service)
+    if not catalogue:
+        return with_menu('The reviewed crop list is not available right now, so nothing '
+                         'can be compared honestly yet.', ('fields', 'Switch field'))
+    names = crop_names(catalogue)
+    start = d.utcnow().astimezone(IST).date() + timedelta(days=1)
+    payload = field.payload or {}
+    planning = c.PlanningRequest(
+        field_id=field.id,
+        proposed_season=c.DateInterval(start_date=start,
+                                       end_date=start + timedelta(days=PLAN_WINDOW_DAYS)),
+        candidate_crop_ids=[str(item['id']) for item in catalogue[:PLAN_CANDIDATES]],
+        # Sent only when the field states them. The engine excludes a crop outright for a
+        # missing water or cash budget, which is the right answer; inventing one would
+        # make that refusal disappear and the advice unsafe.
+        available_water_m3=payload.get('available_water_m3'),
+        budget_inr=payload.get('water_budget_inr'))
+    try:
+        service.own(d.FieldRow, field.id)
+        comparison = resolved(science.compare(session, tenant_id, farmer_id, planning, settings))
+    except PlatformError as error:
+        return with_menu(f'*Suggest crops*\n{error.message}\nNothing is guessed in its place.',
+                         ('suggest', 'Try again'), ('fields', 'Switch field'))
+    result = comparison.model_dump(mode='json')
+    candidates = result.get('candidates') or []
+    if not candidates:
+        reasons = ', '.join(words(item.get('code')) for item in (result.get('exclusions') or [])[:3])
+        return with_menu(f'*Suggest crops*\n_{field.name}_\nNone of the five crops could be '
+                         'ranked for this field.' + (f'\nWhy: {reasons}' if reasons else ''),
+                         ('field_add', 'Add a field'), ('fields', 'Switch field'))
+    stored = {str(plan['crop_id']): plan for plan in candidates}
+    conversation.payload = {**(conversation.payload or {}), 'field_id': field.id,
+                            'suggestion': {'field_id': field.id, 'crops': stored,
+                                           'names': {key: names.get(key, key) for key in stored}}}
+    body = [f'*Crops for {field.name}*', 'Best first. Tap one to see it in full.', '']
+    body += [crop_lines(names.get(key, key), plan) + '\n' for key, plan in stored.items()]
+    body.append('_Ranked on reviewed references and last year\'s weather for this window. '
+                'That is not a forecast._')
+    return ChannelReply(body='\n'.join(body), list_label='Choose crop', options=tuple(
+        (f'crop:{key}', names.get(key, key), crop_summary(plan))
+        for key, plan in list(stored.items())[:LIST_LIMIT]))
+
+
+def crop_summary(plan: dict[str, Any]) -> str:
+    """The one-line row description, which the Cloud API clips at 72 characters."""
+    suitability = (plan.get('compatibility') or {}).get('suitability')
+    sowing = plan.get('sowing_interval') or {}
+    parts = [f'Suitability {round(suitability * 100)}/100' if suitability is not None
+             else 'Suitability not scored']
+    if sowing.get('start_date'):
+        parts.append(f'sow from {sowing["start_date"]}')
+    return ' · '.join(parts)
+
+
+def crop_detail_reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
+                      conversation: d.ConversationRow, field: d.FieldRow,
+                      crop_id: str) -> ChannelReply:
+    """One crop in full, with the confirmation that starts the season."""
+    suggestion = (conversation.payload or {}).get('suggestion') or {}
+    plan = (suggestion.get('crops') or {}).get(crop_id) if suggestion.get('field_id') == field.id else None
+    name = (suggestion.get('names') or {}).get(crop_id, crop_id)
+    if plan is None:
+        service = domain_service(session, settings, tenant_id, farmer_id)
+        catalogue = crop_catalogue(service) if service is not None else []
+        name = crop_names(catalogue).get(crop_id, crop_id)
+        # Honest about the gap rather than filling it: no comparison has been run for
+        # this field, so there are no figures to show, and inventing a suitability
+        # score for a crop nobody ranked would be worse than saying nothing.
+        body = (f'*{name}*\n_{field.name}_\nNo comparison has been run for this field yet, so '
+                'I have no suitability, sowing window or water figure to show you.\n\n'
+                f'Start the season with {name} anyway, or compare crops first.')
+        return with_menu(body, (f'crop_set:{crop_id}', 'Start season'), ('suggest', 'Compare first'))
+    economics = plan.get('economics') or {}
+    price = economics.get('price') or {}
+    lines = [crop_lines(name, plan), f'_{field.name}_']
+    harvest = plan.get('harvest_interval') or {}
+    if harvest.get('start_date'):
+        lines.insert(1, f'Harvest between {harvest["start_date"]} and {harvest["end_date"]}')
+    if price.get('value') is not None:
+        lines.insert(1, f'Price used: ₹{indian_number(price["value"])} per {price.get("unit") or "quintal"}')
+    for reason in (plan.get('exclusions') or [])[:2]:
+        lines.append(f'Note: {words(reason.get("code"))}')
+    lines.append(f'\nStart a season on {field.name} with {name}?')
+    return with_menu('\n'.join(lines), (f'crop_set:{crop_id}', 'Yes, start season'),
+                     ('suggest', 'Other crops'))
+
+
+def create_season_reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
+                        conversation: d.ConversationRow, field: d.FieldRow,
+                        crop_id: str) -> ChannelReply:
+    """Start the season on the area of the field that is not already committed."""
+    service = domain_service(session, settings, tenant_id, farmer_id)
+    if service is None:
+        return with_menu('Your farmer account could not be found.')
+    taken = float(session.scalar(select(func.coalesce(func.sum(d.SeasonRow.allocated_area_ha), 0))
+                                 .where(d.SeasonRow.field_id == field.id,
+                                        d.SeasonRow.tenant_id == tenant_id,
+                                        d.SeasonRow.status != 'closed')) or 0)
+    # The remainder, or the whole field when nothing is committed. A fully allocated
+    # field is refused by the service and the farmer is told so, rather than having a
+    # second season quietly created over the top of one already running.
+    remaining = round(max(0.0, field.area_ha - taken), 4)
+    allocated = remaining if remaining > 0 else field.area_ha
+    try:
+        service.execute('POST', '/fields/{id}/seasons', field.id, c.SeasonCreate(
+            crop_id=crop_id, allocated_area_ha=allocated, status='active'), {})
+    except (PlatformError, ValueError) as error:
+        return with_menu(getattr(error, 'message', 'That crop could not be set on this field.'),
+                         ('suggest', 'Other crops'), ('fields', 'Switch field'))
+    names = ((conversation.payload or {}).get('suggestion') or {}).get('names') or {}
+    return with_menu(f'*Season started*\n{names.get(crop_id, crop_id)} on {field.name}, '
+                     f'{allocated:g} ha.\nAsk AgriSense to evaluate it and readiness, water '
+                     'and money will fill in.', ('readiness', 'Readiness'), ('water', 'Water'))
+
+
+def field_state(conversation: d.ConversationRow) -> dict[str, Any]:
+    return dict((conversation.payload or {}).get('add_field') or {})
+
+
+def keep_field_state(conversation: d.ConversationRow, state: dict[str, Any] | None) -> None:
+    """Half a field is still progress, so it lives on the conversation between messages.
+
+    The active field id is already kept here for exactly this reason. Without it a farmer
+    who answered "North plot" and then looked away would come back to a flow that had
+    forgotten the name and would ask for it again.
+    """
+    payload = {**(conversation.payload or {})}
+    if state:
+        payload['add_field'] = state
+    else:
+        payload.pop('add_field', None)
+    conversation.payload = payload
+
+
+def field_add_reply(session: Session, settings: Settings, request: dict[str, Any], tenant_id: str,
+                    farmer_id: str, conversation: d.ConversationRow,
+                    restart: bool = False) -> ChannelReply:
+    """The guided add-a-field flow: a name, a place, an area and its unit.
+
+    A farmer cannot trace a boundary in a chat window, so the field is located the two
+    practical ways a phone allows: the WhatsApp location pin, which is exact, or a place
+    name resolved through the same gazetteer search the web app uses. Neither is a
+    coordinate we made up, and if the search cannot answer, the flow says so and waits.
+    """
+    state = {} if restart else field_state(conversation)
+    message = session.get(d.MessageRow, request.get('message_id'))
+    text = ((message.payload if message else None) or {}).get('text', '').strip()
+    latitude, longitude = request.get('latitude'), request.get('longitude')
+    awaiting = state.get('awaiting')
+
+    if latitude is not None and longitude is not None:
+        state['latitude'], state['longitude'] = float(latitude), float(longitude)
+        state['place'] = 'the pin you sent'
+        state['source'] = 'map'
+        state.pop('places', None)
+    elif text.startswith('field_unit:'):
+        unit = text.split(':', 1)[1].strip()
+        if unit in HECTARES_PER_UNIT:
+            state['unit'] = unit
+    elif text.startswith('field_place:'):
+        index = text.split(':', 1)[1].strip()
+        places = state.get('places') or []
+        if index.isdigit() and int(index) < len(places):
+            chosen = places[int(index)]
+            state.update({'latitude': chosen['latitude'], 'longitude': chosen['longitude'],
+                          'place': chosen['label'], 'source': 'village'})
+            state.pop('places', None)
+    elif awaiting == 'name' and text:
+        state['name'] = text[:160]
+    elif awaiting == 'place' and text:
+        return place_search_reply(settings, conversation, state, text)
+    elif awaiting == 'area' and text:
+        found = re.search(r'\d+(?:\.\d+)?', text.replace(',', ''))
+        if found is not None and float(found.group()) > 0:
+            state['area'] = float(found.group())
+
+    if not state.get('name'):
+        state['awaiting'] = 'name'
+        keep_field_state(conversation, state)
+        return with_menu('*Add a field*\nWhat should I call this field? Send the name — '
+                         'something like "North plot".', ('field_cancel', 'Cancel'))
+    if state.get('latitude') is None:
+        state['awaiting'] = 'place'
+        keep_field_state(conversation, state)
+        return with_menu(f'Where is *{state["name"]}*?\nSend a location pin from the field '
+                         '(attach → Location), or type the village or town name.',
+                         ('field_cancel', 'Cancel'))
+    if state.get('area') is None:
+        state['awaiting'] = 'area'
+        keep_field_state(conversation, state)
+        return with_menu(f'*{state["name"]}* at {state.get("place", "that place")}.\n'
+                         'How big is it? Send just the number — the unit comes next.',
+                         ('field_cancel', 'Cancel'))
+    if not state.get('unit'):
+        state['awaiting'] = 'unit'
+        keep_field_state(conversation, state)
+        return ChannelReply(body=f'{state["area"]:g} of what?', list_label='Choose unit',
+                            options=AREA_UNIT_OPTIONS)
+    return save_field_reply(session, settings, tenant_id, farmer_id, conversation, state)
+
+
+def place_search_reply(settings: Settings, conversation: d.ConversationRow,
+                       state: dict[str, Any], query: str) -> ChannelReply:
+    """Offer real places for a typed name, or say why none can be offered."""
+    try:
+        items = (locations.search(query, LIST_LIMIT, settings).get('items') or [])
+    except PlatformError as error:
+        state['awaiting'] = 'place'
+        keep_field_state(conversation, state)
+        return with_menu(f'{error.message}\nSend a location pin from the field instead, '
+                         'or type the name again.', ('field_cancel', 'Cancel'))
+    if not items:
+        state['awaiting'] = 'place'
+        keep_field_state(conversation, state)
+        return with_menu(f'No place in India matched "{query[:60]}". Try a nearby town, '
+                         'or send a location pin from the field.', ('field_cancel', 'Cancel'))
+    state['places'] = [{'latitude': item['centroid']['latitude'],
+                        'longitude': item['centroid']['longitude'],
+                        'label': ', '.join(part for part in (item['name'], item.get('district'),
+                                                             item['state']) if part)}
+                       for item in items]
+    state['awaiting'] = 'place'
+    keep_field_state(conversation, state)
+    return ChannelReply(
+        body=f'Which of these is *{state["name"]}* closest to?',
+        list_label='Choose place',
+        options=tuple((f'field_place:{index}', place['label'][:LIST_TITLE], place['label'])
+                      for index, place in enumerate(state['places'][:LIST_LIMIT])))
+
+
+def save_field_reply(session: Session, settings: Settings, tenant_id: str, farmer_id: str,
+                     conversation: d.ConversationRow, state: dict[str, Any]) -> ChannelReply:
+    """Create the field, and read the converted area back before it counts as done.
+
+    The hectare figure is echoed because a unit slip here silently rescales every
+    irrigation volume and every rupee for the whole season, and the kanal in particular
+    means different things in different states.
+    """
+    unit = state['unit']
+    area_ha = round(float(state['area']) * HECTARES_PER_UNIT[unit], 6)
+    if not 0 < area_ha <= MAX_PLAUSIBLE_HECTARES:
+        state.pop('area', None)
+        state.pop('unit', None)
+        state['awaiting'] = 'area'
+        keep_field_state(conversation, state)
+        return with_menu(f'{area_ha:g} ha is larger than any field I can accept, so that is '
+                         'more likely a typo than a farm. Send the area again.',
+                         ('field_cancel', 'Cancel'))
+    service = domain_service(session, settings, tenant_id, farmer_id)
+    if service is None:
+        return with_menu('Your farmer account could not be found.')
+    try:
+        field = service.execute('POST', '/fields', '', c.FieldCreate(
+            name=state['name'], area_ha=area_ha, entered_area=float(state['area']),
+            entered_area_unit=unit,
+            centroid=c.Location(latitude=state['latitude'], longitude=state['longitude'],
+                                source=state.get('source') or 'village')), {})
+    except (PlatformError, ValueError) as error:
+        state['awaiting'] = 'area'
+        keep_field_state(conversation, state)
+        return with_menu(getattr(error, 'message', 'That field could not be saved.'),
+                         ('field_cancel', 'Cancel'))
+    keep_field_state(conversation, None)
+    conversation.payload = {**(conversation.payload or {}), 'field_id': field.id}
+    caveat = ('\n_Kanal differs by state; this used the Punjab kanal of 5,445 sq ft._'
+              if unit == 'kanal' else '')
+    return with_menu(f'*{field.name} is saved*\n{state["area"]:g} {unit} = {area_ha:g} ha, at '
+                     f'{state.get("place", "the place you gave")}.{caveat}',
+                     ('suggest', 'Suggest crops'), ('field_add', 'Add another'))
+
+
 def command_reply(session: Session, settings: Settings, request: dict[str, Any], tenant_id: str,
                   farmer_id: str) -> ChannelReply | None:
     """Small deterministic channel commands; all agronomic answers stay in the assistant."""
@@ -549,6 +998,56 @@ def command_reply(session: Session, settings: Settings, request: dict[str, Any],
         d.ConversationRow.id == request.get('conversation_id'),
         d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
     field_id = active_field_id(session, conversation, tenant_id, farmer_id)
+    if command in {'field_add', 'field_add_step', 'field_cancel'}:
+        if conversation is None:
+            return with_menu('That conversation could not be found.')
+        if command == 'field_cancel':
+            keep_field_state(conversation, None)
+            return with_menu('Nothing was saved. Your other fields are untouched.',
+                             ('field_add', 'Start again'), ('fields', 'My fields'))
+        return field_add_reply(session, settings, request, tenant_id, farmer_id, conversation,
+                               restart=command == 'field_add')
+    if command in {'suggest', 'setcrop'}:
+        # Asked rather than assumed: a ranking or a new season belongs to one plot, and
+        # the field last asked about is not necessarily the one being planned.
+        chosen, choice = field_choice(
+            session, tenant_id, farmer_id, command,
+            '*Suggest crops*\nWhich field should I compare crops for?' if command == 'suggest'
+            else '*Set crop*\nWhich field is the crop for?')
+        if choice is not None or chosen is None:
+            return choice
+        field_id = chosen.id
+        command = f'{command}_run'
+    if command in {'suggest_run', 'setcrop_run', 'crop_detail', 'crop_set'}:
+        field = session.scalar(select(d.FieldRow).where(
+            d.FieldRow.id == field_id, d.FieldRow.tenant_id == tenant_id,
+            d.FieldRow.farmer_id == farmer_id, d.FieldRow.archived.is_(False))) if field_id else None
+        if field is None or conversation is None:
+            return with_menu('Choose the field first and I will pick up from there.',
+                             ('fields', 'Switch field'), ('field_add', 'Add a field'))
+        if command == 'suggest_run':
+            return suggest_reply(session, settings, tenant_id, farmer_id, conversation, field)
+        if command == 'setcrop_run':
+            service = domain_service(session, settings, tenant_id, farmer_id)
+            catalogue = crop_catalogue(service) if service is not None else []
+            if not catalogue:
+                return with_menu('The reviewed crop list is not available right now.',
+                                 ('fields', 'Switch field'))
+            return ChannelReply(
+                body=f'*Set crop*\n_{field.name}_\nTap the crop you have chosen. '
+                     'If you would rather see them ranked for this field, use Suggest crops.',
+                list_label='Choose crop',
+                options=tuple((f'crop:{item["id"]}', str(item.get('name') or item['id']), '')
+                              for item in catalogue[:LIST_LIMIT]))
+        message = session.get(d.MessageRow, request.get('message_id'))
+        crop_id = ((message.payload if message else None) or {}).get('text', '').partition(':')[2].strip()
+        if not crop_id:
+            return with_menu('That crop could not be read.', ('suggest', 'Suggest crops'))
+        if command == 'crop_detail':
+            return crop_detail_reply(session, settings, tenant_id, farmer_id, conversation,
+                                     field, crop_id)
+        return create_season_reply(session, settings, tenant_id, farmer_id, conversation,
+                                   field, crop_id)
     if command == 'history':
         rows = list(session.scalars(select(d.JournalRow).where(
             d.JournalRow.tenant_id == tenant_id, d.JournalRow.farmer_id == farmer_id)

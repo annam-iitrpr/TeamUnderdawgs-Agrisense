@@ -17,13 +17,40 @@
  * 3. **Today's price, labelled as today's.** These are reported arrivals, not a
  *    forecast. A price at harvest is months away and nobody here can predict
  *    it, so the date is always on screen.
+ *
+ * The prices arrive as a prop rather than from `useMarketPrices` here. The crop
+ * card now leads with the per-quintal price, so the card holds the hook and
+ * both the headline and this panel read the same answer. Calling the hook in
+ * both places would put two requests per card on the wire for one crop, and
+ * would let the headline and the detail below it disagree for a moment.
  */
 import { Callout, Card, Skeleton, UnknownValue } from "@/components/ui";
-import { useMarketPrices } from "./use-market-prices";
+import type { Measurement } from "@/lib/api/contract";
+import { formatMoney } from "@/lib/format";
+import { explainCode } from "@/lib/missing-reasons";
+import type { MarketPricesState } from "./use-market-prices";
 import { IndianRupee, MapPin } from "lucide-react";
 
+/** The unit the whole mandi feed speaks. A price in anything else is a different claim. */
+const PER_QUINTAL = "INR/quintal";
+
 function rupees(value: number): string {
-  return `₹${Math.round(value).toLocaleString("en-IN")}`;
+  return formatMoney(value);
+}
+
+/**
+ * A price as a farmer would say it: "₹2,425/quintal".
+ *
+ * Returns null rather than a number when the measurement is absent or arrives
+ * in some other unit. Relabelling a per-kilogram figure as per-quintal would be
+ * wrong by a factor of a hundred, which is the kind of error a farmer would
+ * only find out about at the mandi gate.
+ */
+export function rupeesPerQuintal(measurement: Measurement | null | undefined): string | null {
+  const value = measurement?.value;
+  if (value == null || !Number.isFinite(value)) return null;
+  if (measurement?.unit !== PER_QUINTAL) return null;
+  return `${rupees(value)}/quintal`;
 }
 
 function reportedOn(iso: string): string {
@@ -35,19 +62,17 @@ function reportedOn(iso: string): string {
 }
 
 export function MarketPricePanel({
-  cropId,
   cropName,
-  state,
+  market,
   harvestFrom,
 }: {
-  cropId: string;
   cropName: string;
-  /** Narrows "near you" to a market the farmer could actually reach. */
-  state?: string | null;
+  /** The one market answer for this crop, fetched once by the card above. */
+  market: MarketPricesState;
   /** The farmer's own harvest window, when the planner has worked one out. */
   harvestFrom?: string | null;
 }) {
-  const { prices, loading, unavailable } = useMarketPrices(cropId, state);
+  const { prices, loading, unavailable } = market;
 
   if (loading) return <Skeleton className="h-28 w-full rounded-card" />;
 
@@ -59,19 +84,18 @@ export function MarketPricePanel({
           Mandi price
         </p>
         <div className="mt-1">
-          <UnknownValue
-            label="Not known"
-            reason="no market reported a usable price for this crop today"
-          />
+          <UnknownValue label={explainCode("no_mandi_reported_this_crop_today")} />
         </div>
       </Card>
     );
   }
 
-  const low = prices.low.value;
-  const high = prices.high.value;
-  const modal = prices.modal.value;
+  const low = rupeesPerQuintal(prices.low);
+  const high = rupeesPerQuintal(prices.high);
+  const modal = rupeesPerQuintal(prices.modal);
+  const msp = rupeesPerQuintal(prices.msp);
   const nearest = prices.nearest;
+  const nearestModal = rupeesPerQuintal(nearest?.modal);
   // Optional on the contract: a bundle with no quotes is possible in principle
   // and must not throw here.
   const quotes = prices.quotes ?? [];
@@ -85,11 +109,10 @@ export function MarketPricePanel({
         What {cropName.toLowerCase()} is fetching now
       </p>
 
-      {low != null && high != null ? (
+      {low && high ? (
         <>
-          <p className="mt-1 text-h3 font-semibold text-ink">
-            {rupees(low)} – {rupees(high)}
-            <span className="ml-1 text-sm font-normal text-slate">per quintal</span>
+          <p translate="no" className="mt-1 text-h3 font-semibold tabular-nums text-ink">
+            {low} – {high}
           </p>
           <p className="mt-0.5 text-xs text-slate">
             {/* A reference price is not reported by any mandi, so counting them
@@ -99,21 +122,28 @@ export function MarketPricePanel({
               ? `Across ${quotes.length} mandi${quotes.length === 1 ? "" : "s"}`
               : "Indicative reference price for this season"}
             {quotes.length > 0 && reported ? ` reporting on ${reportedOn(reported)}` : ""}
-            {modal != null ? `. Most common price ${rupees(modal)}.` : "."}
+            {modal ? (
+              <>
+                {". Most common price "}
+                <span translate="no">{modal}</span>.
+              </>
+            ) : (
+              "."
+            )}
           </p>
         </>
       ) : (
         <div className="mt-1">
-          <UnknownValue label="Not known" />
+          <UnknownValue label={explainCode("no_mandi_reported_this_crop_today")} />
         </div>
       )}
 
-      {nearest && nearest.modal.value != null ? (
+      {nearest && nearestModal ? (
         <p className="mt-2 flex items-start gap-1.5 text-sm text-ink">
           <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0 text-forest" />
           <span>
             Nearest reporting mandi is <span className="font-semibold">{nearest.market}</span>,{" "}
-            {nearest.district} at {rupees(nearest.modal.value)}
+            {nearest.district} at <span translate="no">{nearestModal}</span>
             {nearest.variety ? ` for ${nearest.variety}` : ""}.
           </span>
         </p>
@@ -136,13 +166,21 @@ export function MarketPricePanel({
         </p>
       )}
 
-      {prices.msp == null ? (
+      {/* The support price is the floor the mandi range is judged against, so it
+          belongs beside the range and not only in its absence. When it is
+          absent the reason matters more than the gap: a crop with no declared
+          MSP and a crop whose published list has gone stale are different
+          situations, and only one of them means "there is no floor". */}
+      {msp ? (
+        <p className="mt-2 text-xs text-slate">
+          Government support price <span translate="no">{msp}</span>. A mandi offer below that
+          is worth questioning.
+        </p>
+      ) : (
         <Callout tone="info" className="mt-3 text-xs">
-          The government&rsquo;s minimum support price is not shown: the only published series
-          available ends at 2022-23, and quoting a four-year-old figure in a sale could lose you
-          money.
+          {explainCode(prices.msp_missing_reason ?? "current_declared_msp_series_unavailable")}.
         </Callout>
-      ) : null}
+      )}
     </Card>
   );
 }

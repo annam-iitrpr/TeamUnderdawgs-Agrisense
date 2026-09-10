@@ -484,3 +484,40 @@ def test_money_leads_with_the_price_rather_than_a_row_of_blanks():
     assert '{' not in reply
     assert '₹' in reply
     assert 'once you record them' in reply
+
+
+def test_the_menu_offers_the_dashboard_actions_and_stays_within_the_list_cap():
+    """A farmer on WhatsApp should not need the web app to do the ordinary things."""
+    ids = [option[0] for option in whatsapp.MENU_OPTIONS]
+    for expected in ('readiness', 'water', 'money', 'suggest', 'setcrop', 'field_add'):
+        assert expected in ids, expected
+    # The Cloud API rejects the whole message past ten rows, so this is a hard cap.
+    assert len(whatsapp.MENU_OPTIONS) <= whatsapp.LIST_LIMIT
+
+
+def test_tapping_through_suggest_and_add_field_reaches_a_command():
+    """The tapped ids carry their argument, so nothing is typed and nothing is parsed."""
+    for text, expected in (
+        ('suggest', 'suggest'),
+        ('setcrop', 'setcrop'),
+        ('field_add', 'field_add'),
+    ):
+        events = whatsapp.extract(tapped(text, f'wamid.{text}'))
+        assert events[0]['text'] == expected
+
+
+def test_a_half_finished_add_field_keeps_its_place(harness, asha):
+    """A chat is interrupted constantly, so partial progress has to survive.
+
+    The state lives on the conversation row the same way the active field does,
+    rather than in memory, because the next message may reach a different
+    process entirely.
+    """
+    linked_channel(harness, asha)
+    assert signed(harness, tapped('field_add', 'wamid.addstart')).status_code == 200
+    assert signed(harness, message('Lower five acres', 'wamid.addname')).status_code == 200
+    with harness.app.state.sessions() as session:
+        conversation = session.scalar(select(d.ConversationRow).where(
+            d.ConversationRow.payload['source'].as_string() == 'whatsapp'))
+        state = (conversation.payload or {}).get('add_field') or {}
+    assert state, 'the add-field flow kept nothing between messages'

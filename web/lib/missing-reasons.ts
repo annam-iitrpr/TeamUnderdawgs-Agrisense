@@ -36,6 +36,9 @@ const PHRASES: Record<string, string> = {
   planned_actual_line_reconciliation_contract_required:
     "your own recorded costs cannot yet be compared line by line with the plan",
   zero_cost: "cannot be worked out when the recorded cost is zero",
+  zero_cost_in_scenarios: "cannot be worked out when the scenario cost is zero",
+  harvest_price_is_scenario_distribution_not_current_quote:
+    "the price inside this scenario is a spread of past sales, not a quote you could sell at today",
 
   // Advice and planning.
   reviewed_regional_crop_reference_missing:
@@ -54,6 +57,14 @@ const PHRASES: Record<string, string> = {
   project_assumption_pending_validation: "based on an assumption that has not been checked",
   vintage_economics_forecasts_missing_no_error_claim:
     "the money forecasts issued at the time were not kept, so no accuracy claim is made",
+
+  // Mandi prices and the support price beside them.
+  no_msp_is_declared_for_this_crop:
+    "the government does not declare a support price for this crop, so there is no floor under the mandi range",
+  current_declared_msp_series_unavailable:
+    "the only published support-price list ends at 2022-23, and quoting a four-year-old figure in a sale could lose you money",
+  prices_are_reported_arrivals_not_a_forecast:
+    "these are the prices mandis reported today, not a prediction of what you will get at harvest",
 
   // Closure review metrics and their bases.
   actual_margin: "What you actually made",
@@ -100,6 +111,34 @@ const PHRASES: Record<string, string> = {
   binary_feasibility_viability: "an hour is either usable for spraying or it is not; there is no partial score",
   stull_standard_pressure_approximation:
     "Delta T uses standard air pressure, not your field's altitude",
+
+  // Gaps the screen notices for itself.
+  //
+  // The engine names a reason when it computed something and came up short. It
+  // says nothing when a whole field of the contract is simply absent — there is
+  // no yield anywhere in `Economics`, and an interval that was never published
+  // arrives as `null` with no reason attached. Those blanks used to render as
+  // "Not known", which tells a farmer neither what is missing nor who could
+  // supply it. The codes below are raised by the UI for exactly those cases and
+  // live here with the engine's own so that every blank on screen is phrased in
+  // one place and in one voice, rather than as a literal string in a component.
+  reviewed_yield_per_hectare_unavailable:
+    "no reviewed yield for this crop in your district yet, so there is no expected weight per hectare to show",
+  season_return_needs_your_budget_or_recorded_costs:
+    "a return for the whole season needs your own figures — add what you can spend on this field, or record your costs as you go, and it will be worked out from them",
+  sowing_window_not_published_for_your_area:
+    "no reviewed sowing window for your district yet",
+  harvest_window_not_published_for_your_area:
+    "no reviewed harvest window for your district yet",
+  season_length_needs_sowing_and_harvest_windows:
+    "needs both the sowing and the harvest window, and one of them is not published yet",
+  season_water_requirement_unavailable:
+    "needs the season's rainfall and the reference water use for this crop",
+  suitability_not_scored_for_this_field:
+    "the engine could not score this crop against your field",
+  no_mandi_reported_this_crop_today:
+    "no mandi reported a usable price for this crop today",
+  figure_not_supplied: "the engine did not supply this figure and did not say why",
 };
 
 /** What a weather provider's own failure code means, once the provider is named. */

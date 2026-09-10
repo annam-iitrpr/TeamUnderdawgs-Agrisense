@@ -13,9 +13,17 @@ const calendar = JSON.parse(
   readFileSync(resolve(__dirname, "../../../science/reference/crop-calendar.json"), "utf8"),
 );
 
-/** The bundle keys its crops as `planning:<id>`; the app uses the bare id. */
+/**
+ * The bundle keys its crops as `planning:<id>`; the app uses the bare id.
+ *
+ * Only the `planning:` records name a crop. The same map also holds
+ * `economics:<id>` and `scenario:<id>:<case>` rows, and counting those made the
+ * catalogue look five times longer than it is.
+ */
 function catalogueIds(): string[] {
-  return Object.keys(calendar.parameters).map((key) => key.replace(/^planning:/, ""));
+  return Object.keys(calendar.parameters)
+    .filter((key) => key.startsWith("planning:"))
+    .map((key) => key.slice("planning:".length));
 }
 
 describe("crop identity", () => {
