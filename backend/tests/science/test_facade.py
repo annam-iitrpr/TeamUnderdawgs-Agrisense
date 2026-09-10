@@ -627,3 +627,21 @@ def test_an_unconfirmed_draft_reading_is_never_used():
     field_id, now, observations = _card_and_probe("card", "probe")
     draft = observations[1].model_copy(update={"id": "draft", "confirmation_state": "draft"})
     assert select_soil_moisture([observations[0], draft], field_id, now) is None
+
+
+def test_the_season_water_total_comes_from_the_reviewed_record():
+    """It was hardcoded unavailable and never filled.
+
+    The card asked for "the historical climate for your area" when the figure is
+    a reviewed FAO seasonal requirement for the crop that needs no climate at
+    all -- and the crop planner was already reading it from the same record.
+    """
+    snap = snapshot()
+    result = evaluate_season(snap, forecast(snap), reference_bundle())
+    seasonal = result.water.seasonal
+    assert seasonal.p50 is not None, seasonal.missing_reason
+    assert seasonal.unit == "m³"
+    assert seasonal.p10 <= seasonal.p50 <= seasonal.p90
+    # A whole-season requirement, not a balance against this year's rain, and it
+    # has to say so or a farmer will subtract their rainfall from it twice.
+    assert "whole_season_requirement_not_net_of_this_years_rain" in seasonal.assumptions

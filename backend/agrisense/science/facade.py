@@ -109,6 +109,36 @@ def _water(
     )
     if record is None:
         return result
+    # The season total, from the same reviewed record the crop planner reads.
+    # It was hardcoded unavailable and never filled, so the card said the
+    # historical climate for the area was needed -- when the figure is a
+    # reviewed FAO seasonal requirement for the crop and needs no climate at
+    # all. It is a reference requirement for the whole season, not a balance
+    # struck against this year's rain, and the assumptions say so.
+    planning = reviewed_parameters(references, f"planning:{snapshot.season.crop_id}", now)
+    if planning is not None:
+        try:
+            seasonal_mm = number(planning, "seasonal_irrigation_mm", low=0)
+            low_mm = number(planning, "seasonal_irrigation_low_mm", low=0)
+            high_mm = number(planning, "seasonal_irrigation_high_mm", low=low_mm)
+        except (KeyError, ValueError, TypeError):
+            seasonal_mm = None
+        if seasonal_mm is not None:
+            area = snapshot.season.allocated_area_ha
+            result.seasonal = api.Estimate(
+                p10=low_mm * area * 10,
+                p50=seasonal_mm * area * 10,
+                p90=high_mm * area * 10,
+                unit="m³",
+                basis="scenario",
+                target="seasonal_irrigation",
+                assumptions=[
+                    "reviewed_regional_scenario",
+                    "whole_season_requirement_not_net_of_this_years_rain",
+                ],
+                evidence_ids=[str(planning["evidence_id"])],
+                input_completeness=1,
+            )
     try:
         kc = number(record, "kc", low=0, high=3)
         zone = RootZone(
