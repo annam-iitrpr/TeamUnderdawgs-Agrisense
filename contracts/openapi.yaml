@@ -2363,8 +2363,31 @@
       "ForecastHour": {
         "additionalProperties": false,
         "properties": {
+          "gust_kmh": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Measurement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "interval": {
             "$ref": "#/components/schemas/Interval"
+          },
+          "inversion_clear": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inversion Clear"
           },
           "radiation_w_m2": {
             "anyOf": [
@@ -2390,6 +2413,17 @@
           },
           "rain_mm": {
             "$ref": "#/components/schemas/Measurement"
+          },
+          "rain_probability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Measurement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "relative_humidity_pct": {
             "$ref": "#/components/schemas/Measurement"

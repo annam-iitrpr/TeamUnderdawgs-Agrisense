@@ -102,3 +102,42 @@ async def test_outage_diagnostics_survive_contract_bridge_without_credentials():
     assert "cehub:http_403" in caught.value.diagnostics
     assert "synthetic-key" not in str(caught.value)
     assert "synthetic-key" not in str(caught.value.diagnostics)
+
+
+def test_the_contract_carries_the_variables_a_spray_decision_needs():
+    """v1 dropped gust, rain probability and inversion crossing this boundary.
+
+    Providers fetch all three. They were lost on the way into the contract and
+    rebuilt as nulls on the way out, and the ranker treats an unknown gust as a
+    refusal -- so no spray window could be named for any farmer on any field,
+    through the contract itself, whatever the provider had supplied. A gust is
+    what carries a spray onto a neighbour's field, so it cannot be assumed away;
+    carrying it is the only option.
+    """
+    from agrisense.science.contract_bridge import from_contract, to_contract
+    from agrisense.science.weather import Hour, WeatherBundle
+
+    now = datetime(2026, 9, 10, tzinfo=UTC)
+    bundle = WeatherBundle(
+        "synthetic-test",
+        now,
+        (
+            Hour(now, 25, 60, 8, gust_kmh=12, rain_mm=0, rain_probability=0.10,
+                 radiation_wm2=200, wind_height_m=10, inversion_clear=True,
+                 source="synthetic-test"),
+        ),
+        mode="demo",
+    )
+    location = api.Location(latitude=30.9686, longitude=76.473, source="manual")
+
+    contract = to_contract(bundle, location)
+    hour = contract.hourly[0]
+    assert hour.gust_kmh is not None and hour.gust_kmh.value == 12
+    assert hour.rain_probability is not None and hour.rain_probability.value == 0.10
+    assert hour.inversion_clear is True
+
+    # And back, because the evaluation reads the rebuilt bundle and not the original.
+    restored = from_contract(contract).hours[0]
+    assert restored.gust_kmh == 12
+    assert restored.rain_probability == 0.10
+    assert restored.inversion_clear is True

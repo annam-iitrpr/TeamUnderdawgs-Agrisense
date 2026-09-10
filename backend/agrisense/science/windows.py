@@ -247,10 +247,22 @@ def rank_windows(
         else "blocked"
     )
     # A zero need is a monitoring state, never an instruction to apply.
+    #
+    # Being blocked is a finding, not a gap. The stress was worked out, the hours
+    # were checked and none of them are safe to spray in, which is a readiness of
+    # zero with the reasons attached -- "not this week, and here is why". Only a
+    # genuine gap keeps a null score: where a reading was missing we did not
+    # assess the hour, and a zero would claim we had.
     return {
         "status": status,
         "selected_window": selected if status == "recommended" else None,
-        "readiness": None if selected is None else selected["readiness"],
+        "readiness": (
+            selected["readiness"]
+            if selected
+            else None
+            if status == "insufficient_data"
+            else 0
+        ),
         "alternatives": accepted[1:4] if status == "recommended" else [],
         "rejected": rejected,
         "reasons": carried

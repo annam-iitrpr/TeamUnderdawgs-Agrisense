@@ -1038,8 +1038,31 @@
     "ForecastHour": {
       "additionalProperties": false,
       "properties": {
+        "gust_kmh": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Measurement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "interval": {
           "$ref": "#/$defs/Interval"
+        },
+        "inversion_clear": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inversion Clear"
         },
         "radiation_w_m2": {
           "anyOf": [
@@ -1065,6 +1088,17 @@
         },
         "rain_mm": {
           "$ref": "#/$defs/Measurement"
+        },
+        "rain_probability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Measurement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "relative_humidity_pct": {
           "$ref": "#/$defs/Measurement"

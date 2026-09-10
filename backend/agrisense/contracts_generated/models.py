@@ -284,6 +284,19 @@ class ForecastHour(ContractModel):
     vpd_kpa: Measurement
     radiation_w_m2: Measurement | None = None
     radiation_wh_m2: Measurement | None = None
+    #: The three the spray decision cannot be made without.
+    #:
+    #: v1 omitted them, and providers fetch them, so they were dropped crossing
+    #: this boundary and rebuilt as nulls on the other side. The ranker then
+    #: refused every hour for a missing gust and no spray window could be named
+    #: for any farmer -- the feature was unreachable through the contract itself.
+    #: A gust is what carries a spray onto a neighbour's field, so it cannot be
+    #: assumed, which leaves carrying it as the only option.
+    gust_kmh: Measurement | None = None
+    rain_probability: Measurement | None = None
+    #: False where a surface temperature inversion is possible, which traps
+    #: droplets and moves them off target. Null where the provider cannot say.
+    inversion_clear: bool | None = None
 
 
 class ForecastDay(ContractModel):

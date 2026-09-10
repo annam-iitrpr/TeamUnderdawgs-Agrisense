@@ -62,15 +62,27 @@ def from_contract(forecast: api.ForecastBundle) -> WeatherBundle:
         radiation = row.radiation_w_m2
         if radiation is not None and radiation.unit != "W/m²":
             raise ValueError("radiation must be W/m²")
+        gust = row.gust_kmh
+        if gust is not None and gust.value is not None and gust.unit != "km/h":
+            raise ValueError("gust must be km/h")
+        probability = row.rain_probability
+        if probability is not None and probability.value is not None and probability.unit != "ratio":
+            raise ValueError("rain probability must be a ratio from 0 to 1")
         hours.append(
             Hour(
                 row.interval.start_at,
                 row.temperature_c.value,
                 row.relative_humidity_pct.value,
                 row.wind_kmh.value,
+                # Read back rather than left null. The ranker treats an unknown
+                # gust as a refusal, so dropping it here was indistinguishable
+                # from a provider that had never reported one.
+                gust_kmh=None if gust is None else gust.value,
                 rain_mm=row.rain_mm.value,
+                rain_probability=None if probability is None else probability.value,
                 radiation_wm2=None if radiation is None else radiation.value,
                 wind_height_m=row.wind_height_m,
+                inversion_clear=row.inversion_clear,
                 source=forecast.provider,
                 radiation_missing_reason=None if radiation is None else radiation.missing_reason,
             )
@@ -150,6 +162,16 @@ def to_contract(bundle: WeatherBundle, location: api.Location) -> api.ForecastBu
                     row.radiation_missing_reason or "input_missing",
                     provenance=provenance,
                 ),
+                # Carried now rather than dropped. The spray ranker refuses an
+                # hour whose gust it does not know, so losing these three here
+                # meant no window could be named on the far side of this
+                # boundary no matter what the provider had supplied.
+                gust_kmh=measurement(row.gust_kmh, "km/h", provenance=provenance),
+                # A fraction, not a percentage: the internal bound is 0 to 1 and the
+                # spray policy compares against 0.3. Labelling it "%" here would
+                # invite a reader to multiply it by a hundred twice.
+                rain_probability=measurement(row.rain_probability, "ratio", provenance=provenance),
+                inversion_clear=row.inversion_clear,
             )
         )
     days = [
@@ -175,8 +197,5 @@ def to_contract(bundle: WeatherBundle, location: api.Location) -> api.ForecastBu
         data_mode=bundle.mode,
         provenance=provenance,
         warnings=list(bundle.warnings)
-        + [
-            "v1_contract_omits_gust_probability_and_inversion",
-            "grid_location_is_request_location_when_grid_unknown",
-        ],
+        + ["grid_location_is_request_location_when_grid_unknown"],
     )
