@@ -326,7 +326,6 @@ function FieldPanel({
         {field.soil_summary == null ? (
           <SoilCardUpload field={field} onSaved={onFieldChanged} />
         ) : null}
-        <Shortcuts />
         <RemoveField field={field} onRemoved={onFieldChanged} />
       </div>
     </div>
@@ -808,29 +807,3 @@ function DataRequests({
   );
 }
 
-function Shortcuts() {
-  const { t } = useLanguage();
-  const links = [
-    { href: "/journal", label: t("navJournal"), icon: Sprout },
-    { href: "/plan", label: t("navPlan"), icon: Sprout },
-    { href: "/ask", label: t("navAsk"), icon: Sprout },
-  ];
-  return (
-    <Card className="p-4">
-      <h3 className="text-h3 font-semibold">Go to</h3>
-      <ul className="mt-3 grid grid-cols-1 gap-2">
-        {links.map((link) => (
-          <li key={link.href}>
-            <Link
-              href={link.href}
-              className="flex min-h-[48px] items-center gap-2 rounded-control border border-mist bg-card px-3 text-sm font-semibold"
-            >
-              <link.icon aria-hidden className="size-4 shrink-0 text-forest" />
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-}
