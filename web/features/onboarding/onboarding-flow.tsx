@@ -197,6 +197,21 @@ export function OnboardingFlow() {
       return data.id;
     } catch (error) {
       if (error instanceof ApiError) {
+        // The draft's key makes a retry of the same field safe, and refuses a
+        // *different* field sent under it. A farmer who goes back and edits
+        // their land after a save is doing exactly that, and "this key was
+        // already used for different input" describes our bookkeeping rather
+        // than anything they did. The key is retired and the save is allowed
+        // to proceed once, which is what they asked for.
+        if (error.serverCode === "IDEMPOTENCY_CONFLICT") {
+          const rotated = newIdempotencyKey();
+          update((d) => void (d.idempotencyKey = rotated));
+          // Not silent: the press did nothing visible, so it says the next one
+          // will work rather than leaving a dead button.
+          setSaveError("Your land details changed since the last save. Press continue again.");
+          setSaving(false);
+          return null;
+        }
         setSaveError(
           error.isDependencyUnavailable
             ? "AgriSense cannot save your field right now because a service it depends on is unavailable. Your answers are kept — try again in a moment."
@@ -860,7 +875,17 @@ function CropStep({
   // bookmark. Letting go of the dead id is what makes the next step able to
   // save the land again instead of asking about a field that is gone.
   useEffect(() => {
-    if (error?.gone && draft.fieldId) update((d) => void (d.fieldId = null));
+    if (!error?.gone || !draft.fieldId) return;
+    update((d) => {
+      d.fieldId = null;
+      // A fresh key with it. The draft's key is what makes a retry of the *same*
+      // field safe, but this is no longer a retry: the field it was used for is
+      // gone and the next save is a new one. Sending the old key against
+      // different content is rejected as "this key was already used for
+      // different input", which is how dropping the id alone turned one dead
+      // screen into another.
+      d.idempotencyKey = newIdempotencyKey();
+    });
   }, [error?.gone, draft.fieldId, update]);
 
   // Server order, not a local re-sort: the engine already ranked these.
