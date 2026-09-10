@@ -48,7 +48,7 @@ export const pa: Partial<Dict> = {
   signUpTitle: "ਆਪਣਾ ਐਗਰੀਸੈਂਸ ਖਾਤਾ ਬਣਾਓ",
   signUpSubtitle: "ਫ਼ੋਨ ਨੰਬਰ ਅਤੇ ਇੱਕ ਵਾਰ ਵਰਤਣ ਵਾਲੇ ਕੋਡ ਨਾਲ ਖਾਤਾ ਬਣਾਓ।",
   phoneAuthTitle: "ਫ਼ੋਨ ਨਾਲ ਜਾਰੀ ਰੱਖੋ",
-  phoneAuthSubtitle: "ਦੇਸ਼ ਕੋਡ ਸਮੇਤ ਫ਼ੋਨ ਨੰਬਰ ਦਿਓ। ਅਸੀਂ SMS ਰਾਹੀਂ ਕੋਡ ਭੇਜਾਂਗੇ।",
+  phoneAuthSubtitle: "ਅੱਗੇ ਵਧਣ ਲਈ ਆਪਣਾ ਮੋਬਾਈਲ ਨੰਬਰ ਦਿਓ।",
   phoneCodeSubtitle: "ਆਪਣੇ ਫ਼ੋਨ 'ਤੇ ਆਇਆ ਛੇ ਅੰਕਾਂ ਦਾ ਕੋਡ ਦਿਓ।",
   phoneLabel: "ਫ਼ੋਨ ਨੰਬਰ",
   phoneHint: "ਅੰਤਰਰਾਸ਼ਟਰੀ ਰੂਪ ਵਰਤੋ, ਜਿਵੇਂ +91 98765 43210।",

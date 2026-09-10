@@ -47,7 +47,7 @@ export const hi: Partial<Dict> = {
   signUpTitle: "अपना एग्रीसेंस खाता बनाएँ",
   signUpSubtitle: "फ़ोन नंबर और एक बार के कोड से अपना खाता बनाएँ।",
   phoneAuthTitle: "अपने फ़ोन से जारी रखें",
-  phoneAuthSubtitle: "देश कोड सहित फ़ोन नंबर डालें। हम SMS से एक बार का कोड भेजेंगे।",
+  phoneAuthSubtitle: "आगे बढ़ने के लिए अपना मोबाइल नंबर डालें।",
   phoneCodeSubtitle: "अपने फ़ोन पर भेजा गया छह अंकों का कोड डालें।",
   phoneLabel: "फ़ोन नंबर",
   phoneHint: "अंतरराष्ट्रीय प्रारूप इस्तेमाल करें, जैसे +91 98765 43210।",

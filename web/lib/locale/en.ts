@@ -58,7 +58,7 @@ export const en = {
   signUpTitle: "Create your AgriSense account",
   signUpSubtitle: "Create your account with a phone number and a one-time code.",
   phoneAuthTitle: "Continue with your phone",
-  phoneAuthSubtitle: "Enter your number with the country code. We will send a one-time code by SMS.",
+  phoneAuthSubtitle: "Enter your mobile number to continue.",
   phoneCodeSubtitle: "Enter the six-digit code sent to your phone.",
   phoneLabel: "Phone number",
   phoneHint: "Use international format, for example +91 98765 43210.",

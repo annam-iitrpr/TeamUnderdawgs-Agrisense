@@ -47,7 +47,7 @@ export const mr: Partial<Dict> = {
   signUpTitle: "तुमचे अ‍ॅग्रीसेन्स खाते तयार करा",
   signUpSubtitle: "फोन नंबर आणि एकदा वापरता येणाऱ्या कोडने खाते तयार करा.",
   phoneAuthTitle: "फोनद्वारे पुढे जा",
-  phoneAuthSubtitle: "देश कोडासह फोन नंबर टाका. आम्ही SMS द्वारे कोड पाठवू.",
+  phoneAuthSubtitle: "पुढे जाण्यासाठी तुमचा मोबाइल नंबर टाका.",
   phoneCodeSubtitle: "तुमच्या फोनवर पाठवलेला सहा अंकी कोड टाका.",
   phoneLabel: "फोन नंबर",
   phoneHint: "आंतरराष्ट्रीय स्वरूप वापरा, उदाहरणार्थ +91 98765 43210.",
