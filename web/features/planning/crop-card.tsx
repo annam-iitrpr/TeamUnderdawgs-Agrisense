@@ -1,5 +1,7 @@
 "use client";
 
+import { formatArea } from "@/lib/format";
+
 /**
  * One candidate crop, with everything the PRD asks a farmer to weigh.
  *
@@ -256,7 +258,7 @@ export function CropCard({
                   requirement into the rainfall that meets it, which is the
                   opposite claim. Kept apart, neither can absorb the other. */}
               <p className="text-xs text-slate">
-                whole season on <span translate="no">{areaHa} ha</span>
+                whole season on <span translate="no">{formatArea(areaHa, "ha")}</span>
                 {areaHa > 0 ? (
                   <>
                     {" · depth "}
@@ -293,7 +295,7 @@ export function CropCard({
                   {formatLitres(seasonalLitres)}
                 </span>
                 <span className="block text-xs font-normal text-slate">
-                  for your <span translate="no">{areaHa} ha</span>, whole season
+                  for your <span translate="no">{formatArea(areaHa, "ha")}</span>, whole season
                 </span>
               </>
             ) : (

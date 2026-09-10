@@ -1,5 +1,7 @@
 "use client";
 
+import { formatArea } from "@/lib/format";
+
 /**
  * P1-06 — the water side of the same season.
  *
@@ -60,7 +62,7 @@ export function WaterScreen({ seasonId }: { seasonId: string }) {
               {season.status} season
             </p>
             <p className="mt-0.5 text-h3 font-semibold capitalize text-ink">{season.crop_id}</p>
-            <p className="mt-0.5 text-sm text-slate">{areaHa} ha</p>
+            <p className="mt-0.5 text-sm text-slate">{formatArea(areaHa, "ha")}</p>
           </Card>
         ) : (
           <Skeleton className="h-24 w-full rounded-card" />
@@ -129,7 +131,7 @@ function SeasonalNeed({ water, areaHa }: { water: WaterEstimate; areaHa: number 
 
       {litres != null ? (
         <p className="mt-1 text-sm text-slate">
-          About {formatLitres(litres)} across your {areaHa} ha for the whole season.
+          About {formatLitres(litres)} across your {formatArea(areaHa, "ha")} for the whole season.
         </p>
       ) : null}
 

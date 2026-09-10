@@ -1,5 +1,7 @@
 "use client";
 
+import { formatArea } from "@/lib/format";
+
 /**
  * Two or more crops side by side.
  *
@@ -159,7 +161,7 @@ export function CropComparisonTable({
     <Card className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-ink">
-          Comparing {plans.length} crops on the same <span translate="no">{areaHa} ha</span>
+          Comparing {plans.length} crops on the same <span translate="no">{formatArea(areaHa, "ha")}</span>
         </p>
         <Button variant="secondary" onClick={onClear}>
           <X aria-hidden className="size-4" />
