@@ -1,23 +1,29 @@
 "use client";
 
 /**
- * Machine translation for the screens the dictionary has not reached yet.
+ * NOT MOUNTED. Machine page translation is incompatible with React here.
  *
- * AgriSense has its own dictionary, and where a string goes through `t()` the
- * wording is reviewed and stays reviewed. Most components do not use it yet, so
- * choosing Hindi translated the shell and left the body of every page in
- * English -- a half-translated screen, which is harder to read than either
- * language on its own.
+ * This worked -- the whole page really did render in Hindi -- and it crashed the
+ * app. The provider rewrites text nodes in place, wrapping them in its own
+ * elements, and React then tries to update or remove nodes that are no longer
+ * where its tree says they are. The result is
  *
- * This fills that gap rather than replacing the dictionary: reviewed strings
- * are already translated before this ever sees them, and this only reaches what
- * is still English. As the dictionary grows, this does less.
+ *   NotFoundError: Failed to execute 'removeChild' on 'Node':
+ *   The node to be removed is not a child of this node
  *
- * It is deliberately a visible, dismissable overlay from a named provider and
- * not a silent rewrite, because machine translation of agronomy is not reliable
- * enough to pass off as our own words. Product names, doses and units are
- * marked `notranslate` at the point they are rendered wherever they carry an
- * instruction a farmer could act on.
+ * thrown from React's commit phase, which unmounts everything and leaves the
+ * farmer on "Application error: a client-side exception has occurred". It fired
+ * the moment a search rendered its results, and it would fire on any re-render
+ * over translated text: a list appearing, a figure refreshing, a panel opening.
+ *
+ * There is no safe way to scope around it. Every subtree React re-renders would
+ * have to be marked `translate="no"`, which is most of the app, and a single
+ * missed one crashes the whole page rather than mistranslating a word.
+ *
+ * The real fix is the dictionary in `lib/locale/`, which already carries five
+ * languages and cannot break React because the strings are chosen before render.
+ * Extending its coverage is the work; this file is kept only so the next person
+ * to reach for a translate widget finds out why it was taken out.
  */
 import { useLanguage } from "@/components/language-provider";
 import { useEffect } from "react";
