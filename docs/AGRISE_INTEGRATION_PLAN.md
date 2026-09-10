@@ -48,37 +48,26 @@ Relevant routes for WhatsApp:
 | WhatsApp identity | `POST /channels/whatsapp/link`, `DELETE /channels/whatsapp/link` | Link a verified WhatsApp number to a farmer |
 | Close season | `POST /seasons/{id}/close`, `GET /seasons/{id}/summary` | Harvest, sales, forecast-vs-actual |
 
-The current contract does not expose an unauthenticated “phone login” route.
-That is deliberate and must be designed before implementation.
+The web app now uses Firebase Phone Auth with SMS OTP. The existing API keeps
+Firebase ID tokens as its bearer authority, so no unauthenticated API login route
+is needed. Firebase Phone Auth must be enabled for the configured project and
+tested with a disposable number before release.
 
 ## Decisions required for phone-only auth
 
 Firebase Phone Auth sends an SMS OTP; it does not send an OTP over WhatsApp.
-The requested flow therefore needs a small identity broker:
+SMS is the selected hackathon path because it avoids a custom OTP broker and a
+Meta authentication template. WhatsApp remains a linked channel:
 
-1. Farmer enters a phone number on the web or sends `hello` on WhatsApp.
-2. The broker creates a short-lived, single-use OTP challenge, rate-limited by
-   phone and device/IP.
-3. The broker sends the code through the WhatsApp Cloud API using a Meta-approved
-   authentication template.
-4. The farmer submits the code in the web UI or replies in WhatsApp.
-5. The broker verifies it, maps the normalized E.164 number to one AgriSense
-   farmer, and returns a Firebase custom token or another backend session token.
-6. The web client exchanges the custom token with Firebase and uses the normal
-   bearer API flow. WhatsApp webhook requests use the same phone identity after
-   signature verification.
-
-The implementation must settle whether the broker mints Firebase custom tokens
-or whether the backend becomes the session authority. The first option keeps
-the existing web/API authorization path and is the recommended design. Do not
-silently add Firebase SMS as a second login method: the requirement is phone
-number plus WhatsApp OTP.
-
-Required schema additions likely include an OTP challenge record, normalized
-phone hash/lookup, expiry, attempt counter, consumed timestamp, and a verified
-channel identity. These belong in `contracts/models.py` and `contracts/routes.py`,
-then generated bindings must be regenerated. Never put a raw OTP or access token
-in logs, URLs, analytics, or browser storage.
+1. Farmer signs in or creates an account with Firebase SMS OTP in the web UI.
+2. The API enrolls the verified Firebase user and uses the phone identity from
+   Firebase rather than an email/password account.
+3. The farmer requests a one-time WhatsApp link code from the authenticated web
+   account and sends `LINK <code>` from the WhatsApp number.
+4. The signed Meta webhook redeems the code once, creates the channel, and queues
+   the message in the normal conversation and assistant pipeline.
+5. Replies are delivered through the outbox worker after live Meta credentials
+   and an approved send policy are configured.
 
 ## WhatsApp guide review
 
@@ -87,7 +76,7 @@ and `WHATSAPP_PRODUCT_PLAN.md`. The Meta-side setup is already proven for the
 test number, webhook verification, text/image/button receipt, media download,
 WABA subscription, and WhatsApp formatting.
 
-The guide needs these updates before implementation:
+The guide needs these updates before production rollout:
 
 - Replace “copy the temporary `.env` into the backend” with the canonical
   `~/Work/agrisense.env` plus Secret Manager mapping.
@@ -95,7 +84,8 @@ The guide needs these updates before implementation:
   disposable plumbing demo only.
 - Replace the “future API contract” language with the routes above and the
   generated contract models.
-- Add the phone-over-WhatsApp OTP broker and account-continuity rules.
+- Remove the phone-over-WhatsApp OTP requirement for the hackathon path; web
+  authentication is Firebase SMS OTP and WhatsApp is linked after sign-in.
 - Add the `POST /channels/whatsapp/link` flow and require explicit WhatsApp
   consent in the farmer profile.
 - Add deduplication by Meta message ID before any side effect; webhook handlers
@@ -156,15 +146,16 @@ the versioned close route and renders the summary.
 2. **Auth migration.** Replace email/password UI, reset-password and email
    verification copy with phone-number/WhatsApp OTP screens. Preserve existing
    tenant isolation and add migration behavior for any existing test accounts.
-3. **Real WhatsApp adapter.** Move webhook verification, Meta parsing, media
-   download, formatting, dedupe, active-field state, and outbound sends into the
-   real backend. Keep outbound mode `outbox` until the test flow is verified.
+3. **Real WhatsApp adapter.** The backend now verifies webhooks, deduplicates
+   Meta IDs, redeems link codes, creates text conversation turns, runs the
+   grounded assistant worker, and queues replies. Complete media download,
+   WhatsApp formatting, active-field state, and live Meta verification next.
 4. **API integration journeys.** Wire onboarding, readiness, journal/media,
    assistant proposals, reminders, and close-season flows. Add authenticated
    browser/API tests with disposable accounts and no real farmer data.
-5. **Landing page.** Build the public page after the design tokens and auth
-   direction are stable: hero, problem, how-it-works flow, live-data trust,
-   WhatsApp/web entry points, closed-loop Season Journal, and a concise demo CTA.
+5. **Landing page.** Implemented with the existing design tokens: hero, problem,
+   how-it-works flow, live-data trust, WhatsApp/web entry points, closed-loop
+   Season Journal, and a concise demo CTA.
 6. **Deployment.** Deploy API, then frontend, update CORS and Meta Callback URL,
    verify Cloud Run health, run the live browser pass, and only then enable any
    approved WhatsApp outbound behavior.
@@ -173,9 +164,8 @@ the versioned close route and renders the summary.
 
 Ready now in this repository:
 
-- Auth UI and provider migration to a new OTP contract.
-- Real WhatsApp adapter against the existing API once the OTP/channel contract
-  decision is made.
+- Auth UI and provider migration to Firebase SMS OTP.
+- Real WhatsApp text adapter against the existing API, with queued assistant replies.
 - Landing page implementation and public-route Playwright coverage.
 - Deployment script and frontend/API release verification.
 - A reviewed reference-data ingestion change once proper regional per-hectare
@@ -183,12 +173,12 @@ Ready now in this repository:
 
 Blocked on external or human input:
 
-- WhatsApp OTP until a Meta authentication template is approved and the sender
-  number/test recipients are confirmed.
+- Real SMS until Firebase Phone Auth is enabled and a disposable test number is
+  available; WhatsApp OTP is intentionally out of scope.
 - Production deployment until a least-privilege Cloud Build service account is
   provisioned; the current owner account is intentionally not used.
 - Crop ranking until regional, citable per-hectare cost and calendar records are
   supplied. The current CACP figures are not enough by themselves.
 - Advice certification and spray safety until an agronomist signs off.
-- Full live E2E until the latest API and frontend revisions are deployed and a
-  disposable phone/WhatsApp test account is available.
+- Full live authenticated E2E until the latest API and frontend revisions are
+  deployed and disposable phone/WhatsApp test accounts are available.

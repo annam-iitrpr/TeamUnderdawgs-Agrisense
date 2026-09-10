@@ -20,8 +20,8 @@ const BREAKPOINTS = [
   { name: "desktop-1920", width: 1920, height: 1080 },
 ] as const;
 
-/** Public routes. `/` redirects to `/sign-in` when signed out. */
-const ROUTES = ["/sign-in", "/sign-up", "/reset-password"] as const;
+/** Public routes, including the signed-out landing page. */
+const ROUTES = ["/", "/sign-in", "/sign-up", "/reset-password"] as const;
 
 async function horizontalOverflow(page: Page) {
   return page.evaluate(() => {
@@ -77,7 +77,7 @@ for (const bp of BREAKPOINTS) {
 
     test("primary action stays reachable without horizontal scrolling", async ({ page }) => {
       await page.goto("/sign-in");
-      const submit = page.getByRole("button", { name: /sign in/i });
+      const submit = page.getByRole("button", { name: /send code|sign in/i });
       await expect(submit).toBeVisible();
 
       const box = await submit.boundingBox();
@@ -131,6 +131,22 @@ test.describe("installable manifest", () => {
       expect(res.status(), `${icon.src} is declared but does not resolve`).toBe(200);
       expect(res.headers()["content-type"]).toContain("image/png");
     }
+  });
+});
+
+test.describe("signed-out landing and phone auth", () => {
+  test("landing page presents the product and both entry points", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: /better day to spray/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /sign in/i }).first()).toHaveAttribute("href", "/sign-in");
+    await expect(page.getByRole("link", { name: /start with your field/i })).toHaveAttribute("href", "/sign-up");
+  });
+
+  test("phone auth validates the number before calling Firebase", async ({ page }) => {
+    await page.goto("/sign-in");
+    await page.getByRole("button", { name: /send code/i }).click();
+    await expect(page.getByText(/valid phone number/i)).toBeVisible();
+    await expect(page.locator("#recaptcha-container")).toBeAttached();
   });
 });
 

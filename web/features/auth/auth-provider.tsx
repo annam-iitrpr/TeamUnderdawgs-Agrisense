@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Firebase email/password session state.
+ * Firebase phone/SMS OTP session state.
  *
  * Rules this provider enforces, all from the build spec:
- *  - Passwords go to the Firebase SDK only. They are never sent to an
- *    application endpoint and never written to storage.
+ *  - Phone verification stays inside Firebase's SDK. The OTP is never sent to
+ *    an application endpoint or written to storage.
  *  - The API client's bearer token comes from `getIdToken()` on demand, so a
  *    refreshed or revoked token is picked up rather than cached indefinitely.
  *  - Role and tenant come from the server's `/me` response, never from a
@@ -17,12 +17,11 @@
 import { setTokenProvider } from "@/lib/api/client";
 import { authErrorKey, configState, firebaseAuth, type AuthErrorKey } from "@/lib/firebase";
 import {
-  createUserWithEmailAndPassword,
   onIdTokenChanged,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
   signOut as firebaseSignOut,
+  type ConfirmationResult,
   type User,
 } from "firebase/auth";
 import {
@@ -31,6 +30,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -43,11 +43,9 @@ export type AuthContextValue = {
   /** Absent required NEXT_PUBLIC_FIREBASE_* variables, when misconfigured. */
   missingConfig: string[];
   usingEmulator: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  requestPhoneOtp: (phone: string) => Promise<void>;
+  verifyPhoneOtp: (code: string) => Promise<void>;
   signOut: () => Promise<void>;
-  sendPasswordReset: (email: string) => Promise<void>;
-  resendVerification: () => Promise<void>;
 };
 
 /** Thrown with a translation key rather than a provider message, so the text
@@ -112,6 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [missingConfig, setMissingConfig] = useState<string[]>([]);
   const [usingEmulator, setUsingEmulator] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const recaptcha = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
     const state = configState();
@@ -154,32 +154,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const requestPhoneOtp = useCallback(async (phone: string) => {
     const auth = firebaseAuth();
     if (!auth) throw new AuthError("errorTitle");
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (!recaptcha.current) {
+        recaptcha.current = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+      }
+      const result = await signInWithPhoneNumber(auth, phone.trim(), recaptcha.current);
+      setConfirmation(result);
     } catch (error) {
+      recaptcha.current?.clear();
+      recaptcha.current = null;
       throw wrap(error);
     }
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
+  const verifyPhoneOtp = useCallback(async (code: string) => {
     const auth = firebaseAuth();
-    if (!auth) throw new AuthError("errorTitle");
+    if (!auth || !confirmation) throw new AuthError("authCodeExpired");
     try {
-      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      // Best effort: a failure to send the verification mail must not undo a
-      // successfully created account.
-      try {
-        await sendEmailVerification(credential.user);
-      } catch {
-        /* surfaced later by the verification banner's resend action */
-      }
+      await confirmation.confirm(code.trim());
+      setConfirmation(null);
     } catch (error) {
       throw wrap(error);
     }
-  }, []);
+  }, [confirmation]);
 
   const signOut = useCallback(async () => {
     const auth = firebaseAuth();
@@ -192,56 +192,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const sendPasswordReset = useCallback(async (email: string) => {
-    const auth = firebaseAuth();
-    if (!auth) throw new AuthError("errorTitle");
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-    } catch (error) {
-      // auth/user-not-found is deliberately swallowed: reporting it would
-      // confirm which addresses are registered. The UI shows the same
-      // "if an account exists" message either way.
-      const code =
-        error && typeof error === "object" && "code" in error
-          ? (error as { code?: unknown }).code
-          : undefined;
-      if (code === "auth/user-not-found") return;
-      throw wrap(error);
-    }
-  }, []);
-
-  const resendVerification = useCallback(async () => {
-    const current = firebaseAuth()?.currentUser;
-    if (!current) throw new AuthError("errorTitle");
-    try {
-      await sendEmailVerification(current);
-    } catch (error) {
-      throw wrap(error);
-    }
-  }, []);
-
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
       user,
       missingConfig,
       usingEmulator,
-      signIn,
-      signUp,
+      requestPhoneOtp,
+      verifyPhoneOtp,
       signOut,
-      sendPasswordReset,
-      resendVerification,
     }),
     [
       status,
       user,
       missingConfig,
       usingEmulator,
-      signIn,
-      signUp,
+      requestPhoneOtp,
+      verifyPhoneOtp,
       signOut,
-      sendPasswordReset,
-      resendVerification,
     ],
   );
 

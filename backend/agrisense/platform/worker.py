@@ -84,6 +84,19 @@ async def run_job(session: Session, row: d.JobRow, settings: Settings) -> str | 
         message = assistant.reply(session, settings, row.tenant_id, row.farmer_id,
                                   request['conversation_id'], request['message_id'])
         return message.id
+    if row.kind == 'whatsapp.inbound':
+        # Webhook ingestion creates the normal conversation/message records first;
+        # this job gives that turn the same grounded assistant behaviour as the web UI.
+        message = assistant.reply(session, settings, row.tenant_id, row.farmer_id,
+                                  request['conversation_id'], request['message_id'])
+        channel = session.scalar(select(d.ChannelRow).where(
+            d.ChannelRow.tenant_id == row.tenant_id,
+            d.ChannelRow.farmer_id == row.farmer_id,
+            d.ChannelRow.provider == 'whatsapp', d.ChannelRow.opted_in.is_(True)))
+        if channel is not None:
+            from agrisense.platform import whatsapp
+            whatsapp.queue_outbound(session, settings, channel, message.payload.get('text', ''))
+        return message.id
     if row.kind == 'privacy.export':
         return privacy.export(session, settings, row.tenant_id, row.farmer_id, row.id)
     if row.kind == 'privacy.delete':

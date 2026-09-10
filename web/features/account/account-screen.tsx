@@ -14,7 +14,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { ApiError } from "@/lib/api/envelope";
 import { useApiQuery } from "@/lib/api/query";
 import { me as meApi } from "@/lib/api/routes";
-import { AlertTriangle, Download, LogOut, Mail, Trash2, User } from "lucide-react";
+import { AlertTriangle, Download, LogOut, Phone, Trash2, User } from "lucide-react";
 import { useState } from "react";
 
 export function AccountScreen() {
@@ -25,7 +25,7 @@ export function AccountScreen() {
     enabled: Boolean(uid),
   });
   const profile = profileQuery.data ?? null;
-  const verified = Boolean(user?.emailVerified);
+  const verified = Boolean(user?.phoneNumber);
 
   return (
     <AppShell title="Account">
@@ -44,14 +44,9 @@ export function AccountScreen() {
                 </p>
               )}
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-sm text-slate">
-                <Mail aria-hidden className="size-3.5 shrink-0" />
-                {user?.email ?? "—"}
+                <Phone aria-hidden className="size-3.5 shrink-0" />
+                {user?.phoneNumber ?? "—"}
               </p>
-              {user && !verified ? (
-                <p className="mt-1 text-xs text-clay">
-                  Email not verified. Exporting or deleting your data needs a verified email.
-                </p>
-              ) : null}
             </div>
           </div>
         </Card>

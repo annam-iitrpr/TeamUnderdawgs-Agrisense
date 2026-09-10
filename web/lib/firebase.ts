@@ -100,27 +100,22 @@ export function resetFirebaseAuthForTests(): void {
  * enumeration leak the spec asks us to avoid.
  */
 export type AuthErrorKey =
-  | "authInvalidEmail"
-  | "authInvalidCredentials"
-  | "authWeakPassword"
-  | "authEmailInUse"
+  | "authInvalidPhone"
+  | "authInvalidCode"
   | "authTooManyAttempts"
+  | "authCodeExpired"
   | "errorUnreachable"
   | "errorTitle";
 
 export function authErrorKey(code: unknown): AuthErrorKey {
   const value = typeof code === "string" ? code : "";
   switch (value) {
-    case "auth/invalid-email":
-      return "authInvalidEmail";
-    case "auth/user-not-found":
-    case "auth/wrong-password":
-    case "auth/invalid-credential":
-      return "authInvalidCredentials";
-    case "auth/weak-password":
-      return "authWeakPassword";
-    case "auth/email-already-in-use":
-      return "authEmailInUse";
+    case "auth/invalid-phone-number":
+      return "authInvalidPhone";
+    case "auth/invalid-verification-code":
+      return "authInvalidCode";
+    case "auth/code-expired":
+      return "authCodeExpired";
     case "auth/too-many-requests":
       return "authTooManyAttempts";
     case "auth/network-request-failed":

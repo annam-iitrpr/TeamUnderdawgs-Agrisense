@@ -93,8 +93,9 @@ def resolve_channel(session: Session, digest: str) -> d.ChannelRow | None:
         d.ChannelRow.provider == 'whatsapp', d.ChannelRow.external_id_hash == digest))
 
 
-def redeem_link(session: Session, digest: str, code: str) -> d.ChannelRow | None:
+def redeem_link(session: Session, external_id: str, code: str) -> d.ChannelRow | None:
     """A code links one WhatsApp identity to the farmer who requested it, exactly once."""
+    digest = identity_hash(external_id)
     challenge = session.scalar(select(d.LinkChallenge).where(
         d.LinkChallenge.code_hash == hashlib.sha256(code.encode()).hexdigest(),
         d.LinkChallenge.used.is_(False)))
@@ -106,7 +107,11 @@ def redeem_link(session: Session, digest: str, code: str) -> d.ChannelRow | None
     row = d.ChannelRow(tenant_id=challenge.tenant_id, farmer_id=challenge.farmer_id,
                        provider='whatsapp', external_id_hash=digest, opted_in=True,
                        last_inbound_at=d.utcnow(), version=1,
-                       payload={'id': d.new_id(), 'consent_version': challenge.payload.get('consent_version')})
+                       # The inbox stores only a digest. The linked channel needs the
+                       # provider id to send a reply, and is tenant-owned and erasable
+                       # with the channel unlink/delete operation.
+                       payload={'id': d.new_id(), 'msisdn': external_id,
+                                'consent_version': challenge.payload.get('consent_version')})
     session.add(row)
     return row
 
@@ -115,21 +120,51 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
     """Turn one verified inbound message into platform work, or explain why it was ignored."""
     if event['kind'] != 'message':
         return 'status'
-    digest = identity_hash(event.get('from', ''))
+    external_id = (event.get('from') or '').strip()
+    if not external_id:
+        return 'invalid_sender'
+    digest = identity_hash(external_id)
     text = (event.get('text') or '').strip()
     if text.upper().startswith(LINK_PREFIX):
         code = text[len(LINK_PREFIX):].strip()
-        return 'linked' if redeem_link(session, digest, code) else 'link_rejected'
+        return 'linked' if redeem_link(session, external_id, code) else 'link_rejected'
     channel = resolve_channel(session, digest)
     if channel is None:
         # An unlinked sender is never guessed into an account.
         return 'unlinked'
     if not channel.opted_in:
         return 'opted_out'
+    if event.get('type') != 'text' or not text:
+        # Media requires a separate Meta media download and an internal media asset
+        # before the assistant can read it. Keep the signed event for audit, but do
+        # not create an empty assistant turn.
+        return 'unsupported_message'
     channel.last_inbound_at = d.utcnow()
+    channel_payload = channel.payload or {}
+    conversation_id = channel_payload.get('conversation_id')
+    conversation = session.scalar(select(d.ConversationRow).where(
+        d.ConversationRow.id == conversation_id,
+        d.ConversationRow.tenant_id == channel.tenant_id,
+        d.ConversationRow.farmer_id == channel.farmer_id)) if conversation_id else None
+    if conversation is None:
+        conversation_id = d.new_id()
+        conversation = d.ConversationRow(
+            id=conversation_id, tenant_id=channel.tenant_id, farmer_id=channel.farmer_id,
+            version=1, payload={'id': conversation_id, 'language': 'en'})
+        session.add(conversation)
+        channel.payload = {**channel_payload, 'conversation_id': conversation_id}
+    message_id = d.new_id()
+    session.add(d.MessageRow(
+        id=message_id, tenant_id=channel.tenant_id, farmer_id=channel.farmer_id,
+        conversation_id=conversation_id, version=1,
+        payload={'id': message_id, 'conversation_id': conversation_id, 'role': 'user',
+                 'text': text[:8000], 'media_ids': [], 'proposal_ids': [],
+                 'source_record_ids': [], 'created_at': d.utcnow().isoformat()}))
     session.add(d.JobRow(tenant_id=channel.tenant_id, farmer_id=channel.farmer_id,
                          kind='whatsapp.inbound', status='pending', attempts=0,
-                         payload={'id': d.new_id(), 'request': {'external_message_id': event['external_message_id']}}))
+                         payload={'id': d.new_id(), 'request': {
+                             'external_message_id': event['external_message_id'],
+                             'conversation_id': conversation_id, 'message_id': message_id}}))
     return 'queued'
 
 

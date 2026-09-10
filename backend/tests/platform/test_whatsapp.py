@@ -82,6 +82,7 @@ def test_a_link_code_binds_one_identity_once_and_then_messages_are_queued(harnes
         channel = session.scalar(select(d.ChannelRow).where(d.ChannelRow.provider == 'whatsapp'))
         assert channel is not None and channel.opted_in
         assert channel.external_id_hash == whatsapp.identity_hash(NUMBER)
+        assert channel.payload['msisdn'] == NUMBER
 
     # The same code cannot bind a second identity.
     assert signed(harness, message(f'LINK {code}', 'wamid.link2', '919999900002')).status_code == 200
@@ -92,6 +93,31 @@ def test_a_link_code_binds_one_identity_once_and_then_messages_are_queued(harnes
     with harness.app.state.sessions() as session:
         jobs = session.scalars(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')).all()
         assert len(jobs) == 1
+
+
+def test_a_linked_text_creates_the_normal_conversation_and_assistant_job(harness, asha):
+    code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
+    signed(harness, message(f'LINK {code}', 'wamid.link'))
+    assert signed(harness, message('Show my pending tasks', 'wamid.question')).status_code == 200
+    with harness.app.state.sessions() as session:
+        conversation = session.scalar(select(d.ConversationRow))
+        assert conversation is not None
+        user_message = session.scalar(select(d.MessageRow).where(d.MessageRow.payload['text'].as_string() == 'Show my pending tasks'))
+        assert user_message is not None
+        job = session.scalar(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound'))
+        assert job is not None
+        assert job.payload['request']['message_id'] == user_message.id
+
+
+def test_media_is_recorded_but_does_not_create_an_empty_assistant_turn(harness, asha):
+    code = asha.post('/channels/whatsapp/link', {'consent_version': '2026-09-01'}).json()['data']['code']
+    signed(harness, message(f'LINK {code}', 'wamid.link'))
+    payload = {'entry': [{'changes': [{'value': {'messages': [
+        {'id': 'wamid.photo', 'from': NUMBER, 'type': 'image',
+         'image': {'id': 'media.1'}, 'timestamp': '1757462400'}]}}]}]}
+    assert signed(harness, payload).status_code == 200
+    with harness.app.state.sessions() as session:
+        assert session.scalars(select(d.JobRow).where(d.JobRow.kind == 'whatsapp.inbound')).all() == []
 
 
 def test_unlinking_stops_further_ingestion(harness, asha):

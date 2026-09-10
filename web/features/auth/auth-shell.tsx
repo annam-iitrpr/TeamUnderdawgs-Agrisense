@@ -6,7 +6,7 @@ import { useAuth } from "./auth-provider";
 import type { ReactNode } from "react";
 
 /**
- * Frame shared by sign-in, sign-up and password reset.
+ * Frame shared by phone sign-in and account creation.
  *
  * Keeps the language switcher on the unauthenticated screens: a farmer who
  * cannot read English needs to change language *before* being asked to type

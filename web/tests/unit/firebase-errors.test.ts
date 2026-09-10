@@ -3,24 +3,14 @@ import { authErrorKey } from "@/lib/firebase";
 import { en } from "@/lib/locale/en";
 
 describe("authErrorKey", () => {
-  it("does not reveal whether an email address is registered", () => {
-    // The account-enumeration guard: a wrong password and an unknown address
-    // must produce the same message, or the response distinguishes registered
-    // addresses from unregistered ones.
-    const unknownAddress = authErrorKey("auth/user-not-found");
-    const wrongPassword = authErrorKey("auth/wrong-password");
-    const invalidCredential = authErrorKey("auth/invalid-credential");
-
-    expect(unknownAddress).toBe("authInvalidCredentials");
-    expect(wrongPassword).toBe("authInvalidCredentials");
-    expect(invalidCredential).toBe("authInvalidCredentials");
-    expect(en[unknownAddress]).toBe(en[wrongPassword]);
+  it("maps phone verification failures to safe farmer-facing messages", () => {
+    expect(authErrorKey("auth/invalid-verification-code")).toBe("authInvalidCode");
+    expect(authErrorKey("auth/code-expired")).toBe("authCodeExpired");
+    expect(en.authInvalidCode).toBeTruthy();
   });
 
   it("maps the conditions a farmer can act on to their own message", () => {
-    expect(authErrorKey("auth/invalid-email")).toBe("authInvalidEmail");
-    expect(authErrorKey("auth/weak-password")).toBe("authWeakPassword");
-    expect(authErrorKey("auth/email-already-in-use")).toBe("authEmailInUse");
+    expect(authErrorKey("auth/invalid-phone-number")).toBe("authInvalidPhone");
     expect(authErrorKey("auth/too-many-requests")).toBe("authTooManyAttempts");
   });
 
@@ -37,12 +27,9 @@ describe("authErrorKey", () => {
 
   it("resolves every mapped key to a real translation", () => {
     const codes = [
-      "auth/invalid-email",
-      "auth/user-not-found",
-      "auth/wrong-password",
-      "auth/invalid-credential",
-      "auth/weak-password",
-      "auth/email-already-in-use",
+      "auth/invalid-phone-number",
+      "auth/invalid-verification-code",
+      "auth/code-expired",
       "auth/too-many-requests",
       "auth/network-request-failed",
       "auth/unmapped",

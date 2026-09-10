@@ -1,93 +1,28 @@
 "use client";
 
-import { AppShell } from "@/components/app-shell";
-import { useLanguage } from "@/components/language-provider";
-import { Button, Callout, Skeleton } from "@/components/ui";
-import { AuthError, useAuth } from "@/features/auth/auth-provider";
+import { useAuth } from "@/features/auth/auth-provider";
 import { FieldDashboard } from "@/features/fields/field-dashboard";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useLanguage } from "@/components/language-provider";
+import { AppShell } from "@/components/app-shell";
+import { Callout, Skeleton } from "@/components/ui";
 
 export default function HomePage() {
-  const { status, user } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === "signed-out") router.replace("/sign-in");
-  }, [status, router]);
-
-  if (status === "initialising" || status === "signed-out") {
-    return (
-      <AppShell>
-        <div className="space-y-4" aria-busy="true">
-          <Skeleton className="h-16 w-full rounded-card" />
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Skeleton className="h-48 w-full rounded-card lg:col-span-2" />
-            <Skeleton className="h-48 w-full rounded-card" />
-          </div>
-        </div>
-      </AppShell>
-    );
+  const { status } = useAuth();
+  if (status === "initialising") {
+    return <AppShell><div className="space-y-4" aria-busy="true"><Skeleton className="h-16 w-full rounded-card" /><div className="grid gap-4 lg:grid-cols-3"><Skeleton className="h-48 w-full rounded-card lg:col-span-2" /><Skeleton className="h-48 w-full rounded-card" /></div></div></AppShell>;
   }
-
-  if (status === "misconfigured") {
-    return (
-      <AppShell>
-        <Callout tone="blocked" title="Sign-in is not configured">
-          Authentication cannot start. Open <span className="font-mono text-xs">/sign-in</span> to
-          see which environment variables are missing.
-        </Callout>
-      </AppShell>
-    );
-  }
-
-  return (
-    <>
-      {user && !user.emailVerified ? <VerificationNotice /> : null}
-      <FieldDashboard />
-    </>
-  );
+  if (status === "signed-out") return <LandingPage />;
+  if (status === "misconfigured") return <AppShell><Callout tone="blocked" title="Sign-in is not configured">Authentication cannot start. Open <span className="font-mono text-xs">/sign-in</span> to see which environment variables are missing.</Callout></AppShell>;
+  return <FieldDashboard />;
 }
 
-/**
- * Email verification prompt.
- *
- * Rendered above the dashboard rather than blocking it: an unverified account
- * can still read its own fields, and locking a farmer out of their data over an
- * unopened email would be worse than the risk it mitigates.
- */
-function VerificationNotice() {
+function LandingPage() {
   const { t } = useLanguage();
-  const { resendVerification } = useAuth();
-  const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function resend() {
-    setState("sending");
-    setMessage(null);
-    try {
-      await resendVerification();
-      setState("sent");
-    } catch (error) {
-      setState("failed");
-      setMessage(error instanceof AuthError ? t(error.key) : t("errorTitle"));
-    }
-  }
-
-  return (
-    <div className="border-b border-amber/40 bg-[color-mix(in_srgb,var(--amber)_12%,var(--card))] px-4 py-2.5">
-      <div className="mx-auto flex max-w-[100rem] flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <span className="font-semibold text-amber-ink">{t("verifyEmailTitle")}</span>
-        <span className="text-slate">{t("verifyEmailBody")}</span>
-        {state === "sent" ? (
-          <span className="font-semibold text-forest">{t("done")}</span>
-        ) : (
-          <Button variant="ghost" className="px-0" busy={state === "sending"} onClick={() => void resend()}>
-            {t("verifyEmailResend")}
-          </Button>
-        )}
-        {message ? <span className="text-clay">{message}</span> : null}
-      </div>
-    </div>
-  );
+  return <main className="min-h-dvh overflow-hidden bg-paper">
+    <nav className="mx-auto flex max-w-[90rem] items-center justify-between px-6 py-5 lg:px-10"><div><p className="text-h2 font-bold text-forest">{t("appName")}</p><p className="text-xs text-slate">Forecast-driven farming decisions</p></div><a href="/sign-in" className="rounded-control bg-forest px-5 py-3 text-sm font-semibold text-white">{t("signInAction")}</a></nav>
+    <section className="mx-auto grid max-w-[90rem] gap-10 px-6 pb-16 pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-10 lg:pb-24 lg:pt-20"><div><p className="mb-5 text-sm font-bold uppercase tracking-[0.18em] text-sprout">The right moment matters</p><h1 className="max-w-3xl text-4xl font-bold leading-tight text-ink sm:text-6xl">Turn weather into a better day to spray.</h1><p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate">AgriSense helps farmers understand when a biological application has the best chance to work, why the window is open, and what happened in the field afterwards.</p><div className="mt-8 flex flex-wrap gap-3"><a href="/sign-up" className="rounded-control bg-forest px-6 py-4 font-semibold text-white">Start with your field</a><a href="#how-it-works" className="rounded-control border border-mist bg-card px-6 py-4 font-semibold text-forest">See how it works</a></div><p className="mt-4 text-sm text-slate">Web dashboard today. WhatsApp access is being connected for simple phones.</p></div><div className="relative rounded-[2rem] bg-forest p-6 text-white shadow-xl sm:p-10"><div className="absolute -right-10 -top-10 size-32 rounded-full bg-sprout/40 blur-2xl" /><p className="relative text-sm font-semibold text-white/70">A field view built for action</p><div className="relative mt-8 rounded-card bg-white p-5 text-ink shadow-lg"><div className="flex items-center justify-between"><span className="font-semibold">Cotton · North field</span><span className="rounded-full bg-[color-mix(in_srgb,var(--sprout)_15%,white)] px-3 py-1 text-xs font-semibold text-forest">Live forecast</span></div><p className="mt-6 text-sm text-slate">Best window</p><p className="mt-1 text-3xl font-bold text-forest">Tomorrow · 06:00–08:00</p><p className="mt-4 rounded-control bg-paper p-3 text-sm leading-relaxed text-slate">Heat is building after the weekend. Early morning conditions are calmer and the forecast stays rain-free.</p><div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-control bg-paper p-3"><b className="block text-lg text-forest">82</b>readiness</div><div className="rounded-control bg-paper p-3"><b className="block text-lg text-forest">3</b>signals</div><div className="rounded-control bg-paper p-3"><b className="block text-lg text-forest">₹</b>value view</div></div></div></div></section>
+    <section id="how-it-works" className="border-y border-mist bg-card"><div className="mx-auto max-w-[90rem] px-6 py-16 lg:px-10"><p className="text-sm font-bold uppercase tracking-[0.18em] text-sprout">How it works</p><h2 className="mt-3 text-3xl font-bold text-ink">One clear loop from forecast to outcome.</h2><div className="mt-10 grid gap-4 md:grid-cols-3"><div className="rounded-card border border-mist p-6"><span className="text-3xl">01</span><h3 className="mt-5 text-xl font-bold">Read the conditions</h3><p className="mt-2 leading-relaxed text-slate">Weather, crop stage, soil and product fit stay visible so the recommendation has a reason.</p></div><div className="rounded-card border border-mist p-6"><span className="text-3xl">02</span><h3 className="mt-5 text-xl font-bold">Choose the window</h3><p className="mt-2 leading-relaxed text-slate">See the best practical hours, readiness signals and what remains unknown before you act.</p></div><div className="rounded-card border border-mist p-6"><span className="text-3xl">03</span><h3 className="mt-5 text-xl font-bold">Log what happened</h3><p className="mt-2 leading-relaxed text-slate">Keep a season journal with text, photos and voice so the next season learns from your field.</p></div></div></div></section>
+    <section className="mx-auto grid max-w-[90rem] gap-8 px-6 py-16 lg:grid-cols-2 lg:px-10"><div><h2 className="text-3xl font-bold text-ink">Trust the evidence, understand the gaps.</h2><p className="mt-4 max-w-xl leading-relaxed text-slate">AgriSense labels live data, estimates and missing inputs clearly. When a figure is unavailable, the app tells you what would make it useful instead of filling the space with a guess.</p></div><div className="rounded-card bg-[color-mix(in_srgb,var(--sprout)_10%,var(--card))] p-6"><p className="font-semibold text-forest">Built for the way farming happens</p><ul className="mt-4 space-y-3 text-sm leading-relaxed text-slate"><li>• Localized guidance for Indian farming communities</li><li>• Simple enough for a phone, detailed enough for an agronomist</li><li>• A record of decisions, actions and outcomes over time</li></ul></div></section>
+    <footer className="border-t border-mist px-6 py-8 text-center text-sm text-slate">AgriSense · Forecast-driven application readiness for biologicals</footer>
+  </main>;
 }
