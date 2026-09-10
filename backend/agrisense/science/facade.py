@@ -279,12 +279,23 @@ def evaluate_season(
                     )
                     lead_min = number(record, "lead_min_days", low=0, high=14)
                     lead_max = number(record, "lead_max_days", low=lead_min, high=14)
+                    # How long after the stress has arrived the product is still
+                    # worth applying. Without it the window was one-sided: a lead
+                    # is `onset - date`, so every hour after the onset scored a
+                    # negative lead and was excluded, and once a heat run had
+                    # actually begun there were no candidate hours left at all.
+                    # A farmer watching a crop suffer today was told no window
+                    # existed, when the forecast held twenty-two clear hours. A
+                    # stress product is for the stress you are in as much as the
+                    # stress you expect.
+                    lead_after = number(record, "lead_after_days", low=0, high=14)
                     candidates = []
                     for hour in weather.hours:
                         local_date = hour.start_at.astimezone(IST).date()
                         lead = None if onset is None else (onset - local_date).days
                         if category == "yield_booster" or (
-                            lead is not None and lead_min <= lead <= lead_max
+                            lead is not None and -lead_after <= lead <= lead_max
+                            and (lead >= lead_min or lead < 0)
                         ):
                             candidates.append(
                                 Candidate(

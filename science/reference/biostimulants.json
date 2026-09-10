@@ -90,7 +90,9 @@
       "rain_probability_max": 0.3,
       "rainfast_hours": 4,
       "spray_parameter_source": "agrisense:foliar-spray-safety-practice",
-      "wind_limit_note": "limits are at the 10 m measurement height forecasts report, equivalent to roughly 3-15 km/h at 2 m"
+      "wind_limit_note": "limits are at the 10 m measurement height forecasts report, equivalent to roughly 3-15 km/h at 2 m",
+      "lead_after_days": 5,
+      "lead_after_rationale": "still worth applying this many days into a stress episode: the product is for the stress the crop is in as well as the stress it is about to meet"
     },
     "product:isabion": {
       "reviewed": true,
@@ -117,7 +119,9 @@
       "rain_probability_max": 0.3,
       "rainfast_hours": 4,
       "spray_parameter_source": "agrisense:foliar-spray-safety-practice",
-      "wind_limit_note": "limits are at the 10 m measurement height forecasts report, equivalent to roughly 3-15 km/h at 2 m"
+      "wind_limit_note": "limits are at the 10 m measurement height forecasts report, equivalent to roughly 3-15 km/h at 2 m",
+      "lead_after_days": 7,
+      "lead_after_rationale": "recovery support remains useful well after the episode, which is what this product is positioned for"
     },
     "product:coucal": {
       "reviewed": true,
