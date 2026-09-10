@@ -129,3 +129,40 @@ body {
     background-color: var(--mist);
   }
 }
+
+/* Suppress the translation provider's own chrome.
+ *
+ * The widget injects a toolbar iframe at the top of the page and pushes the
+ * document down with an inline `top` on <body>, which lands as a grey bar above
+ * the app and a shifted layout. We drive the widget from AgriSense's own
+ * language switcher, so its toolbar is a second control for the same thing and
+ * only confuses the farmer.
+ *
+ * The `top` reset needs !important to beat the inline style the widget writes,
+ * and `.skiptranslate` is matched only as an iframe: the widget also puts that
+ * class on content it must not translate, and hiding those would blank parts of
+ * the page. */
+.goog-te-banner-frame,
+.goog-te-gadget-icon,
+iframe.skiptranslate {
+  display: none !important;
+}
+
+body {
+  top: 0 !important;
+  position: static !important;
+}
+
+/* The hover tooltip and the highlight it paints over translated words. Both are
+ * provider affordances for correcting a translation, which a farmer has no use
+ * for and which obscure the text underneath. */
+#goog-gt-tt,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
