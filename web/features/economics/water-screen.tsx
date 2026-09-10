@@ -20,7 +20,11 @@ import { AppShell } from "@/components/app-shell";
 import { Callout, Card, ErrorState, Skeleton, UnknownValue } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { EstimateBand } from "@/features/planning/estimate-band";
-import { formatLitres, litresForArea } from "@/features/planning/water-figures";
+import {
+  formatLitres,
+  litresFromMeasurement,
+  splitDayReason,
+} from "@/features/planning/water-figures";
 import type { Measurement, Season, WaterEstimate } from "@/lib/api/contract";
 import { useApiQuery } from "@/lib/api/query";
 import { seasons as seasonsApi } from "@/lib/api/routes";
@@ -103,7 +107,13 @@ export function WaterScreen({ seasonId }: { seasonId: string }) {
 }
 
 function SeasonalNeed({ water, areaHa }: { water: WaterEstimate; areaHa: number }) {
-  const mm = water.seasonal?.p50 ?? null;
+  // Unit-aware: the seasonal estimate arrives in cubic metres, not millimetres.
+  // Treating it as a depth multiplied it by ten thousand.
+  const litres = litresFromMeasurement(
+    water.seasonal?.p50,
+    water.seasonal?.unit,
+    areaHa,
+  );
 
   return (
     <Card className="p-5">
@@ -116,10 +126,9 @@ function SeasonalNeed({ water, areaHa }: { water: WaterEstimate; areaHa: number 
         <EstimateBand estimate={water.seasonal} label="" emphasis />
       </div>
 
-      {mm != null ? (
+      {litres != null ? (
         <p className="mt-1 text-sm text-slate">
-          About {formatLitres(litresForArea(mm, areaHa))} across your {areaHa} ha. The depth in
-          millimetres is the same whatever the field size; only the volume changes.
+          About {formatLitres(litres)} across your {areaHa} ha for the whole season.
         </p>
       ) : null}
 
@@ -134,8 +143,12 @@ function SeasonalNeed({ water, areaHa }: { water: WaterEstimate; areaHa: number 
         </Callout>
       ) : (
         <p className="mt-3 text-sm text-slate">
-          Whether irrigation is needed is not known yet.
-          {water.missing_reason ? ` ${water.missing_reason.replace(/_/g, " ")}.` : ""}
+          Whether irrigation is needed over the whole season is not known yet.
+          {water.missing_reason === "initial_storage_unknown"
+            ? " A season total needs to know how much water is already in the soil, which needs a soil moisture reading for this field. The day-by-day figures below do not need it."
+            : water.missing_reason
+              ? ` ${water.missing_reason.replace(/_/g, " ")}.`
+              : ""}
         </p>
       )}
     </Card>
@@ -174,26 +187,52 @@ function DailyPlan({ daily, areaHa }: { daily: Measurement[]; areaHa: number }) 
       <p className="mt-1 text-xs text-slate">
         These come from a weather forecast and get less certain further out.
       </p>
+      {/*
+        The engine's own assumption for these is
+        `daily_values_are_replenishment_alternatives_do_not_sum`. A plain list of
+        numbers invites exactly that addition, so it is ruled out in words.
+      */}
+      <Callout tone="caution" className="mt-2 text-xs">
+        Each row is an alternative, not an instalment. It is how much to put on
+        <em> if you irrigate that day</em>. Do not add them up.
+      </Callout>
       <ul className="mt-3 divide-y divide-mist">
-        {daily.slice(0, 14).map((measurement, index) => (
-          <li key={index} className="flex items-baseline justify-between gap-3 py-2">
-            <span className="text-sm text-slate">Day {index + 1}</span>
-            <span className="text-right">
-              {measurement.value != null ? (
-                <>
+        {daily.slice(0, 14).map((measurement, index) => {
+          const { date, reason } = splitDayReason(measurement.missing_reason);
+          // Already litres for the allocated area. The previous version labelled
+          // it "L" and then also converted it as though it were millimetres,
+          // printing two different numbers for the same figure.
+          const litres = litresFromMeasurement(measurement.value, measurement.unit, areaHa);
+          return (
+            <li
+              key={measurement.missing_reason ?? index}
+              className="flex items-baseline justify-between gap-3 py-2"
+            >
+              <span className="text-sm text-slate">
+                {date
+                  ? new Date(`${date}T00:00:00Z`).toLocaleDateString("en-IN", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                      timeZone: "UTC",
+                    })
+                  : `Day ${index + 1}`}
+              </span>
+              <span className="text-right">
+                {litres != null ? (
                   <span className="font-semibold tabular-nums text-ink">
-                    {measurement.value.toFixed(1)} {measurement.unit}
+                    {formatLitres(litres)}
                   </span>
-                  <span className="block text-xs text-slate">
-                    {formatLitres(litresForArea(measurement.value, areaHa))}
-                  </span>
-                </>
-              ) : (
-                <UnknownValue label="Not known" />
-              )}
-            </span>
-          </li>
-        ))}
+                ) : (
+                  <UnknownValue
+                    label="Not known"
+                    reason={reason ? reason.replace(/_/g, " ") : undefined}
+                  />
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );

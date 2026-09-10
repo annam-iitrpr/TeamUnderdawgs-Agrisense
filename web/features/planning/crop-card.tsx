@@ -11,7 +11,7 @@
 import { Button, Callout, Card } from "@/components/ui";
 import { EstimateBand } from "./estimate-band";
 import { ScoreMeter } from "./score-meter";
-import { formatLitres, litresForArea } from "./water-figures";
+import { formatLitres, litresFromMeasurement } from "./water-figures";
 import type { Crop, CropPlan } from "@/lib/api/contract";
 import { cn } from "@/lib/utils";
 import { CalendarDays, Check, Droplets, Scissors, TriangleAlert } from "lucide-react";
@@ -61,7 +61,15 @@ export function CropCard({
   const compatibility = plan.compatibility ?? {};
   const overall = compatibility.overall ?? null;
   const reasons = Object.entries(compatibility).filter(([key]) => key !== "overall");
-  const seasonalMm = plan.water?.seasonal?.p50 ?? null;
+  // The planner returns the seasonal requirement in cubic metres, not
+  // millimetres. It was being labelled "mm" and then converted as though it
+  // were a depth over the area, which both mislabelled it and multiplied it by
+  // the area a second time.
+  const seasonalLitres = litresFromMeasurement(
+    plan.water?.seasonal?.p50,
+    plan.water?.seasonal?.unit,
+    areaHa,
+  );
   const days = seasonLengthDays(plan);
   const sowing = windowLabel(plan.sowing_interval);
   const harvest = windowLabel(plan.harvest_interval);
@@ -112,11 +120,11 @@ export function CropCard({
             <Droplets aria-hidden className="size-3.5" /> Season water
           </dt>
           <dd className="mt-0.5 font-semibold text-ink">
-            {seasonalMm != null ? (
+            {seasonalLitres != null ? (
               <>
-                {Math.round(seasonalMm)} mm
+                {formatLitres(seasonalLitres)}
                 <span className="block text-xs font-normal text-slate">
-                  {formatLitres(litresForArea(seasonalMm, areaHa))} for {areaHa} ha
+                  for your {areaHa} ha, whole season
                 </span>
               </>
             ) : (

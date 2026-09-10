@@ -16,7 +16,7 @@ import { Button, Card } from "@/components/ui";
 import type { Crop, CropPlan } from "@/lib/api/contract";
 import { X } from "lucide-react";
 import { EstimateBand } from "./estimate-band";
-import { formatLitres, litresForArea } from "./water-figures";
+import { formatLitres, litresFromMeasurement } from "./water-figures";
 
 type Row = {
   key: string;
@@ -41,13 +41,16 @@ const ROWS: Row[] = [
     key: "water",
     label: "Season water",
     render: (plan, areaHa) => {
-      const mm = plan.water?.seasonal?.p50;
-      return mm != null ? (
+      // Cubic metres from the planner, not a depth. See litresFromMeasurement.
+      const litres = litresFromMeasurement(
+        plan.water?.seasonal?.p50,
+        plan.water?.seasonal?.unit,
+        areaHa,
+      );
+      return litres != null ? (
         <span>
-          <span className="font-semibold tabular-nums">{Math.round(mm)} mm</span>
-          <span className="block text-xs text-slate">
-            {formatLitres(litresForArea(mm, areaHa))}
-          </span>
+          <span className="font-semibold tabular-nums">{formatLitres(litres)}</span>
+          <span className="block text-xs text-slate">whole season</span>
         </span>
       ) : (
         <span className="text-slate">Not known</span>
