@@ -81,6 +81,10 @@ export const en = {
   // Retained for old saved translations during the migration; no current
   // screen links to password reset or email verification.
   emailLabel: "Email address",
+  phonePasswordSubtitle: "Use your mobile number and a password.",
+  phonePasswordNotice: "Signing in as {phone}. No code is sent to this number.",
+  passwordCreateHint: "At least 8 characters.",
+  authPhoneInUse: "That number already has an account. Try signing in instead.",
   passwordLabel: "Password",
   passwordShow: "Show password",
   passwordHide: "Hide password",

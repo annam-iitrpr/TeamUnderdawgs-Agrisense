@@ -7,7 +7,7 @@
  * shapes and all of them have to work.
  */
 import { describe, expect, it } from "vitest";
-import { toE164 } from "@/lib/phone";
+import { toE164, needsSmsVerification, phoneAccountEmail } from "@/lib/phone";
 
 describe("toE164", () => {
   it("accepts the same Indian number however it is written", () => {
@@ -57,5 +57,27 @@ describe("toE164", () => {
     // +91 followed by ten digits is India; anything else with a leading 91 and
     // the wrong length is ambiguous and refused.
     expect(toE164("911234")).toBeNull();
+  });
+});
+
+describe("phone accounts", () => {
+  it("keeps only the demo number on SMS verification", () => {
+    expect(needsSmsVerification("+919620577459")).toBe(true);
+    expect(needsSmsVerification("+919999988888")).toBe(false);
+  });
+
+  it("derives one stable account identity per number", () => {
+    // Sign-in must land on the account sign-up created, so the same number
+    // written in any of its usual shapes has to reduce to one identity.
+    const written = ["9620577459", "09620577459", "+91 96205 77459", "919620577459"];
+    const identities = new Set(written.map((raw) => phoneAccountEmail(toE164(raw)!)));
+    expect(identities.size).toBe(1);
+    expect([...identities][0]).toBe("919620577459@phone.agrisense.invalid");
+  });
+
+  it("uses a domain that can never resolve", () => {
+    // RFC 2606 reserves .invalid, so this can neither collide with an address a
+    // farmer owns nor accidentally be mailed.
+    expect(phoneAccountEmail("+919999988888").endsWith(".invalid")).toBe(true);
   });
 });

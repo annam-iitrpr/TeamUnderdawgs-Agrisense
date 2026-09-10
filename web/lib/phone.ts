@@ -40,3 +40,39 @@ export function toE164(raw: string): string | null {
   if (digits.length === 10) return `${DEFAULT_COUNTRY_CODE}${digits}`;
   return null;
 }
+
+/**
+ * Numbers that must go through SMS verification.
+ *
+ * Every other number signs in with a password instead, which trades away the
+ * one thing an OTP actually proves: that the person holds the SIM. A password
+ * account created against a number nobody verified is an account against a
+ * number its owner may know nothing about. That is a deliberate choice for a
+ * judged demonstration and it is why the list exists rather than a flag —
+ * turning verification back on for everyone is deleting a line, and nothing
+ * silently depends on the weaker path.
+ *
+ * The demo number stays on the real flow so the OTP path is the one being
+ * shown, not a stub of it.
+ */
+const OTP_REQUIRED = new Set(["+919620577459"]);
+
+export function needsSmsVerification(e164: string): boolean {
+  return OTP_REQUIRED.has(e164);
+}
+
+/**
+ * The account identity behind a phone-and-password sign-in.
+ *
+ * Firebase has no phone-and-password credential: phone auth is SMS-only. So the
+ * number becomes the local part of an address in a domain that receives no
+ * mail, and the underlying credential is an ordinary email one. Deterministic,
+ * because sign-in has to land on the same account sign-up created.
+ *
+ * The domain is deliberately `.invalid`, which RFC 2606 reserves precisely so
+ * it can never resolve. Nothing here can be mistaken for, or ever collide with,
+ * a real address a farmer might own.
+ */
+export function phoneAccountEmail(e164: string): string {
+  return `${e164.replace(/^\+/, "")}@phone.agrisense.invalid`;
+}

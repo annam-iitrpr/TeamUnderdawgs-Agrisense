@@ -15,6 +15,7 @@
  *    the previous one's data from memory or localStorage.
  */
 import { setTokenProvider } from "@/lib/api/client";
+import { phoneAccountEmail } from "@/lib/phone";
 import { authErrorKey, configState, firebaseAuth, type AuthErrorKey } from "@/lib/firebase";
 import {
   createUserWithEmailAndPassword,
@@ -23,6 +24,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   signOut as firebaseSignOut,
+  updateProfile,
   type ConfirmationResult,
   type User,
 } from "firebase/auth";
@@ -55,6 +57,16 @@ export type AuthContextValue = {
    *  so email keeps a password rather than pretending to offer a code. */
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  /** Phone and password, for every number that is not on the SMS allowlist.
+   *
+   *  Firebase has no phone-and-password credential -- phone auth is SMS-only --
+   *  so the number is reduced to a stable identity in a reserved domain that
+   *  cannot resolve, and the credential underneath is an ordinary email one.
+   *  What this does not do is prove the person holds the SIM, which is the
+   *  whole point of an OTP; `needsSmsVerification` is where that trade is made
+   *  and it is made for one number at a time. */
+  signInWithPhonePassword: (phoneE164: string, password: string) => Promise<void>;
+  signUpWithPhonePassword: (phoneE164: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -200,6 +212,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const signInWithPhonePassword = useCallback(async (phoneE164: string, password: string) => {
+    const auth = firebaseAuth();
+    if (!auth) throw new AuthError("errorTitle");
+    try {
+      await signInWithEmailAndPassword(auth, phoneAccountEmail(phoneE164), password);
+    } catch (error) {
+      throw wrap(error);
+    }
+  }, []);
+
+  const signUpWithPhonePassword = useCallback(async (phoneE164: string, password: string) => {
+    const auth = firebaseAuth();
+    if (!auth) throw new AuthError("errorTitle");
+    try {
+      const created = await createUserWithEmailAndPassword(
+        auth,
+        phoneAccountEmail(phoneE164),
+        password,
+      );
+      // The number is what the farmer knows themselves by, and the address
+      // underneath is an implementation detail they should never be shown. It is
+      // recorded as the display name so every screen has the number to show.
+      await updateProfile(created.user, { displayName: phoneE164 });
+    } catch (error) {
+      throw wrap(error);
+    }
+  }, []);
+
   const verifyPhoneOtp = useCallback(async (code: string) => {
     const auth = firebaseAuth();
     if (!auth || !confirmation) throw new AuthError("authCodeExpired");
@@ -232,6 +272,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyPhoneOtp,
       signIn,
       signUp,
+      signInWithPhonePassword,
+      signUpWithPhonePassword,
       signOut,
     }),
     [
@@ -243,6 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       verifyPhoneOtp,
       signIn,
       signUp,
+      signInWithPhonePassword,
+      signUpWithPhonePassword,
       signOut,
     ],
   );
