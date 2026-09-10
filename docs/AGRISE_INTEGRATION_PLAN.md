@@ -30,7 +30,7 @@ WhatsApp relay `.env` now points back to the consolidated file.
 - The landing page and public responsive/PWA browser checks are implemented.
 - Meta webhook verification, signature checking, message deduplication, and fast 200 acknowledgement are implemented.
 - WhatsApp link codes bind a number to an authenticated farmer once.
-- Linked text, interactive replies, menu/help, field listing, and active-field switching use the backend conversation pipeline.
+- Linked text, interactive replies, menu/help, field listing, active-field switching, readiness, water, money, and recent-history commands use the backend conversation pipeline.
 - Meta image/audio IDs are downloaded by the worker, validated, stored through media custody, and attached to the assistant turn.
 - Assistant replies are queued for WhatsApp delivery and converted to WhatsApp formatting.
 - Actual local environment values are consolidated in `~/Work/agrisense.env`; no environment file is committed.
@@ -38,7 +38,7 @@ WhatsApp relay `.env` now points back to the consolidated file.
 ### In progress
 
 - Local WhatsApp worker and media tests, including assistant and outbox delivery.
-- Mapping readiness, water, money, journal, reminders, proposals, and season closure to deterministic channel actions where the API contract permits it.
+- Mapping journal, reminders, proposals, and season closure to deterministic channel actions where the API contract permits it.
 - Authenticated browser/API E2E using Firebase fictional numbers.
 
 ### Remaining
@@ -251,7 +251,7 @@ Blocked on external or human input:
 
 - API and frontend production deployment.
 - Firebase Phone Auth activation and real SMS smoke test.
-- WhatsApp media, image/voice ingestion, active-field state, formatting, live send, and route mapping.
+- WhatsApp media, image/voice ingestion, active-field state, formatting, live send, and route mapping for journal, reminders, proposals, and season closure.
 - Authenticated API/browser E2E against disposable accounts; the 30-test Chromium suite covers public layout, PWA, landing, and phone-form validation.
 - Regional crop calendar, economics, product-label, and agronomist inputs.
 - Replace the placeholder privacy policy before public use.

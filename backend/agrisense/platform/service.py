@@ -413,7 +413,12 @@ class DomainService:
             mapping={'journal.create':('POST','/seasons/{id}/journal',d.SeasonRow),'field.update':('PATCH','/fields/{id}',d.FieldRow),'task.update':('PATCH','/tasks/{id}',d.TaskRow),'season.close':('POST','/seasons/{id}/close',d.SeasonRow)}
             target_method,target_path,model=mapping[proposal.operation]
             target=self.own(model,proposal.target_id,True);self.version(target,proposal.expected_version)
-            result=self.execute(target_method,target_path,proposal.target_id,proposal.new_values,{})
+            if proposal.operation=='journal.create':
+                conversation=self.s.get(d.ConversationRow, proposal.conversation_id)
+                source='whatsapp' if conversation and conversation.payload.get('source')=='whatsapp' else 'web'
+                result=self.create_journal(proposal.target_id, proposal.new_values, source=source)
+            else:
+                result=self.execute(target_method,target_path,proposal.target_id,proposal.new_values,{})
             row.status='confirmed';row.version+=1;row.payload={**row.payload,'status':row.status,'version':row.version}
             return c.MutationReceipt(id=id,status='completed',resource_id=proposal.target_id,version=target.version)
         if path=='/channels/whatsapp/link':

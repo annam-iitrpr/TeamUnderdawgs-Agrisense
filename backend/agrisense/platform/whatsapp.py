@@ -159,7 +159,7 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         conversation_id = d.new_id()
         conversation = d.ConversationRow(
             id=conversation_id, tenant_id=channel.tenant_id, farmer_id=channel.farmer_id,
-            version=1, payload={'id': conversation_id, 'language': 'en'})
+            version=1, payload={'id': conversation_id, 'language': 'en', 'source': 'whatsapp'})
         session.add(conversation)
         channel.payload = {**channel_payload, 'conversation_id': conversation_id}
     command = None
@@ -168,6 +168,8 @@ def ingest(session: Session, event: dict[str, Any]) -> str:
         command = 'menu'
     elif lowered in {'fields', 'my fields', 'switch field'}:
         command = 'fields'
+    elif lowered in {'readiness', 'status', 'water', 'money', 'economics', 'history', 'log'}:
+        command = {'status': 'readiness', 'economics': 'money', 'log': 'history'}.get(lowered, lowered)
     elif lowered.startswith('use '):
         requested = text[4:].strip().lower()
         fields = list(session.scalars(select(d.FieldRow).where(
@@ -223,6 +225,43 @@ def command_reply(session: Session, request: dict[str, Any], tenant_id: str,
             d.FieldRow.id == field_id, d.FieldRow.tenant_id == tenant_id,
             d.FieldRow.farmer_id == farmer_id)) if field_id else None
         return f'Active field: {field.name}.' if field else 'That field is no longer available.'
+    conversation = session.scalar(select(d.ConversationRow).where(
+        d.ConversationRow.id == request.get('conversation_id'),
+        d.ConversationRow.tenant_id == tenant_id, d.ConversationRow.farmer_id == farmer_id))
+    field_id = (conversation.payload or {}).get('field_id') if conversation else None
+    if command == 'history':
+        rows = list(session.scalars(select(d.JournalRow).where(
+            d.JournalRow.tenant_id == tenant_id, d.JournalRow.farmer_id == farmer_id)
+            .order_by(d.JournalRow.occurred_at.desc()).limit(5)))
+        if not rows:
+            return 'No journal entries are recorded yet. Reply with what happened in the field to log it.'
+        return '*Recent field log*\n' + '\n'.join(
+            f'- {row.occurred_at.date().isoformat()}: {row.payload.get("action", "observation")}'
+            for row in rows)
+    if command in {'readiness', 'water', 'money'}:
+        season = session.scalar(select(d.SeasonRow).where(
+            d.SeasonRow.tenant_id == tenant_id, d.SeasonRow.farmer_id == farmer_id,
+            d.SeasonRow.field_id == field_id, d.SeasonRow.status != 'closed').order_by(d.SeasonRow.id)) if field_id else None
+        if season is None:
+            return 'No open season is available for the active field. Set up a season in the web app first.'
+        recommendation = session.scalar(select(d.RecommendationRow).where(
+            d.RecommendationRow.tenant_id == tenant_id, d.RecommendationRow.season_id == season.id,
+            d.RecommendationRow.superseded.is_(False)).order_by(d.RecommendationRow.created_at.desc()).limit(1))
+        if recommendation is None:
+            return 'No current evaluation is available. Ask AgriSense to evaluate this season in the web app first.'
+        if command == 'readiness':
+            value = recommendation.payload.get('recommendation', {})
+            readiness = value.get('readiness')
+            status = value.get('status', 'unknown').replace('_', ' ')
+            return f'*Readiness: {readiness if readiness is not None else "not known"}*\nStatus: {status}'
+        key = 'water' if command == 'water' else 'economics'
+        value = recommendation.payload.get(key)
+        if not value:
+            return f'{command.title()} figures are not available for this evaluation.'
+        missing = value.get('missing_reason')
+        if missing:
+            return f'{command.title()} figures are not available yet: {missing.replace("_", " ")}'
+        return f'*{command.title()}*\n{value}'
     return None
 
 
