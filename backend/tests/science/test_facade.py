@@ -277,7 +277,8 @@ def test_paired_scenario_golden_and_actual_ledger_gate():
     assert economic_estimates("cotton", 1, refs, date(2026, 9, 9)).roi.p50 == -100
 
 
-def test_planner_returns_only_locally_evidenced_candidates():
+def planning_case():
+    """A planner case with one crop that fits the field and one that does not."""
     snap, refs = snapshot(), references()
     now = snap.as_of.date()
     soil = api.SoilObservation(
@@ -338,12 +339,56 @@ def test_planner_returns_only_locally_evidenced_candidates():
         "seasonal_irrigation_mm": 100,
         "planned_cost_inr_ha": 50000,
     }
+    return planning, refs, climate
+
+
+def test_planner_returns_only_locally_evidenced_candidates():
+    planning, refs, climate = planning_case()
     result = compare_crops(planning, refs, climate)
     assert [row.crop_id for row in result.candidates] == ["cotton"]
     assert any(row.facts["crop_id"] == "rice" for row in result.exclusions)
     assert result.candidates[0].water.seasonal.p50 == 2000
     planning.request.available_water_m3 = 1
     assert compare_crops(planning, refs, climate).candidates == []
+
+
+def test_an_unstated_budget_does_not_exclude_a_crop():
+    """Absence is not insufficiency.
+
+    Both budgets are optional in the request, but absence used to exclude, so a
+    farmer who had not said how much water or money they had got every crop
+    excluded and an empty list back. That reads as "nothing grows on your land"
+    rather than "you have not told us yet", which is the opposite of what the
+    planner is for.
+    """
+    planning, refs, climate = planning_case()
+    planning.request.available_water_m3 = None
+    planning.request.budget_inr = None
+    result = compare_crops(planning, refs, climate)
+
+    assert [row.crop_id for row in result.candidates] == ["cotton"]
+    assert not any(
+        reason.code.startswith(("irrigation_budget", "cash_budget"))
+        for reason in result.exclusions
+    )
+    # The dimension is dropped from the ranking, never scored as a perfect fit.
+    compatibility = result.candidates[0].compatibility
+    assert compatibility["water_fit"] is None and compatibility["budget_fit"] is None
+    # Renormalised, so a score still means the same thing on the same 0-1 scale.
+    assert compatibility["overall"] == pytest.approx(
+        (0.45 * 0.8 + 0.15 * (1 - 140 / 730)) / 0.60
+    )
+    assert "water_fit_not_ranked_without_stated_water" in result.warnings
+    assert "budget_fit_not_ranked_without_stated_budget" in result.warnings
+
+
+def test_a_stated_budget_that_is_too_small_still_excludes():
+    """The guard that matters is kept: a real constraint the crop fails."""
+    planning, refs, climate = planning_case()
+    planning.request.budget_inr = 1
+    result = compare_crops(planning, refs, climate)
+    assert result.candidates == []
+    assert any(reason.code == "cash_budget_insufficient" for reason in result.exclusions)
 
 
 def test_closure_zero_yield_and_zero_cost():

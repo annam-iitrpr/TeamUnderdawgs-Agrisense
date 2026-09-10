@@ -125,11 +125,18 @@ def compare_crops(
             water_mm = number(record, "seasonal_irrigation_mm", low=0)
             water_m3 = water_mm * area * 10
             available = snapshot.request.available_water_m3
-            if water_m3 > 0 and (available is None or available < water_m3):
-                reasons.append("irrigation_budget_missing_or_insufficient")
             cost = number(record, "planned_cost_inr_ha", low=0) * area
-            if snapshot.request.budget_inr is None or snapshot.request.budget_inr < cost:
-                reasons.append("cash_budget_missing_or_insufficient")
+            budget = snapshot.request.budget_inr
+            # An unstated budget is not a budget of zero. Both of these fields are
+            # optional in the request, yet absence used to exclude, so a farmer who
+            # had not said how much water or money they had got every one of the
+            # fifteen crops excluded and an empty list back -- which reads as
+            # "nothing grows on your land" rather than "you have not told us yet".
+            # Only a stated budget that is genuinely too small excludes a crop now.
+            if available is not None and water_m3 > 0 and available < water_m3:
+                reasons.append("irrigation_budget_insufficient")
+            if budget is not None and budget < cost:
+                reasons.append("cash_budget_insufficient")
         except (KeyError, ValueError, TypeError):
             exclusions.append(api.Reason(code="invalid_crop_reference", facts={"crop_id": crop}))
             continue
@@ -138,12 +145,21 @@ def compare_crops(
                 api.Reason(code=reason, facts={"crop_id": crop}) for reason in reasons
             )
             continue
-        water_fit = 1 if water_m3 == 0 else min(1, (available - water_m3) / max(available, 1))
-        budget_fit = (
-            1
-            if cost == 0
-            else min(1, (snapshot.request.budget_inr - cost) / max(snapshot.request.budget_inr, 1))
-        )
+        # A fit nobody can compute is None, never 1. Scoring an unknown as a perfect
+        # fit would flatter exactly the crops whose demands the farmer has not yet
+        # said they can meet.
+        if water_m3 == 0:
+            water_fit = 1.0
+        elif available is None:
+            water_fit = None
+        else:
+            water_fit = min(1, (available - water_m3) / max(available, 1))
+        if cost == 0:
+            budget_fit = 1.0
+        elif budget is None:
+            budget_fit = None
+        else:
+            budget_fit = min(1, (budget - cost) / max(budget, 1))
         duration_fit = 1 - maximum_days / 730
         # Suitability comes from the reviewed record, not a constant. It used to
         # be hardcoded to 1 for every crop, which meant the ranking was pure
@@ -153,12 +169,19 @@ def compare_crops(
         # Weights are data too, so the emphasis can be changed by an agronomist
         # without touching this file. They are ranking weights and nothing more.
         weights = references.parameters.get('ranking_weights') or {}
-        score = (
-            number(weights, 'suitability', low=0, high=1) * suitability
-            + number(weights, 'water_fit', low=0, high=1) * water_fit
-            + number(weights, 'budget_fit', low=0, high=1) * budget_fit
-            + number(weights, 'duration_fit', low=0, high=1) * duration_fit
+        # Only what is known is weighted, and the weights are then renormalised, so a
+        # score means the same thing whether or not the farmer stated a budget.
+        # Dropping a term without renormalising would cap every crop below 1 and make
+        # one farmer's scores quietly incomparable with another's.
+        parts = (
+            (number(weights, 'suitability', low=0, high=1), suitability),
+            (number(weights, 'water_fit', low=0, high=1), water_fit),
+            (number(weights, 'budget_fit', low=0, high=1), budget_fit),
+            (number(weights, 'duration_fit', low=0, high=1), duration_fit),
         )
+        known = [(weight, value) for weight, value in parts if value is not None]
+        weighed = sum(weight for weight, _ in known)
+        score = sum(weight * value for weight, value in known) / weighed if weighed else 0.0
         evidence = str(record["evidence_id"])
         candidates.append(
             api.CropPlan(
@@ -201,5 +224,17 @@ def compare_crops(
             "ranking_weights_are_project_choices",
             "no_cross_crop_yield_comparison",
             "economics_requires_paired_yield_price_cost_records",
+            # Named rather than silent: a farmer comparing crops should know which
+            # of their own constraints the ranking could not take into account.
+            *(
+                ["water_fit_not_ranked_without_stated_water"]
+                if snapshot.request.available_water_m3 is None
+                else []
+            ),
+            *(
+                ["budget_fit_not_ranked_without_stated_budget"]
+                if snapshot.request.budget_inr is None
+                else []
+            ),
         ],
     )
