@@ -76,7 +76,18 @@ export type SeasonBudget = {
 export function useComparison(fieldId: string | null) {
   const [comparison, setComparison] = useState<CropComparison | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<{ message: string; retryable: boolean } | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    retryable: boolean;
+    /** The field itself is gone, so retrying this id can never succeed.
+     *
+     *  An onboarding draft outlives the field it created: the id is kept in
+     *  local storage, and if that field is later removed the draft still points
+     *  at it. Every comparison then 404s with "this record was not found",
+     *  which reads as a broken app rather than as a stale bookmark. Callers use
+     *  this to drop the dead id and start again. */
+    gone?: boolean;
+  } | null>(null);
 
   // Guards against a slow first response overwriting a newer one when the
   // farmer switches between "suggest" and a single named crop quickly.
@@ -107,10 +118,18 @@ export function useComparison(fieldId: string | null) {
         if (ticket === latest.current) setComparison(data);
       } catch (cause) {
         if (ticket !== latest.current) return;
+        const gone = cause instanceof ApiError && cause.status === 404;
         setError(
-          cause instanceof ApiError
-            ? { message: cause.message, retryable: cause.retryable }
-            : { message: "The comparison could not be loaded.", retryable: true },
+          gone
+            ? {
+                message:
+                  "That field is no longer saved. Go back a step and save your land details again.",
+                retryable: false,
+                gone: true,
+              }
+            : cause instanceof ApiError
+              ? { message: cause.message, retryable: cause.retryable }
+              : { message: "The comparison could not be loaded.", retryable: true },
         );
       } finally {
         if (ticket === latest.current) setLoading(false);

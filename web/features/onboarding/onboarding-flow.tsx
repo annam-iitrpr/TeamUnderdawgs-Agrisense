@@ -854,6 +854,15 @@ function CropStep({
     budgetInr: positiveNumber(draft.land.waterBudget),
   });
 
+  // A draft outlives the field it created. The id is kept in local storage, so
+  // if that field is later removed the draft still points at it and every
+  // comparison 404s -- which reads as a broken app rather than a stale
+  // bookmark. Letting go of the dead id is what makes the next step able to
+  // save the land again instead of asking about a field that is gone.
+  useEffect(() => {
+    if (error?.gone && draft.fieldId) update((d) => void (d.fieldId = null));
+  }, [error?.gone, draft.fieldId, update]);
+
   // Server order, not a local re-sort: the engine already ranked these.
   const ranked = useMemo(() => comparison?.candidates ?? [], [comparison]);
   const water = useMemo(() => waterScores(ranked), [ranked]);
@@ -950,7 +959,10 @@ function CropStep({
       ) : null}
 
       {error ? (
-        <Callout tone="blocked" title="The comparison could not be loaded">
+        <Callout
+          tone="blocked"
+          title={error.gone ? "That field is not saved any more" : "The comparison could not be loaded"}
+        >
           {error.message}
         </Callout>
       ) : null}
