@@ -153,7 +153,23 @@ export function useMarketPrices(cropId: string | null, state?: string | null): M
     setUnavailable(false);
     try {
       const { data } = await marketApi.prices(cropId, state ?? undefined);
-      if (ticket === latest.current) setPrices(data);
+      // The API always answers now, falling back to a labelled reference price
+      // rather than failing. That would have stranded the app on the reference
+      // even where live quotes exist, because the edge was only ever reached by
+      // way of an exception. So a reference answer is treated as a floor: the
+      // edge is asked too, and real quotes from a named mandi win over it. The
+      // API's MSP is carried across either way, since the edge feed has none.
+      if (data.data_mode !== "demo") {
+        if (ticket === latest.current) setPrices(data);
+        return;
+      }
+      const live = await viaEdge(cropId, state ?? null).catch(() => null);
+      if (ticket !== latest.current) return;
+      setPrices(
+        live
+          ? { ...live, msp: data.msp, msp_missing_reason: data.msp_missing_reason }
+          : data,
+      );
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 404) {
         if (ticket === latest.current) setUnavailable(true);
