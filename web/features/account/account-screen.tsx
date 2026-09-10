@@ -119,7 +119,7 @@ function ExportCard({ verified }: { verified: boolean }) {
         Request a copy of my data
       </Button>
       {!verified ? (
-        <p className="mt-2 text-xs text-slate">Verify your email address to use this.</p>
+        <p className="mt-2 text-xs text-slate">Verify your phone number to use this.</p>
       ) : null}
     </Card>
   );
@@ -201,7 +201,7 @@ function DangerZone({ verified }: { verified: boolean }) {
         </div>
       )}
       {!verified ? (
-        <p className="mt-2 text-xs text-slate">Verify your email address to use this.</p>
+        <p className="mt-2 text-xs text-slate">Verify your phone number to use this.</p>
       ) : null}
     </Card>
   );

@@ -94,10 +94,8 @@ export function resetFirebaseAuthForTests(): void {
 /**
  * Maps a Firebase error code onto one of our own translation keys.
  *
- * `auth/user-not-found` and `auth/wrong-password` intentionally collapse to the
- * same message: telling a caller that an address exists but the password was
- * wrong confirms which addresses are registered, which is an account
- * enumeration leak the spec asks us to avoid.
+ * Phone verification failures are reduced to stable translation keys so the UI
+ * never exposes provider internals or raw Firebase messages.
  */
 export type AuthErrorKey =
   | "authInvalidPhone"
