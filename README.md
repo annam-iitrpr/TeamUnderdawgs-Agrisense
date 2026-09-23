@@ -470,7 +470,7 @@ No credentials live in this repository. `docs/TEAM_SETUP_AND_MANUAL_TESTING.md` 
 
 <br>
 
-Built over a 36-hour on-campus sprint at **IIT Ropar** and continued afterwards.
+**189 of the 190 commits here landed inside the 36-hour sprint** at **IIT Ropar**.
 One of the on-campus finalist teams at **HACK CORE 2026**.
 
 <sub>Thanks to IIT Ropar, ANNAM.AI, Syngenta and Google for the event, the travel and the judging.</sub>
